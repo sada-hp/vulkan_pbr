@@ -1,5 +1,5 @@
 include_directories(${DemoPrj_SOURCE_DIR}/include)
 link_directories(${DemoPrj_SOURCE_DIR}/libraries)
-add_compile_definitions(GLFW_INCLUDE_VULKAN VMA_IMPLEMENTATION VK_KHR_swapchain)
-add_executable(source entry.cpp renderer.hpp)
+add_executable(source entry.cpp renderer.cpp renderer.hpp pch.hpp)
+target_precompile_headers(source PRIVATE pch.hpp)
 target_link_libraries(source assimp.lib glfw3.lib vulkan-1.lib)
