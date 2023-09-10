@@ -12,6 +12,13 @@ int main()
 
 	VulkanBase render(pWindow);
 
+	glfwSetWindowUserPointer(pWindow, &render);
+	glfwSetWindowSizeCallback(pWindow, [](GLFWwindow* window, int width, int height)
+		{
+			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
+			rndr->HandleResize();
+		});
+
 	while (!glfwWindowShouldClose(pWindow))
 	{
 		glfwPollEvents();

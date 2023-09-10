@@ -40,7 +40,6 @@ class VulkanBase
 	std::vector<VkFramebuffer> _framebuffers = {};
 	std::vector<VkFence> _presentFences = {};
 	std::vector<VkSemaphore> _presentSemaphores = {};
-	std::vector<VkSemaphore> _swapchainSemaphores = {};
 	std::vector<VkCommandBuffer> _presentBuffers = {};
 
 	vkQueueStruct _graphicsQueue = {};
@@ -53,6 +52,7 @@ class VulkanBase
 	VkSurfaceKHR _surface = VK_NULL_HANDLE;
 	VmaAllocator _allocator = VK_NULL_HANDLE;
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE;
+	VkSemaphore _swapchainSemaphore = VK_NULL_HANDLE;
 	VkFence _graphicsFence = VK_NULL_HANDLE;
 	VkFence _transferFence = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
@@ -84,7 +84,6 @@ public:
 
 		_presentBuffers.resize(_swapchainImages.size());
 		_presentSemaphores.resize(_swapchainImages.size());
-		_swapchainSemaphores.resize(_swapchainImages.size());
 		_presentFences.resize(_swapchainImages.size());
 		res = _allocateBuffers(_graphicsPool, _presentBuffers.size(), _presentBuffers.data()) & res;
 
@@ -93,10 +92,7 @@ public:
 				res = _createSemaphore(&it) & res;
 			});
 
-		std::for_each(_swapchainSemaphores.begin(), _swapchainSemaphores.end(), [&, this](VkSemaphore& it)
-			{
-				res = _createSemaphore(&it) & res;
-			});
+		res = _createSemaphore(&_swapchainSemaphore) & res;
 
 		std::for_each(_presentFences.begin(), _presentFences.end(), [&, this](VkFence& it)
 			{
@@ -120,11 +116,7 @@ public:
 				vkDestroyFence(_logicalDevice, it, VK_NULL_HANDLE);
 				return true;
 			});
-		std::erase_if(_swapchainSemaphores, [&, this](VkSemaphore& it)
-			{
-				vkDestroySemaphore(_logicalDevice, it, VK_NULL_HANDLE);
-				return true;
-			});
+		vkDestroySemaphore(_logicalDevice, _swapchainSemaphore, VK_NULL_HANDLE);
 		std::erase_if(_presentSemaphores, [&, this](VkSemaphore& it)
 			{
 				vkDestroySemaphore(_logicalDevice, it, VK_NULL_HANDLE);
@@ -156,11 +148,13 @@ public:
 		vkDestroyInstance(_instance, VK_NULL_HANDLE);
 	}
 
-	void Step()
+	void Step() const
 	{
-		static uint32_t image_index = 0;
-		uint32_t frame = image_index % _swapchainSemaphores.size();
-		vkAcquireNextImageKHR(_logicalDevice, _swapchain, UINT64_MAX, _swapchainSemaphores[frame], VK_NULL_HANDLE, &image_index);
+		if (_swapchainExtent.width == 0 || _swapchainExtent.height == 0)
+			return;
+
+		uint32_t image_index = 0;
+		vkAcquireNextImageKHR(_logicalDevice, _swapchain, UINT64_MAX, _swapchainSemaphore, VK_NULL_HANDLE, &image_index);
 
 		vkWaitForFences(_logicalDevice, 1, &_presentFences[image_index], VK_TRUE, UINT64_MAX);
 		vkResetFences(_logicalDevice, 1, &_presentFences[image_index]);
@@ -168,7 +162,7 @@ public:
 		//////////////////////////////////////////////////////////
 		{
 			VkResult res;
-			VkCommandBuffer& cmd = _presentBuffers[image_index];
+			const VkCommandBuffer& cmd = _presentBuffers[image_index];
 			VkCommandBufferBeginInfo beginInfo{};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 			res = vkBeginCommandBuffer(cmd, &beginInfo);
@@ -207,7 +201,7 @@ public:
 		//////////////////////////////////////////////////////////
 
 		VkSubmitInfo submitInfo{};
-		VkSemaphore waitSemaphores[] = { _swapchainSemaphores[image_index] };
+		VkSemaphore waitSemaphores[] = { _swapchainSemaphore };
 		VkSemaphore signalSemaphores[] = { _presentSemaphores[image_index] };
 
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -234,6 +228,41 @@ public:
 		presentInfo.pResults = nullptr;
 
 		vkQueuePresentKHR(_graphicsQueue.queue, &presentInfo);
+	}
+	/*
+	* !@brief Handles recreation of swapchain dependant objects
+	*/
+	void HandleResize()
+	{
+		vkWaitForFences(_logicalDevice, _presentFences.size(), _presentFences.data(), VK_TRUE, UINT64_MAX);
+
+		std::erase_if(_framebuffers, [&, this](VkFramebuffer& fb)
+			{
+				vkDestroyFramebuffer(_logicalDevice, fb, VK_NULL_HANDLE);
+				return true;
+			});
+		std::erase_if(_depthAttachments, [&, this](vkImageStruct img)
+			{
+				img.destroy(_logicalDevice, _allocator);
+				return true;
+			});
+		std::erase_if(_swapchainViews, [&, this](VkImageView view)
+			{
+				vkDestroyImageView(_logicalDevice, view, VK_NULL_HANDLE);
+				return true;
+			});
+		_swapchainImages.resize(0);
+		vkDestroySwapchainKHR(_logicalDevice, _swapchain, VK_NULL_HANDLE);
+		_swapchain = VK_NULL_HANDLE;
+
+		if (_initializeSwapchain())
+		{
+			_initializeSwapchainImages();
+			_initializeFramebuffers();
+
+			//it shouldn't change as I understand, but better to keep it under control
+			assert(_swapchainImages.size() == _presentBuffers.size());
+		}
 	}
 
 private:
@@ -377,7 +406,7 @@ private:
 	/*
 	* !@brief Initializes VkSwapchainKHR object based on the surface capabilities
 	* 
-	* @return VK_TRUE if initialization was successful, VK_FALSE otherwise
+	* @return VK_TRUE if initialization was successful, VK_FALSE if window size is zero or initialization failed
 	*/
 	VkBool32 _initializeSwapchain()
 	{
@@ -410,9 +439,10 @@ private:
 		glfwGetFramebufferSize(_glfwWindow, &fbWidth, &fbHeight);
 
 		std::vector<uint32_t> queueFamilies(std::move(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT })));
+		uint32_t desiredImageCount = glm::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
 
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.minImageCount = capabilities.minImageCount;
+		createInfo.minImageCount = desiredImageCount;
 		createInfo.surface = _surface;
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		createInfo.imageArrayLayers = 1;
@@ -430,6 +460,9 @@ private:
 
 		_swapchainExtent = createInfo.imageExtent;
 		_swapchainFormat = createInfo.imageFormat;
+
+		if (_swapchainExtent.width == 0 || _swapchainExtent.height == 0)
+			return VK_FALSE;
 
 		return vkCreateSwapchainKHR(_logicalDevice, &createInfo, VK_NULL_HANDLE, &_swapchain) == VK_SUCCESS;
 	}
