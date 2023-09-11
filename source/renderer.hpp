@@ -5,11 +5,10 @@
 #include <vector>
 #include <array>
 #include <string>
-#include <set>
-#include <assert.h>
-#include <iostream>
 
-#define _VkValidation
+#if DEBUG == 1
+	#define _VkValidation
+#endif
 
 struct vkQueueStruct
 {
@@ -64,6 +63,9 @@ class VulkanBase
 	VkExtent2D _swapchainExtent = { 0, 0 };
 
 	GLFWwindow* _glfwWindow = VK_NULL_HANDLE;
+
+	VkPipeline _pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
 
 public:
 
@@ -205,7 +207,7 @@ private:
 
 	void setupDebugMessenger();
 
-	bool checkValidationLayerSupport() const;
+	VkBool32 checkValidationLayerSupport() const;
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 #endif

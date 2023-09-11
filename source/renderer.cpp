@@ -4,6 +4,8 @@
 #define VK_KHR_swapchain
 #include "renderer.hpp"
 
+extern std::string exe_path;
+
 VulkanBase::VulkanBase(GLFWwindow* window)
 	: _glfwWindow(window)
 {
@@ -39,6 +41,143 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = _createFence(&_graphicsFence) & res;
 	res = _createFence(&_transferFence) & res;
 
+	VkPipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = 0;
+	layoutInfo.pushConstantRangeCount = 0;
+	vkCreatePipelineLayout(_logicalDevice, &layoutInfo, VK_NULL_HANDLE, &_pipelineLayout);
+
+	std::ifstream shaderFile(exe_path + "shaders/default_vert.spv", std::ios::ate | std::ios::binary);
+	std::size_t fileSize = (std::size_t)shaderFile.tellg();
+	shaderFile.seekg(0);
+	std::vector<char> vertShaderCode(fileSize);
+	shaderFile.read(vertShaderCode.data(), fileSize);
+	shaderFile.close();
+	shaderFile.open(exe_path + "shaders/default_frag.spv", std::ios::ate | std::ios::binary);
+	fileSize = (std::size_t)shaderFile.tellg();
+	shaderFile.seekg(0);
+	std::vector<char> fragShaderCode(fileSize);
+	shaderFile.read(fragShaderCode.data(), fileSize);
+	shaderFile.close();
+
+	VkShaderModuleCreateInfo vertShader{};
+	vertShader.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	vertShader.codeSize = vertShaderCode.size();
+	vertShader.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
+
+	VkShaderModuleCreateInfo fragShader{};
+	fragShader.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	fragShader.codeSize = fragShaderCode.size();
+	fragShader.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
+
+	std::array<VkShaderModule, 2> shaders;
+	vkCreateShaderModule(_logicalDevice, &vertShader, VK_NULL_HANDLE, &shaders[0]);
+	vkCreateShaderModule(_logicalDevice, &fragShader, VK_NULL_HANDLE, &shaders[1]);
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 0;
+	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
+	inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyState.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineRasterizationStateCreateInfo rasterizationState{};
+	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizationState.depthClampEnable = VK_FALSE;
+	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizationState.lineWidth = 1.0f;
+	rasterizationState.cullMode = VK_CULL_MODE_NONE; //VK_CULL_MODE_BACK_BIT;
+	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationState.depthBiasEnable = VK_FALSE;
+	rasterizationState.depthBiasConstantFactor = 0.0f;
+	rasterizationState.depthBiasClamp = 0.0f;
+	rasterizationState.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineColorBlendAttachmentState blendAttachmentState{};
+	blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	blendAttachmentState.blendEnable = VK_FALSE;	
+
+	VkPipelineColorBlendStateCreateInfo colorBlendState{};
+	colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendState.logicOpEnable = VK_FALSE;
+	colorBlendState.logicOp = VK_LOGIC_OP_COPY; // Optional
+	colorBlendState.attachmentCount = 1;
+	colorBlendState.pAttachments = &blendAttachmentState;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencilState.pNext = nullptr;
+	depthStencilState.depthTestEnable = VK_TRUE;
+	depthStencilState.depthWriteEnable = VK_TRUE;
+	depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencilState.depthBoundsTestEnable = VK_FALSE;
+	depthStencilState.minDepthBounds = 0.0f; // Optional
+	depthStencilState.maxDepthBounds = 1.0f; // Optional
+	depthStencilState.stencilTestEnable = VK_FALSE;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = nullptr;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = nullptr;
+
+	VkPipelineMultisampleStateCreateInfo multisampleState{};
+	multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampleState.sampleShadingEnable = VK_FALSE;
+	multisampleState.minSampleShading = 0;
+
+	std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.pNext = nullptr;
+	dynamicState.flags = 0;
+	dynamicState.dynamicStateCount = (uint32_t)dynamicStates.size();
+	dynamicState.pDynamicStates = dynamicStates.data();
+
+	VkGraphicsPipelineCreateInfo pipelineCI{};
+	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCI.layout = _pipelineLayout;
+	pipelineCI.renderPass = _renderPass;
+	pipelineCI.pInputAssemblyState = &inputAssemblyState;
+	pipelineCI.pRasterizationState = &rasterizationState;
+	pipelineCI.pColorBlendState = &colorBlendState;
+	pipelineCI.pMultisampleState = &multisampleState;
+	pipelineCI.pViewportState = &viewportState;
+	pipelineCI.pDepthStencilState = &depthStencilState;
+	pipelineCI.pDynamicState = &dynamicState;
+	pipelineCI.subpass = 0;
+	pipelineCI.pVertexInputState = &vertexInputInfo;
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = shaders[0];
+	vertShaderStageInfo.pName = "main";
+
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = shaders[1];
+	fragShaderStageInfo.pName = "main";
+
+	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = { vertShaderStageInfo, fragShaderStageInfo };
+	pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
+	pipelineCI.pStages = shaderStages.data();
+	pipelineCI.subpass = 0;
+
+	vkCreateGraphicsPipelines(_logicalDevice, VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &_pipeline);
+
+	std::for_each(shaders.begin(), shaders.end(), [&, this](VkShaderModule& it)
+		{
+			vkDestroyShaderModule(_logicalDevice, it, VK_NULL_HANDLE);
+		});
+
 	assert(res != 0);
 }
 
@@ -46,6 +185,8 @@ VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(_logicalDevice, _presentFences.size(), _presentFences.data(), VK_TRUE, UINT64_MAX);
 
+	vkDestroyPipelineLayout(_logicalDevice, _pipelineLayout, VK_NULL_HANDLE);
+	vkDestroyPipeline(_logicalDevice, _pipeline, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _transferFence, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _graphicsFence, VK_NULL_HANDLE);
 	std::erase_if(_presentFences, [&, this](VkFence& it)
@@ -130,7 +271,8 @@ void VulkanBase::Step() const
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		//vkCmdDraw(cmd, 3, 1, 0, 0);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
 		vkCmdEndRenderPass(cmd);
 
 		vkEndCommandBuffer(cmd);
@@ -247,7 +389,7 @@ VkBool32 VulkanBase::_enumeratePhysicalDevices()
 
 	const auto& it = std::find_if(devicesArray.cbegin(), devicesArray.cend(), [&, this](const VkPhysicalDevice& itt)
 		{
-			return this->_enumerateDeviceExtensions(itt, _extensions);
+			return _enumerateDeviceExtensions(itt, _extensions);
 		});
 
 	if (it != devicesArray.end())
@@ -278,7 +420,7 @@ VkBool32 VulkanBase::_initializeLogicalDevice()
 	deviceFeatures.shaderFloat64 = VK_TRUE;
 
 	std::vector<VkDeviceQueueCreateInfo> queueInfos;
-	std::vector<uint32_t> queueFamilies(std::move(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT })));
+	std::vector<uint32_t> queueFamilies(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT }));
 
 	float queuePriority = 1.0f;
 	for (uint32_t queueFamily : queueFamilies) {
@@ -350,7 +492,7 @@ VkBool32 VulkanBase::_initializeSwapchain()
 	int fbWidth = 0, fbHeight = 0;
 	glfwGetFramebufferSize(_glfwWindow, &fbWidth, &fbHeight);
 
-	std::vector<uint32_t> queueFamilies(std::move(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT })));
+	std::vector<uint32_t> queueFamilies(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT }));
 	uint32_t desiredImageCount = glm::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
 
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -673,7 +815,7 @@ void VulkanBase::setupDebugMessenger()
 	}
 }
 
-bool VulkanBase::checkValidationLayerSupport() const
+VkBool32 VulkanBase::checkValidationLayerSupport() const
 {
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -681,11 +823,14 @@ bool VulkanBase::checkValidationLayerSupport() const
 	std::vector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-	for (const char* layerName : validationLayers) {
-		bool layerFound = false;
+	for (const char* layerName : validationLayers) 
+	{
+		VkBool32 layerFound = false;
 
-		for (const auto& layerProperties : availableLayers) {
-			if (strcmp(layerName, layerProperties.layerName) == 0) {
+		for (const auto& layerProperties : availableLayers) 
+		{
+			if (strcmp(layerName, layerProperties.layerName) == 0) 
+			{
 				layerFound = true;
 				break;
 			}

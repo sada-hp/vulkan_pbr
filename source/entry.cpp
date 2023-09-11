@@ -1,7 +1,15 @@
 #include "renderer.hpp"
 
-int main()
+std::string exe_path;
+
+int main(int argc, char** argv)
 {
+	if (argc > 0)
+	{
+		exe_path = argv[0];
+		exe_path = exe_path.substr(0, exe_path.find_last_of('\\') + 1);
+	}
+
 	GLFWwindow* pWindow = nullptr;
 	glfwInit();
 
