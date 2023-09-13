@@ -41,9 +41,59 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = _createFence(&_graphicsFence) & res;
 	res = _createFence(&_transferFence) & res;
 
+	VkBufferCreateInfo uboInfo{};
+	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	uboInfo.size = sizeof(glm::mat4);
+	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VmaAllocationCreateInfo uboAllocCreateInfo{};
+	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	_ubo.create(_allocator, &uboInfo, &uboAllocCreateInfo);
+	camera.position.z = -1.f;
+
+	VkDescriptorPoolSize poolSizes{};
+	poolSizes.descriptorCount = 1;
+	poolSizes.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	VkDescriptorPoolCreateInfo dpoolInfo{};
+	dpoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	dpoolInfo.maxSets = 1;
+	dpoolInfo.poolSizeCount = 1;
+	dpoolInfo.pPoolSizes = &poolSizes;
+	//dpoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; //unnecessary
+	vkCreateDescriptorPool(_logicalDevice, &dpoolInfo, VK_NULL_HANDLE, &_descriptorPool);
+
+	VkDescriptorSetLayoutBinding binding{};
+	binding.binding = 0;
+	binding.descriptorCount = 1;
+	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	VkDescriptorSetLayoutCreateInfo dsetInfo{};
+	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dsetInfo.bindingCount = 1;
+	dsetInfo.pBindings = &binding;
+	vkCreateDescriptorSetLayout(_logicalDevice, &dsetInfo, VK_NULL_HANDLE, &_descriptorLayout);
+
+	VkDescriptorSetAllocateInfo setAlloc{};
+	setAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	setAlloc.descriptorPool = _descriptorPool;
+	setAlloc.descriptorSetCount = 1;
+	setAlloc.pSetLayouts = &_descriptorLayout;
+	vkAllocateDescriptorSets(_logicalDevice, &setAlloc, &_descriptorSet);
+
+	VkWriteDescriptorSet writes{};
+	writes.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes.descriptorCount = 1;
+	writes.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writes.dstBinding = 0;
+	writes.pBufferInfo = &_ubo.descriptorInfo;
+	writes.dstSet = _descriptorSet;
+	vkUpdateDescriptorSets(_logicalDevice, 1, &writes, 0, VK_NULL_HANDLE);
+
 	VkPipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount = 0;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &_descriptorLayout;
 	layoutInfo.pushConstantRangeCount = 0;
 	vkCreatePipelineLayout(_logicalDevice, &layoutInfo, VK_NULL_HANDLE, &_pipelineLayout);
 
@@ -185,6 +235,11 @@ VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(_logicalDevice, _presentFences.size(), _presentFences.data(), VK_TRUE, UINT64_MAX);
 
+	_ubo.destroy(_allocator);
+
+	vkDestroyDescriptorSetLayout(_logicalDevice, _descriptorLayout, VK_NULL_HANDLE);
+	vkDestroyDescriptorPool(_logicalDevice, _descriptorPool, VK_NULL_HANDLE);
+
 	vkDestroyPipelineLayout(_logicalDevice, _pipelineLayout, VK_NULL_HANDLE);
 	vkDestroyPipeline(_logicalDevice, _pipeline, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _transferFence, VK_NULL_HANDLE);
@@ -237,6 +292,12 @@ void VulkanBase::Step() const
 	vkWaitForFences(_logicalDevice, 1, &_presentFences[image_index], VK_TRUE, UINT64_MAX);
 	vkResetFences(_logicalDevice, 1, &_presentFences[image_index]);
 
+	glm::mat4 projection = glm::perspective(60.f, _swapchainExtent.width / static_cast<float>(_swapchainExtent.height), 0.1f, 1000.f);
+	projection[1][1] *= -1;
+	memcpy(_ubo.allocInfo.pMappedData, &camera.get_ubo(projection), sizeof(glm::mat4));
+	vmaFlushAllocation(_allocator, _ubo.memory, 0, VK_WHOLE_SIZE); //clean cache
+
+
 	//////////////////////////////////////////////////////////
 	{
 		VkResult res;
@@ -271,6 +332,7 @@ void VulkanBase::Step() const
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSet, 0, VK_NULL_HANDLE);
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 		vkCmdEndRenderPass(cmd);
@@ -844,8 +906,8 @@ VkBool32 VulkanBase::checkValidationLayerSupport() const
 	return true;
 }
 
- VkBool32 VulkanBase::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) 
- {
+VkBool32 VulkanBase::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) 
+{
 	std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
 	return VK_FALSE;

@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "renderer.hpp"
 
 std::string exe_path;
@@ -27,11 +28,24 @@ int main(int argc, char** argv)
 			rndr->HandleResize();
 		});
 
+	unsigned long long frame_count = 0;
+	auto count_start = std::chrono::steady_clock::now();
 	while (!glfwWindowShouldClose(pWindow))
 	{
 		glfwPollEvents();
 		glfwSwapBuffers(pWindow);
 		render.Step();
+		frame_count++;
+		auto count_end = std::chrono::steady_clock::now();
+
+		if (std::chrono::duration_cast<std::chrono::seconds>(count_end - count_start).count() >= 1L)
+		{
+			long long latency = std::chrono::duration_cast<std::chrono::seconds>(count_end - count_start).count() / frame_count;
+			glfwSetWindowTitle(pWindow, ("Vulkan PBR " + std::to_string(frame_count)).c_str());
+
+			count_start = count_end;
+			frame_count = 0;
+		}
 	}
 
 	glfwDestroyWindow(pWindow);

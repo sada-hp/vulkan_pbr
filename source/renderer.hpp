@@ -1,6 +1,7 @@
 #pragma once
 #include <glfw/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <vma/vk_mem_alloc.h>
 #include <vector>
 #include <array>
@@ -10,6 +11,37 @@
 	#define _VkValidation
 #endif
 
+struct ViewCameraStruct
+{
+	const glm::mat4& get_ubo(const glm::mat4& proj = glm::mat4(1.f)) const
+	{
+		//cache
+		static glm::vec3 old_pos = glm::vec3(0.f);
+		static glm::vec3 old_ori = glm::vec3(0.f);
+
+		if (position != old_pos || orientation != old_ori)
+		{
+			glm::quat q = glm::quat_cast(glm::mat3(1.f));
+			q = q * glm::angleAxis(glm::radians(orientation.x), glm::vec3(1, 0, 0));
+			q = q * glm::angleAxis(glm::radians(orientation.y), glm::vec3(0, 1, 0));
+			q = q * glm::angleAxis(glm::radians(orientation.z), glm::vec3(0, 0, 1));
+
+			ubo = proj * glm::translate(glm::mat4_cast(q), position);
+
+			old_pos = position;
+			old_ori = orientation;
+		}
+
+		return ubo;
+	}
+	//!@brief XYZ coordinates
+	glm::vec3 position = glm::vec3(0.f);
+	//!@brief Euler angles PYR
+	glm::vec3 orientation = glm::vec3(0.f);
+private:
+	mutable glm::mat4 ubo = glm::mat4(1.f);
+};
+
 struct vkQueueStruct
 {
 	VkQueue queue = VK_NULL_HANDLE;
@@ -18,7 +50,7 @@ struct vkQueueStruct
 
 struct vkImageStruct
 {
-	void destroy(VkDevice device, VmaAllocator allocator)
+	void destroy(const VkDevice& device, const VmaAllocator& allocator)
 	{
 		vkDestroyImageView(device, view, VK_NULL_HANDLE);
 		vmaDestroyImage(allocator, image, memory);
@@ -28,6 +60,29 @@ struct vkImageStruct
 	VkImageView view = VK_NULL_HANDLE;
 	VkSampler sampler = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;
+};
+
+struct vkBufferStruct
+{
+	void create(const VmaAllocator& allocator, const VkBufferCreateInfo* createInfo, const VmaAllocationCreateInfo* allocCreateInfo)
+	{
+		vmaCreateBuffer(allocator, createInfo, allocCreateInfo, &buffer, &memory, &allocInfo);
+		descriptorInfo.buffer = buffer;
+		descriptorInfo.offset = 0;
+		descriptorInfo.range = createInfo->size;
+	}
+
+	void destroy(const VmaAllocator& allocator)
+	{
+		vmaDestroyBuffer(allocator, buffer, memory);
+		allocInfo = {};
+		descriptorInfo = {};
+	}
+
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VmaAllocation memory = VK_NULL_HANDLE;
+	VmaAllocationInfo allocInfo = {};
+	VkDescriptorBufferInfo descriptorInfo = {};
 };
 
 class VulkanBase
@@ -67,7 +122,16 @@ class VulkanBase
 	VkPipeline _pipeline = VK_NULL_HANDLE;
 	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
 
+	vkBufferStruct _ubo = {};
+
+	VkDescriptorSet _descriptorSet = VK_NULL_HANDLE;
+	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout _descriptorLayout = VK_NULL_HANDLE;
 public:
+	/*
+	* !@brief Should be modified to control the scene
+	*/
+	ViewCameraStruct camera;
 
 	VulkanBase(GLFWwindow* window);
 
