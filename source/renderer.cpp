@@ -693,9 +693,9 @@ VkBool32 VulkanBase::_prepareScene()
 
 	{
 		std::array<std::future<void>, 6> loaders;
-		const std::array<std::string, 6> sky_collection = { (exec_path + "content\\Background_East.png"), (exec_path + "content\\Background_West.png"),
-			(exec_path + "content\\Background_Top.png"), (exec_path + "content\\Background_Bottom.png"),
-			(exec_path + "content\\Background_North.png"), (exec_path + "content\\Background_South.png") };
+		const std::array<std::string, 6> sky_collection = { (exec_path + "content\\Background_East.jpg"), (exec_path + "content\\Background_West.jpg"),
+			(exec_path + "content\\Background_Top.jpg"), (exec_path + "content\\Background_Bottom.jpg"),
+			(exec_path + "content\\Background_North.jpg"), (exec_path + "content\\Background_South.jpg") };
 		constexpr int resolution = 2048 * 2048 * 4;
 		unsigned char* pixels = (unsigned char*)malloc(resolution * 6);
 
