@@ -2,9 +2,10 @@
 #define GLFW_INCLUDE_VULKAN
 #define VMA_IMPLEMENTATION
 #define VK_KHR_swapchain
+#define STB_IMAGE_IMPLEMENTATION
 #include "renderer.hpp"
 
-extern std::string exe_path;
+extern std::string exec_path;
 
 VulkanBase::VulkanBase(GLFWwindow* window)
 	: _glfwWindow(window)
@@ -44,189 +45,21 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	VkBufferCreateInfo uboInfo{};
 	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	uboInfo.size = sizeof(glm::mat4);
+	uboInfo.size = sizeof(ModelViewProjection);
 	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	_ubo.create(_allocator, &uboInfo, &uboAllocCreateInfo);
-	camera.position.z = -1.f;
+	res = _ubo.create(_allocator, &uboInfo, &uboAllocCreateInfo) & res;
 
-	VkDescriptorPoolSize poolSizes{};
-	poolSizes.descriptorCount = 1;
-	poolSizes.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	VkDescriptorPoolCreateInfo dpoolInfo{};
-	dpoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	dpoolInfo.maxSets = 1;
-	dpoolInfo.poolSizeCount = 1;
-	dpoolInfo.pPoolSizes = &poolSizes;
-	//dpoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; //unnecessary
-	vkCreateDescriptorPool(_logicalDevice, &dpoolInfo, VK_NULL_HANDLE, &_descriptorPool);
+	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = 2;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = 1;
+	res = _initializeDescriptorPool(poolSizes.data(), poolSizes.size(), 2) & res;
 
-	VkDescriptorSetLayoutBinding binding{};
-	binding.binding = 0;
-	binding.descriptorCount = 1;
-	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	VkDescriptorSetLayoutCreateInfo dsetInfo{};
-	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	dsetInfo.bindingCount = 1;
-	dsetInfo.pBindings = &binding;
-	vkCreateDescriptorSetLayout(_logicalDevice, &dsetInfo, VK_NULL_HANDLE, &_descriptorLayout);
-
-	VkDescriptorSetAllocateInfo setAlloc{};
-	setAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	setAlloc.descriptorPool = _descriptorPool;
-	setAlloc.descriptorSetCount = 1;
-	setAlloc.pSetLayouts = &_descriptorLayout;
-	vkAllocateDescriptorSets(_logicalDevice, &setAlloc, &_descriptorSet);
-
-	VkWriteDescriptorSet writes{};
-	writes.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes.descriptorCount = 1;
-	writes.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	writes.dstBinding = 0;
-	writes.pBufferInfo = &_ubo.descriptorInfo;
-	writes.dstSet = _descriptorSet;
-	vkUpdateDescriptorSets(_logicalDevice, 1, &writes, 0, VK_NULL_HANDLE);
-
-	VkPipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount = 1;
-	layoutInfo.pSetLayouts = &_descriptorLayout;
-	layoutInfo.pushConstantRangeCount = 0;
-	vkCreatePipelineLayout(_logicalDevice, &layoutInfo, VK_NULL_HANDLE, &_pipelineLayout);
-
-	std::ifstream shaderFile(exe_path + "shaders/default_vert.spv", std::ios::ate | std::ios::binary);
-	std::size_t fileSize = (std::size_t)shaderFile.tellg();
-	shaderFile.seekg(0);
-	std::vector<char> vertShaderCode(fileSize);
-	shaderFile.read(vertShaderCode.data(), fileSize);
-	shaderFile.close();
-	shaderFile.open(exe_path + "shaders/default_frag.spv", std::ios::ate | std::ios::binary);
-	fileSize = (std::size_t)shaderFile.tellg();
-	shaderFile.seekg(0);
-	std::vector<char> fragShaderCode(fileSize);
-	shaderFile.read(fragShaderCode.data(), fileSize);
-	shaderFile.close();
-
-	VkShaderModuleCreateInfo vertShader{};
-	vertShader.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	vertShader.codeSize = vertShaderCode.size();
-	vertShader.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
-
-	VkShaderModuleCreateInfo fragShader{};
-	fragShader.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	fragShader.codeSize = fragShaderCode.size();
-	fragShader.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
-
-	std::array<VkShaderModule, 2> shaders;
-	vkCreateShaderModule(_logicalDevice, &vertShader, VK_NULL_HANDLE, &shaders[0]);
-	vkCreateShaderModule(_logicalDevice, &fragShader, VK_NULL_HANDLE, &shaders[1]);
-
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
-
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
-	inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	inputAssemblyState.primitiveRestartEnable = VK_FALSE;
-
-	VkPipelineRasterizationStateCreateInfo rasterizationState{};
-	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizationState.depthClampEnable = VK_FALSE;
-	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterizationState.lineWidth = 1.0f;
-	rasterizationState.cullMode = VK_CULL_MODE_NONE; //VK_CULL_MODE_BACK_BIT;
-	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	rasterizationState.depthBiasEnable = VK_FALSE;
-	rasterizationState.depthBiasConstantFactor = 0.0f;
-	rasterizationState.depthBiasClamp = 0.0f;
-	rasterizationState.depthBiasSlopeFactor = 0.0f;
-
-	VkPipelineColorBlendAttachmentState blendAttachmentState{};
-	blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	blendAttachmentState.blendEnable = VK_FALSE;	
-
-	VkPipelineColorBlendStateCreateInfo colorBlendState{};
-	colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlendState.logicOpEnable = VK_FALSE;
-	colorBlendState.logicOp = VK_LOGIC_OP_COPY; // Optional
-	colorBlendState.attachmentCount = 1;
-	colorBlendState.pAttachments = &blendAttachmentState;
-
-	VkPipelineDepthStencilStateCreateInfo depthStencilState{};
-	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencilState.pNext = nullptr;
-	depthStencilState.depthTestEnable = VK_TRUE;
-	depthStencilState.depthWriteEnable = VK_TRUE;
-	depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-	depthStencilState.depthBoundsTestEnable = VK_FALSE;
-	depthStencilState.minDepthBounds = 0.0f; // Optional
-	depthStencilState.maxDepthBounds = 1.0f; // Optional
-	depthStencilState.stencilTestEnable = VK_FALSE;
-
-	VkPipelineViewportStateCreateInfo viewportState{};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = nullptr;
-
-	VkPipelineMultisampleStateCreateInfo multisampleState{};
-	multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampleState.sampleShadingEnable = VK_FALSE;
-	multisampleState.minSampleShading = 0;
-
-	std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicState{};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.pNext = nullptr;
-	dynamicState.flags = 0;
-	dynamicState.dynamicStateCount = (uint32_t)dynamicStates.size();
-	dynamicState.pDynamicStates = dynamicStates.data();
-
-	VkGraphicsPipelineCreateInfo pipelineCI{};
-	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineCI.layout = _pipelineLayout;
-	pipelineCI.renderPass = _renderPass;
-	pipelineCI.pInputAssemblyState = &inputAssemblyState;
-	pipelineCI.pRasterizationState = &rasterizationState;
-	pipelineCI.pColorBlendState = &colorBlendState;
-	pipelineCI.pMultisampleState = &multisampleState;
-	pipelineCI.pViewportState = &viewportState;
-	pipelineCI.pDepthStencilState = &depthStencilState;
-	pipelineCI.pDynamicState = &dynamicState;
-	pipelineCI.subpass = 0;
-	pipelineCI.pVertexInputState = &vertexInputInfo;
-
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = shaders[0];
-	vertShaderStageInfo.pName = "main";
-
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = shaders[1];
-	fragShaderStageInfo.pName = "main";
-
-	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = { vertShaderStageInfo, fragShaderStageInfo };
-	pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
-	pipelineCI.pStages = shaderStages.data();
-	pipelineCI.subpass = 0;
-
-	vkCreateGraphicsPipelines(_logicalDevice, VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &_pipeline);
-
-	std::for_each(shaders.begin(), shaders.end(), [&, this](VkShaderModule& it)
-		{
-			vkDestroyShaderModule(_logicalDevice, it, VK_NULL_HANDLE);
-		});
+	_prepareScene();
 
 	assert(res != 0);
 }
@@ -236,12 +69,11 @@ VulkanBase::~VulkanBase() noexcept
 	vkWaitForFences(_logicalDevice, _presentFences.size(), _presentFences.data(), VK_TRUE, UINT64_MAX);
 
 	_ubo.destroy(_allocator);
+	_skyboxImg.destroy(_logicalDevice, _allocator);
+	triangle.destroy(_logicalDevice, _descriptorPool);
+	skybox.destroy(_logicalDevice, _descriptorPool);
 
-	vkDestroyDescriptorSetLayout(_logicalDevice, _descriptorLayout, VK_NULL_HANDLE);
 	vkDestroyDescriptorPool(_logicalDevice, _descriptorPool, VK_NULL_HANDLE);
-
-	vkDestroyPipelineLayout(_logicalDevice, _pipelineLayout, VK_NULL_HANDLE);
-	vkDestroyPipeline(_logicalDevice, _pipeline, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _transferFence, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _graphicsFence, VK_NULL_HANDLE);
 	std::erase_if(_presentFences, [&, this](VkFence& it)
@@ -292,9 +124,7 @@ void VulkanBase::Step() const
 	vkWaitForFences(_logicalDevice, 1, &_presentFences[image_index], VK_TRUE, UINT64_MAX);
 	vkResetFences(_logicalDevice, 1, &_presentFences[image_index]);
 
-	glm::mat4 projection = glm::perspective(60.f, _swapchainExtent.width / static_cast<float>(_swapchainExtent.height), 0.1f, 1000.f);
-	projection[1][1] *= -1;
-	memcpy(_ubo.allocInfo.pMappedData, &camera.get_ubo(projection), sizeof(glm::mat4));
+	memcpy(_ubo.allocInfo.pMappedData, &camera.get_mvp(), sizeof(ModelViewProjection));
 	vmaFlushAllocation(_allocator, _ubo.memory, 0, VK_WHOLE_SIZE); //clean cache
 
 
@@ -332,8 +162,11 @@ void VulkanBase::Step() const
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSet, 0, VK_NULL_HANDLE);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipelineLayout, 0, 1, &skybox.descriptorSet, 0, VK_NULL_HANDLE);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipeline);
+		vkCmdDraw(cmd, 36, 1, 0, 0);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle.pipelineLayout, 0, 1, &triangle.descriptorSet, 0, VK_NULL_HANDLE);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle.pipeline);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 		vkCmdEndRenderPass(cmd);
 
@@ -366,7 +199,7 @@ void VulkanBase::Step() const
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &_swapchain;
 	presentInfo.pImageIndices = &image_index;
-	presentInfo.pResults = nullptr;
+	presentInfo.pResults = VK_NULL_HANDLE;
 
 	vkQueuePresentKHR(_graphicsQueue.queue, &presentInfo);
 }
@@ -435,7 +268,7 @@ VkBool32 VulkanBase::_initializeInstance()
 	createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
 #else
 	createInfo.enabledLayerCount = 0;
-	createInfo.pNext = nullptr;
+	createInfo.pNext = VK_NULL_HANDLE;
 #endif
 	return vkCreateInstance(&createInfo, VK_NULL_HANDLE, &_instance) == VK_SUCCESS;
 }
@@ -445,7 +278,7 @@ VkBool32 VulkanBase::_enumeratePhysicalDevices()
 	uint32_t devicesCount;
 	std::vector<VkPhysicalDevice> devicesArray;
 
-	vkEnumeratePhysicalDevices(_instance, &devicesCount, nullptr);
+	vkEnumeratePhysicalDevices(_instance, &devicesCount, VK_NULL_HANDLE);
 	devicesArray.resize(devicesCount);
 	vkEnumeratePhysicalDevices(_instance, &devicesCount, devicesArray.data());
 
@@ -468,18 +301,9 @@ VkBool32 VulkanBase::_initializeLogicalDevice()
 	assert(_physicalDevice != VK_NULL_HANDLE);
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
-	deviceFeatures.sampleRateShading = VK_TRUE;
-	deviceFeatures.geometryShader = VK_TRUE;
 	deviceFeatures.imageCubeArray = VK_TRUE;
-	deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
-	deviceFeatures.tessellationShader = VK_TRUE;
-	deviceFeatures.samplerAnisotropy = VK_TRUE;
-	deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
-	deviceFeatures.independentBlend = VK_TRUE;
-	deviceFeatures.depthBiasClamp = VK_TRUE;
-	deviceFeatures.depthClamp = VK_TRUE;
 	deviceFeatures.fullDrawIndexUint32 = VK_TRUE;
-	deviceFeatures.shaderFloat64 = VK_TRUE;
+	deviceFeatures.samplerAnisotropy = VK_TRUE;
 
 	std::vector<VkDeviceQueueCreateInfo> queueInfos;
 	std::vector<uint32_t> queueFamilies(_findQueues({ VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT }));
@@ -580,6 +404,10 @@ VkBool32 VulkanBase::_initializeSwapchain()
 	if (_swapchainExtent.width == 0 || _swapchainExtent.height == 0)
 		return VK_FALSE;
 
+	glm::mat4 projection = glm::perspective(30.f, static_cast<float>(_swapchainExtent.width) / static_cast<float>(_swapchainExtent.height), 0.1f, 1000.f);
+	projection[1][1] *= -1;
+	camera._set_projection(projection);
+
 	return vkCreateSwapchainKHR(_logicalDevice, &createInfo, VK_NULL_HANDLE, &_swapchain) == VK_SUCCESS;
 }
 
@@ -588,7 +416,7 @@ VkBool32 VulkanBase::_initializeSwapchainImages()
 	assert(_swapchain != VK_NULL_HANDLE);
 
 	uint32_t imagesCount = 0;
-	vkGetSwapchainImagesKHR(_logicalDevice, _swapchain, &imagesCount, nullptr);
+	vkGetSwapchainImagesKHR(_logicalDevice, _swapchain, &imagesCount, VK_NULL_HANDLE);
 	_swapchainImages.resize(imagesCount);
 	_depthAttachments.resize(imagesCount);
 	VkBool32 res = vkGetSwapchainImagesKHR(_logicalDevice, _swapchain, &imagesCount, _swapchainImages.data()) == VK_SUCCESS;
@@ -638,12 +466,9 @@ VkBool32 VulkanBase::_initializeSwapchainImages()
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	viewInfo.format = _depthFormat;
 
-	for (int i = 0; i < _depthAttachments.size(); i++)
+	for (auto& attachment : _depthAttachments)
 	{
-		res = (vmaCreateImage(_allocator, &depthInfo, &allocCreateInfo, &_depthAttachments[i].image, &_depthAttachments[i].memory, VK_NULL_HANDLE) == VK_SUCCESS) & res;
-		viewInfo.image = _depthAttachments[i].image;
-		res = (vkCreateImageView(_logicalDevice, &viewInfo, VK_NULL_HANDLE, &_depthAttachments[i].view) == VK_SUCCESS) & res;
-
+		res = attachment.create(_logicalDevice, _allocator, &depthInfo, &viewInfo, VK_NULL_HANDLE, &allocCreateInfo) & res;
 	}
 
 	return res;
@@ -731,6 +556,18 @@ VkBool32 VulkanBase::_initializeCommandPool(const uint32_t targetQueueIndex, VkC
 	createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	return vkCreateCommandPool(_logicalDevice, &createInfo, VK_NULL_HANDLE, outPool) == VK_SUCCESS;
+}
+
+VkBool32 VulkanBase::_initializeDescriptorPool(const VkDescriptorPoolSize* poolSizes, const size_t poolSizesCount, const uint32_t setsCount)
+{
+	VkDescriptorPoolCreateInfo dpoolInfo{};
+	dpoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	dpoolInfo.maxSets = setsCount;
+	dpoolInfo.poolSizeCount = poolSizesCount;
+	dpoolInfo.pPoolSizes = poolSizes;
+	dpoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+	return vkCreateDescriptorPool(_logicalDevice, &dpoolInfo, VK_NULL_HANDLE, &_descriptorPool) == VK_SUCCESS;
 }
 
 VkBool32 VulkanBase::_allocateBuffers(const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers)
@@ -823,6 +660,230 @@ vkQueueStruct VulkanBase::_getVkQueueStruct(const uint32_t& familyIndex) const
 	return output;
 }
 
+VkBool32 VulkanBase::_prepareScene()
+{
+	VkBool32 res = 1;
+
+	{
+		VkWriteDescriptorSet write{};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		write.dstBinding = 0;
+		write.pBufferInfo = &_ubo.descriptorInfo;
+		VkDescriptorSetLayoutBinding binding{};
+		binding.binding = 0;
+		binding.descriptorCount = 1;
+		binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		vkObjectCreateInfo triCI{};
+		triCI.bindingsCount = 1;
+		triCI.pBindings = &binding;
+		triCI.descriptorPool = _descriptorPool;
+		triCI.renderPass = _renderPass;
+		triCI.shaderStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		triCI.shaderName = exec_path + "shaders\\default";
+		triCI.writesCount = 1;
+		triCI.pWrites = &write;
+
+		res = triangle.create(_logicalDevice, triCI) & res;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////cube_texture
+
+	{
+		std::array<std::future<void>, 6> loaders;
+		const std::array<std::string, 6> sky_collection = { (exec_path + "content\\Background_East.png"), (exec_path + "content\\Background_West.png"),
+			(exec_path + "content\\Background_Top.png"), (exec_path + "content\\Background_Bottom.png"),
+			(exec_path + "content\\Background_North.png"), (exec_path + "content\\Background_South.png") };
+		constexpr int resolution = 2048 * 2048 * 4;
+		unsigned char* pixels = (unsigned char*)malloc(resolution * 6);
+
+		for (int i = 0; i < 6; i++)
+		{
+			loaders[i] = std::async(std::launch::async, [&, this, i]()
+				{
+					int x, y, c;
+					void* target = stbi_load(sky_collection[i].c_str(), &x, &y, &c, 4);
+					memcpy(pixels + resolution * i, target, resolution);
+					free(target);
+				});
+		}
+
+		std::for_each(loaders.begin(), loaders.end(), [](const auto& it) {it.wait(); });
+
+		vkBufferStruct stagingBuffer{};
+		VkBufferCreateInfo sbInfo{};
+		sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		sbInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		sbInfo.queueFamilyIndexCount = 1;
+		sbInfo.pQueueFamilyIndices = &_transferQueue.index;
+		sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		sbInfo.size = resolution * 6;
+		VmaAllocationCreateInfo sbAlloc{};
+		sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+		sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		stagingBuffer.create(_allocator, &sbInfo, &sbAlloc);
+
+		memcpy(stagingBuffer.allocInfo.pMappedData, pixels, resolution * 6);
+
+		VkImageCreateInfo skyInfo{};
+		skyInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		skyInfo.arrayLayers = 6;
+		skyInfo.extent = { 2048, 2048, 1 };
+		skyInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		skyInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		skyInfo.mipLevels = 1;
+		skyInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+		skyInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		skyInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		skyInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		skyInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		skyInfo.imageType = VK_IMAGE_TYPE_2D;
+		VkImageViewCreateInfo skyView{};
+		skyView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		skyView.format = VK_FORMAT_R8G8B8A8_SRGB;
+		skyView.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+		skyView.subresourceRange.baseArrayLayer = 0;
+		skyView.subresourceRange.baseMipLevel = 0;
+		skyView.subresourceRange.layerCount = 6;
+		skyView.subresourceRange.levelCount = 1;
+		skyView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		VmaAllocationCreateInfo skyAlloc{};
+		skyAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(_physicalDevice, &properties);
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 1;
+		_skyboxImg.create(_logicalDevice, _allocator, &skyInfo, &skyView, &samplerInfo, &skyAlloc);
+		VkCommandBuffer cmd;
+		VkCommandBufferAllocateInfo cmdAlloc{};
+		cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		cmdAlloc.commandBufferCount = 1;
+		cmdAlloc.commandPool = _transferPool;
+		cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		VkCommandBufferBeginInfo cmdBegin{};
+		cmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		cmdBegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		vkAllocateCommandBuffers(_logicalDevice, &cmdAlloc, &cmd);
+		vkBeginCommandBuffer(cmd, &cmdBegin);
+
+		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = _skyboxImg.image;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.layerCount = 6;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+		int i = 0;
+		std::array<VkBufferImageCopy, 6> regions = {};
+		for (auto& region : regions)
+		{
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.baseArrayLayer = i;
+			region.imageSubresource.layerCount = 1;
+			region.imageSubresource.mipLevel = 0;
+			region.bufferOffset = i * resolution;
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = { 2048, 2048, 1 };
+			i++;
+		}
+
+		vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, _skyboxImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions.size(), regions.data());
+		VkSubmitInfo submition{};
+		submition.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submition.commandBufferCount = 1;
+		submition.pCommandBuffers = &cmd;
+
+		vkEndCommandBuffer(cmd);
+		vkQueueSubmit(_transferQueue.queue, 1, &submition, _transferFence);
+		vkWaitForFences(_logicalDevice, 1, &_transferFence, VK_TRUE, UINT64_MAX);
+		vkFreeCommandBuffers(_logicalDevice, _transferPool, 1, &cmd);
+
+		cmdAlloc.commandPool = _graphicsPool;
+		vkAllocateCommandBuffers(_logicalDevice, &cmdAlloc, &cmd);
+		vkBeginCommandBuffer(cmd, &cmdBegin);
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkEndCommandBuffer(cmd);
+		vkQueueSubmit(_graphicsQueue.queue, 1, &submition, _graphicsFence);
+		vkWaitForFences(_logicalDevice, 1, &_graphicsFence, VK_TRUE, UINT64_MAX);
+		vkFreeCommandBuffers(_logicalDevice, _graphicsPool, 1, &cmd);
+
+		stagingBuffer.destroy(_allocator);
+		free(pixels);
+	}
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////skybox
+
+	{
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+		bindings[0].binding = 0;
+		bindings[0].descriptorCount = 1;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		bindings[1].binding = 1;
+		bindings[1].descriptorCount = 1;
+		bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		std::array<VkWriteDescriptorSet, 2> writes{};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writes[0].dstBinding = 0;
+		writes[0].pBufferInfo = &_ubo.descriptorInfo;
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[1].dstBinding = 1;
+		writes[1].pImageInfo = &_skyboxImg.descriptorInfo;
+		
+		vkObjectCreateInfo skyboxCI{};
+		skyboxCI.bindingsCount = bindings.size();
+		skyboxCI.pBindings = bindings.data();
+		skyboxCI.writesCount = writes.size();
+		skyboxCI.pWrites = writes.data();
+		skyboxCI.renderPass = _renderPass;
+		skyboxCI.descriptorPool = _descriptorPool;
+		skyboxCI.shaderName = exec_path + "shaders/background";
+		skyboxCI.shaderStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		res = skybox.create(_logicalDevice, skyboxCI) & res;
+	}
+
+	return res;
+}
+
 std::vector<const char*> VulkanBase::_getRequiredExtensions()
 {
 	uint32_t glfwExtensionCount = 0;
@@ -842,7 +903,7 @@ std::vector<const char*> VulkanBase::_getRequiredExtensions()
 VkResult VulkanBase::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) 
 {
 	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-	if (func != nullptr) {
+	if (func != VK_NULL_HANDLE) {
 		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
 	}
 	else {
@@ -853,7 +914,7 @@ VkResult VulkanBase::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkD
 void VulkanBase::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) 
 {
 	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-	if (func != nullptr) {
+	if (func != VK_NULL_HANDLE) {
 		func(instance, debugMessenger, pAllocator);
 	}
 }
@@ -872,7 +933,7 @@ void VulkanBase::setupDebugMessenger()
 	VkDebugUtilsMessengerCreateInfoEXT createInfo;
 	populateDebugMessengerCreateInfo(createInfo);
 
-	if (CreateDebugUtilsMessengerEXT(_instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+	if (CreateDebugUtilsMessengerEXT(_instance, &createInfo, VK_NULL_HANDLE, &debugMessenger) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug messenger!");
 	}
 }
@@ -880,7 +941,7 @@ void VulkanBase::setupDebugMessenger()
 VkBool32 VulkanBase::checkValidationLayerSupport() const
 {
 	uint32_t layerCount;
-	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+	vkEnumerateInstanceLayerProperties(&layerCount, VK_NULL_HANDLE);
 
 	std::vector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());

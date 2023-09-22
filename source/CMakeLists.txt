@@ -1,6 +1,6 @@
 include_directories(${DemoPrj_SOURCE_DIR}/include)
 link_directories(${DemoPrj_SOURCE_DIR}/libraries)
-add_executable(source entry.cpp renderer.cpp renderer.hpp pch.hpp)
+add_executable(source entry.cpp renderer.cpp renderer.hpp pch.hpp object.cpp object.hpp)
 add_compile_definitions("DEBUG=$<CONFIG:Debug>")
 set_target_properties(source PROPERTIES  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DemoPrj_SOURCE_DIR}/bin)
 set_target_properties(source PROPERTIES  RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DemoPrj_SOURCE_DIR}/bin)

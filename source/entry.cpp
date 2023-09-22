@@ -1,14 +1,14 @@
 #include "pch.hpp"
 #include "renderer.hpp"
 
-std::string exe_path;
+std::string exec_path;
 
 int main(int argc, char** argv)
 {
 	if (argc > 0)
 	{
-		exe_path = argv[0];
-		exe_path = exe_path.substr(0, exe_path.find_last_of('\\') + 1);
+		exec_path = argv[0];
+		exec_path = exec_path.substr(0, exec_path.find_last_of('\\') + 1);
 	}
 
 	GLFWwindow* pWindow = nullptr;
@@ -28,6 +28,56 @@ int main(int argc, char** argv)
 			rndr->HandleResize();
 		});
 
+	struct CameraCustomization
+	{
+		glm::vec3 camera_pyr = glm::vec3(0.f);
+		float camera_zoom = 1.f;
+
+	} CC;
+
+	render.userPointer1 = &CC;
+
+	glfwSetKeyCallback(pWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
+		{
+			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
+			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
+
+			switch (key)
+			{
+			case GLFW_KEY_RIGHT:
+				cam_customs.camera_pyr.y += 10.f;
+				break;
+			case GLFW_KEY_LEFT:
+				cam_customs.camera_pyr.y -= 10.f;
+				break;
+			case GLFW_KEY_UP:
+				cam_customs.camera_pyr.x -= 10.f;
+				break;
+			case GLFW_KEY_DOWN:
+				cam_customs.camera_pyr.x += 10.f;
+				break;
+			default:
+				break;
+			}
+
+			glm::quat q = glm::quat_cast(glm::mat4(1.f));
+			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.x), glm::vec3(1, 0, 0));
+			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.y), glm::vec3(0, 1, 0));
+			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.z), glm::vec3(0, 0, 1));
+			rndr->camera.orientation = q;
+			rndr->camera.position = glm::vec3(0.f, 0.f, -5.f * cam_customs.camera_zoom) * rndr->camera.orientation;
+		});
+
+	glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset)
+		{
+			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
+			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
+
+			cam_customs.camera_zoom -= yoffset;
+			rndr->camera.position = glm::vec3(0.f, 0.f, -5.f * cam_customs.camera_zoom) * rndr->camera.orientation;
+		});
+
+	render.camera.position.z = -5.f * CC.camera_zoom;
 	unsigned long long frame_count = 0;
 	auto count_start = std::chrono::steady_clock::now();
 	while (!glfwWindowShouldClose(pWindow))

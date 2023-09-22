@@ -1,45 +1,47 @@
 #pragma once
-#include <glfw/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <vma/vk_mem_alloc.h>
-#include <vector>
-#include <array>
-#include <string>
+#include "object.hpp"
 
 #if DEBUG == 1
 	#define _VkValidation
 #endif
 
+using ObjectPosition = glm::vec3;
+using ObjectOrientation = glm::quat;
+using ModelViewProjection = glm::mat4;
+
 struct ViewCameraStruct
 {
-	const glm::mat4& get_ubo(const glm::mat4& proj = glm::mat4(1.f)) const
+	const ModelViewProjection& get_mvp() const
 	{
 		//cache
-		static glm::vec3 old_pos = glm::vec3(0.f);
-		static glm::vec3 old_ori = glm::vec3(0.f);
+		static ObjectPosition old_pos = glm::vec3(0.f);
+		static ObjectOrientation old_ori = glm::quat_cast(glm::mat4(1.f));
 
 		if (position != old_pos || orientation != old_ori)
 		{
-			glm::quat q = glm::quat_cast(glm::mat3(1.f));
-			q = q * glm::angleAxis(glm::radians(orientation.x), glm::vec3(1, 0, 0));
-			q = q * glm::angleAxis(glm::radians(orientation.y), glm::vec3(0, 1, 0));
-			q = q * glm::angleAxis(glm::radians(orientation.z), glm::vec3(0, 0, 1));
-
-			ubo = proj * glm::translate(glm::mat4_cast(q), position);
+			MVP = projection * glm::translate(glm::mat4_cast(orientation), position);
 
 			old_pos = position;
 			old_ori = orientation;
 		}
 
-		return ubo;
+		return MVP;
 	}
-	//!@brief XYZ coordinates
-	glm::vec3 position = glm::vec3(0.f);
-	//!@brief Euler angles PYR
-	glm::vec3 orientation = glm::vec3(0.f);
+
+	ObjectPosition position = glm::vec3(0.f);
+	ObjectOrientation orientation = glm::quat_cast(glm::mat4(1.f));
+
 private:
-	mutable glm::mat4 ubo = glm::mat4(1.f);
+	mutable ModelViewProjection MVP = glm::mat4(1.f);
+	glm::mat4 projection = glm::mat4(1.f);
+
+	void _set_projection(const glm::mat4& proj = glm::mat4(1.f))
+	{
+		projection = proj;
+		MVP = projection * glm::translate(glm::mat4_cast(orientation), position);
+	}
+
+	friend class VulkanBase;
 };
 
 struct vkQueueStruct
@@ -50,8 +52,27 @@ struct vkQueueStruct
 
 struct vkImageStruct
 {
+	VkBool32 create(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo* imgInfo, VkImageViewCreateInfo* viewInfo, const VkSamplerCreateInfo* samplerInfo, const VmaAllocationCreateInfo* allocCreateInfo)
+	{
+		assert(imgInfo != VK_NULL_HANDLE);
+
+		VkBool32 res = vmaCreateImage(allocator, imgInfo, allocCreateInfo, &image, &memory, &allocInfo) == VK_SUCCESS;
+		viewInfo->image = image;
+		if (viewInfo)
+			res = (vkCreateImageView(device, viewInfo, VK_NULL_HANDLE, &view) == VK_SUCCESS) & res;
+		if (samplerInfo)
+			res = (vkCreateSampler(device, samplerInfo, VK_NULL_HANDLE, &sampler) == VK_SUCCESS) & res;
+
+		descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		descriptorInfo.imageView = view;
+		descriptorInfo.sampler = sampler;
+
+		return res;
+	}
+
 	void destroy(const VkDevice& device, const VmaAllocator& allocator)
 	{
+		vkDestroySampler(device, sampler, VK_NULL_HANDLE);
 		vkDestroyImageView(device, view, VK_NULL_HANDLE);
 		vmaDestroyImage(allocator, image, memory);
 	}
@@ -60,16 +81,20 @@ struct vkImageStruct
 	VkImageView view = VK_NULL_HANDLE;
 	VkSampler sampler = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;
+	VmaAllocationInfo allocInfo = {};
+	VkDescriptorImageInfo descriptorInfo = {};
 };
 
 struct vkBufferStruct
 {
-	void create(const VmaAllocator& allocator, const VkBufferCreateInfo* createInfo, const VmaAllocationCreateInfo* allocCreateInfo)
+	VkBool32 create(const VmaAllocator& allocator, const VkBufferCreateInfo* createInfo, const VmaAllocationCreateInfo* allocCreateInfo)
 	{
-		vmaCreateBuffer(allocator, createInfo, allocCreateInfo, &buffer, &memory, &allocInfo);
+		VkBool32 res = vmaCreateBuffer(allocator, createInfo, allocCreateInfo, &buffer, &memory, &allocInfo) == VK_SUCCESS;
 		descriptorInfo.buffer = buffer;
 		descriptorInfo.offset = 0;
 		descriptorInfo.range = createInfo->size;
+
+		return res;
 	}
 
 	void destroy(const VmaAllocator& allocator)
@@ -119,19 +144,34 @@ class VulkanBase
 
 	GLFWwindow* _glfwWindow = VK_NULL_HANDLE;
 
-	VkPipeline _pipeline = VK_NULL_HANDLE;
-	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
-
 	vkBufferStruct _ubo = {};
+	vkImageStruct _skyboxImg = {};
 
-	VkDescriptorSet _descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSetLayout _descriptorLayout = VK_NULL_HANDLE;
+
+	vkObject triangle;
+	vkObject skybox;
 public:
 	/*
 	* !@brief Should be modified to control the scene
 	*/
 	ViewCameraStruct camera;
+	/*
+	* !@brief User defined pointer, render itself does not reference it
+	*/
+	void* userPointer1 = nullptr;
+	/*
+	* !@brief User defined pointer, render itself does not reference it
+	*/
+	void* userPointer2 = nullptr;
+	/*
+	* !@brief User defined pointer, render itself does not reference it
+	*/
+	void* userPointer3 = nullptr;
+	/*
+	* !@brief User defined pointer, render itself does not reference it
+	*/
+	void* userPointer4 = nullptr;
 
 	VulkanBase(GLFWwindow* window);
 
@@ -205,6 +245,16 @@ private:
 	*/
 	VkBool32 _initializeCommandPool(const uint32_t targetQueueIndex, VkCommandPool* outPool);
 	/*
+	* !@brief Initialize common descriptor pool
+	* 
+	* @param[in] poolSizes - pointer to an array of VkDescriptorPoolSize structs
+	* @param[in] poolSizesCount - size of the given array
+	* @param[in] setsCount - maximum number of descriptor sets, that the pool can allocate
+	* 
+	* @return VK_TRUE if creation was successful, VK_FALSE otherwise
+	*/
+	VkBool32 _initializeDescriptorPool(const VkDescriptorPoolSize* poolSizes, const size_t poolSizesCount, const uint32_t setsCount);
+	/*
 	* !@brief Allocates specified number of command buffers from the pool
 	* 
 	* @param[in] pool - command pool to allocate from
@@ -255,6 +305,10 @@ private:
 	* @return structure with VkQueue object and it's respective index packed
 	*/
 	vkQueueStruct _getVkQueueStruct(const uint32_t& familyIndex) const;
+	/*
+	* !@brief Handles creation of an object and a skybox
+	*/
+	VkBool32 _prepareScene();
 
 	std::vector<const char*> _getRequiredExtensions();
 
