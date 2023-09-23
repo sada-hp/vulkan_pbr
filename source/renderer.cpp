@@ -59,7 +59,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	poolSizes[1].descriptorCount = 1;
 	res = _initializeDescriptorPool(poolSizes.data(), poolSizes.size(), 2) & res;
 
-	_prepareScene();
+	res = _prepareScene() & res;
 
 	assert(res != 0);
 }
@@ -660,6 +660,117 @@ vkQueueStruct VulkanBase::_getVkQueueStruct(const uint32_t& familyIndex) const
 	return output;
 }
 
+void VulkanBase::_generate_mip_maps(VkImage image, VkExtent2D dimensions, VkImageSubresourceRange subRange)
+{
+	if (subRange.levelCount == 1)
+		return;
+
+	VkCommandBuffer commandBuffer;
+	VkCommandBufferAllocateInfo cmdAlloc{};
+	cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdAlloc.commandBufferCount = 1;
+	cmdAlloc.commandPool = _graphicsPool;
+	cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	vkAllocateCommandBuffers(_logicalDevice, &cmdAlloc, &commandBuffer);
+
+	VkFence mipFence;
+	_createFence(&mipFence);
+
+	VkCommandBufferBeginInfo cmdBegin{};
+	cmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(commandBuffer, &cmdBegin);
+
+	for (int k = 0; k < subRange.layerCount; k++)
+	{
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.image = image;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.subresourceRange.aspectMask = subRange.aspectMask;
+		barrier.subresourceRange.baseArrayLayer = k;
+		barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+		int32_t mipWidth = dimensions.width;
+		int32_t mipHeight = dimensions.height;
+
+		for (uint32_t i = 1; i < subRange.levelCount; i++)
+		{
+			barrier.subresourceRange.baseMipLevel = i;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(commandBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			VkImageBlit blit{};
+			blit.srcOffsets[0] = { 0, 0, 0 };
+			blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.srcSubresource.mipLevel = i - 1;
+			blit.srcSubresource.baseArrayLayer = k;
+			blit.srcSubresource.layerCount = 1;
+			blit.dstOffsets[0] = { 0, 0, 0 };
+			blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.dstSubresource.mipLevel = i;
+			blit.dstSubresource.baseArrayLayer = k;
+			blit.dstSubresource.layerCount = 1;
+
+			vkCmdBlitImage(commandBuffer,
+				image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &blit,
+				VK_FILTER_LINEAR);
+
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(commandBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			if (mipWidth > 1) mipWidth /= 2;
+			if (mipHeight > 1) mipHeight /= 2;
+		}
+
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = subRange.levelCount;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+	}
+
+	VkSubmitInfo submition{};
+	submition.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submition.commandBufferCount = 1;
+	submition.pCommandBuffers = &commandBuffer;
+	vkEndCommandBuffer(commandBuffer);
+	vkQueueSubmit(_graphicsQueue.queue, 1, &submition, mipFence);
+	vkWaitForFences(_logicalDevice, 1, &mipFence, VK_TRUE, UINT64_MAX);
+	vkFreeCommandBuffers(_logicalDevice, _graphicsPool, 1, &commandBuffer);
+	vkDestroyFence(_logicalDevice, mipFence, VK_NULL_HANDLE);
+}
+
 VkBool32 VulkanBase::_prepareScene()
 {
 	VkBool32 res = 1;
@@ -676,7 +787,7 @@ VkBool32 VulkanBase::_prepareScene()
 		binding.descriptorCount = 1;
 		binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		vkObjectCreateInfo triCI{};
+		vkShaderPipelineCreateInfo triCI{};
 		triCI.bindingsCount = 1;
 		triCI.pBindings = &binding;
 		triCI.descriptorPool = _descriptorPool;
@@ -726,31 +837,35 @@ VkBool32 VulkanBase::_prepareScene()
 		stagingBuffer.create(_allocator, &sbInfo, &sbAlloc);
 
 		memcpy(stagingBuffer.allocInfo.pMappedData, pixels, resolution * 6);
+		vmaFlushAllocation(_allocator, stagingBuffer.memory, 0, VK_WHOLE_SIZE);
 
+		uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(2048, 2048)))) + 1;
+		VkImageSubresourceRange skySubRes{};
+		skySubRes.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		skySubRes.baseArrayLayer = 0;
+		skySubRes.baseMipLevel = 0;
+		skySubRes.layerCount = 6;
+		skySubRes.levelCount = mipLevels;
 		VkImageCreateInfo skyInfo{};
 		skyInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		skyInfo.arrayLayers = 6;
 		skyInfo.extent = { 2048, 2048, 1 };
 		skyInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
 		skyInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		skyInfo.mipLevels = 1;
+		skyInfo.mipLevels = mipLevels;
 		skyInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 		skyInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		skyInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		skyInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		skyInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		skyInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		skyInfo.imageType = VK_IMAGE_TYPE_2D;
 		VkImageViewCreateInfo skyView{};
 		skyView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		skyView.format = VK_FORMAT_R8G8B8A8_SRGB;
 		skyView.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-		skyView.subresourceRange.baseArrayLayer = 0;
-		skyView.subresourceRange.baseMipLevel = 0;
-		skyView.subresourceRange.layerCount = 6;
-		skyView.subresourceRange.levelCount = 1;
-		skyView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		skyView.subresourceRange = skySubRes;
 		VmaAllocationCreateInfo skyAlloc{};
-		skyAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+		skyAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(_physicalDevice, &properties);
 		VkSamplerCreateInfo samplerInfo{};
@@ -792,11 +907,7 @@ VkBool32 VulkanBase::_prepareScene()
 		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = _skyboxImg.image;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.layerCount = 6;
-		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange = skySubRes;
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
@@ -830,16 +941,18 @@ VkBool32 VulkanBase::_prepareScene()
 		vkAllocateCommandBuffers(_logicalDevice, &cmdAlloc, &cmd);
 		vkBeginCommandBuffer(cmd, &cmdBegin);
 		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 		vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		vkEndCommandBuffer(cmd);
 		vkQueueSubmit(_graphicsQueue.queue, 1, &submition, _graphicsFence);
 		vkWaitForFences(_logicalDevice, 1, &_graphicsFence, VK_TRUE, UINT64_MAX);
 		vkFreeCommandBuffers(_logicalDevice, _graphicsPool, 1, &cmd);
+
+		_generate_mip_maps(_skyboxImg.image, { 2048, 2048 }, skySubRes);
 
 		stagingBuffer.destroy(_allocator);
 		free(pixels);
@@ -868,7 +981,7 @@ VkBool32 VulkanBase::_prepareScene()
 		writes[1].dstBinding = 1;
 		writes[1].pImageInfo = &_skyboxImg.descriptorInfo;
 		
-		vkObjectCreateInfo skyboxCI{};
+		vkShaderPipelineCreateInfo skyboxCI{};
 		skyboxCI.bindingsCount = bindings.size();
 		skyboxCI.pBindings = bindings.data();
 		skyboxCI.writesCount = writes.size();

@@ -8,7 +8,7 @@
 #include <array>
 #include <string>
 
-struct vkObjectCreateInfo
+struct vkShaderPipelineCreateInfo
 {
 	std::string shaderName = "";
 	uint32_t shaderStages;
@@ -23,10 +23,9 @@ struct vkObjectCreateInfo
 	size_t pushConstantsCount = 0;
 };
 
-class vkObject
+struct vkShaderPipeline
 {
-public:
-	VkBool32 create(const VkDevice& device, const vkObjectCreateInfo& objectCI);
+	VkBool32 create(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI);
 
 	void destroy(const VkDevice& device, const VkDescriptorPool& pool = VK_NULL_HANDLE);
 

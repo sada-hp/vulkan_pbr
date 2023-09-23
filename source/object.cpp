@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "object.hpp"
 
-VkBool32 vkObject::create(const VkDevice& device, const vkObjectCreateInfo& objectCI)
+VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI)
 {
 	VkDescriptorSetLayoutCreateInfo dsetInfo{};
 	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -124,9 +124,9 @@ VkBool32 vkObject::create(const VkDevice& device, const vkObjectCreateInfo& obje
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStagesCI;
 	pipelineStagesCI.reserve(shaders.size());
 
-	for (const auto& stage : shaders)
+	for (const auto& [_stage, _module] : shaders)
 	{
-		pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, stage.first, stage.second, "main", VK_NULL_HANDLE);
+		pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, _stage, _module, "main", VK_NULL_HANDLE);
 	}
 
 	VkGraphicsPipelineCreateInfo pipelineCI{};
@@ -147,15 +147,15 @@ VkBool32 vkObject::create(const VkDevice& device, const vkObjectCreateInfo& obje
 
 	VkBool32 res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &pipeline) == VK_SUCCESS;
 
-	for (const auto& stage : shaders)
+	for (const auto& [_stage, _module] : shaders)
 	{
-		vkDestroyShaderModule(device, stage.second, VK_NULL_HANDLE);
+		vkDestroyShaderModule(device, _module, VK_NULL_HANDLE);
 	}
 
 	return res;
 }
 
-void vkObject::destroy(const VkDevice& device, const VkDescriptorPool& pool)
+void vkShaderPipeline::destroy(const VkDevice& device, const VkDescriptorPool& pool)
 {
 	vkDestroyPipeline(device, pipeline, VK_NULL_HANDLE);
 	vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);

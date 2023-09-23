@@ -75,6 +75,10 @@ struct vkImageStruct
 		vkDestroySampler(device, sampler, VK_NULL_HANDLE);
 		vkDestroyImageView(device, view, VK_NULL_HANDLE);
 		vmaDestroyImage(allocator, image, memory);
+		image = VK_NULL_HANDLE;
+		view = VK_NULL_HANDLE;
+		sampler = VK_NULL_HANDLE;
+		memory = VK_NULL_HANDLE;
 	}
 
 	VkImage image = VK_NULL_HANDLE;
@@ -102,6 +106,8 @@ struct vkBufferStruct
 		vmaDestroyBuffer(allocator, buffer, memory);
 		allocInfo = {};
 		descriptorInfo = {};
+		buffer = VK_NULL_HANDLE;
+		memory = VK_NULL_HANDLE;
 	}
 
 	VkBuffer buffer = VK_NULL_HANDLE;
@@ -149,8 +155,8 @@ class VulkanBase
 
 	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
 
-	vkObject triangle;
-	vkObject skybox;
+	vkShaderPipeline triangle;
+	vkShaderPipeline skybox;
 public:
 	/*
 	* !@brief Should be modified to control the scene
@@ -305,6 +311,14 @@ private:
 	* @return structure with VkQueue object and it's respective index packed
 	*/
 	vkQueueStruct _getVkQueueStruct(const uint32_t& familyIndex) const;
+	/*
+	* !@brief Generate given number of mip levels for given VkImage
+	* 
+	* @param[in] image - target image. IMAGE SHOULD BE TRANSITIONED TO TRANSFER_SRC LAYOUT BEFOREHAND!
+	* @param[in] dimensions - image size
+	* @param[in] subRange - specify number of mipLevels and arrayLayers here
+	*/
+	void _generate_mip_maps(VkImage image, VkExtent2D dimensions, VkImageSubresourceRange subRange);
 	/*
 	* !@brief Handles creation of an object and a skybox
 	*/
