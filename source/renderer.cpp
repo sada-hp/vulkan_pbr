@@ -10,6 +10,8 @@ extern std::string exec_path;
 VulkanBase::VulkanBase(GLFWwindow* window)
 	: _glfwWindow(window)
 {
+	assert(exec_path != "");
+
 	VkBool32 res = _initializeInstance();
 	res = _enumeratePhysicalDevices() & res;
 	res = (glfwCreateWindowSurface(_instance, _glfwWindow, VK_NULL_HANDLE, &_surface) == VK_SUCCESS) & res;
@@ -50,7 +52,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	res = _ubo.create(_allocator, &uboInfo, &uboAllocCreateInfo) & res;
+	res = _ubo.create(_allocator, uboInfo, uboAllocCreateInfo) & res;
 
 	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -70,7 +72,8 @@ VulkanBase::~VulkanBase() noexcept
 
 	_ubo.destroy(_allocator);
 	_skyboxImg.destroy(_logicalDevice, _allocator);
-	triangle.destroy(_logicalDevice, _descriptorPool);
+	sword.destroy(_logicalDevice, _descriptorPool);
+	swordMesh.destroy(_allocator);
 	skybox.destroy(_logicalDevice, _descriptorPool);
 
 	vkDestroyDescriptorPool(_logicalDevice, _descriptorPool, VK_NULL_HANDLE);
@@ -165,9 +168,14 @@ void VulkanBase::Step() const
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipelineLayout, 0, 1, &skybox.descriptorSet, 0, VK_NULL_HANDLE);
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipeline);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle.pipelineLayout, 0, 1, &triangle.descriptorSet, 0, VK_NULL_HANDLE);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle.pipeline);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, sword.pipelineLayout, 0, 1, &sword.descriptorSet, 0, VK_NULL_HANDLE);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, sword.pipeline);
+		vkCmdBindVertexBuffers(cmd, 0, 1, &swordMesh.vertexBuffer.buffer, offsets);
+		vkCmdBindIndexBuffer(cmd, swordMesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, swordMesh.indicesCount, 1, 0, 0, 0);
+		
 		vkCmdEndRenderPass(cmd);
 
 		vkEndCommandBuffer(cmd);
@@ -468,7 +476,7 @@ VkBool32 VulkanBase::_initializeSwapchainImages()
 
 	for (auto& attachment : _depthAttachments)
 	{
-		res = attachment.create(_logicalDevice, _allocator, &depthInfo, &viewInfo, VK_NULL_HANDLE, &allocCreateInfo) & res;
+		res = attachment.create(_logicalDevice, _allocator, depthInfo, allocCreateInfo , &viewInfo) & res;
 	}
 
 	return res;
@@ -776,6 +784,9 @@ VkBool32 VulkanBase::_prepareScene()
 	VkBool32 res = 1;
 
 	{
+		auto vertAttributes = vkVertex::getAttributeDescriptions();
+		auto vertBindings = vkVertex::getBindingDescription();
+
 		VkWriteDescriptorSet write{};
 		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		write.descriptorCount = 1;
@@ -793,11 +804,16 @@ VkBool32 VulkanBase::_prepareScene()
 		triCI.descriptorPool = _descriptorPool;
 		triCI.renderPass = _renderPass;
 		triCI.shaderStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		triCI.shaderName = exec_path + "shaders\\default";
+		triCI.shaderName = "default";
 		triCI.writesCount = 1;
 		triCI.pWrites = &write;
+		triCI.vertexInputBindingsCount = 1;
+		triCI.vertexInputBindings = &vertBindings;
+		triCI.vertexInputAttributesCount = vertAttributes.size();
+		triCI.vertexInputAttributes = vertAttributes.data();
 
-		res = triangle.create(_logicalDevice, triCI) & res;
+		res = sword.create(_logicalDevice, triCI) & res;
+		swordMesh.loadMesh(_allocator, "content\\sword.fbx");
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////cube_texture
@@ -834,7 +850,7 @@ VkBool32 VulkanBase::_prepareScene()
 		VmaAllocationCreateInfo sbAlloc{};
 		sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
 		sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-		stagingBuffer.create(_allocator, &sbInfo, &sbAlloc);
+		stagingBuffer.create(_allocator, sbInfo, sbAlloc);
 
 		memcpy(stagingBuffer.allocInfo.pMappedData, pixels, resolution * 6);
 		vmaFlushAllocation(_allocator, stagingBuffer.memory, 0, VK_WHOLE_SIZE);
@@ -885,7 +901,7 @@ VkBool32 VulkanBase::_prepareScene()
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
 		samplerInfo.maxLod = 1;
-		_skyboxImg.create(_logicalDevice, _allocator, &skyInfo, &skyView, &samplerInfo, &skyAlloc);
+		_skyboxImg.create(_logicalDevice, _allocator, skyInfo, skyAlloc, &skyView, &samplerInfo);
 		VkCommandBuffer cmd;
 		VkCommandBufferAllocateInfo cmdAlloc{};
 		cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -988,7 +1004,7 @@ VkBool32 VulkanBase::_prepareScene()
 		skyboxCI.pWrites = writes.data();
 		skyboxCI.renderPass = _renderPass;
 		skyboxCI.descriptorPool = _descriptorPool;
-		skyboxCI.shaderName = exec_path + "shaders/background";
+		skyboxCI.shaderName = "background";
 		skyboxCI.shaderStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 		res = skybox.create(_logicalDevice, skyboxCI) & res;

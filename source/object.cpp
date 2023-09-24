@@ -1,8 +1,74 @@
 #include "pch.hpp"
 #include "object.hpp"
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include <assimp/Importer.hpp>
+
+extern std::string exec_path;
+
+VkBool32 vkImageStruct::create(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo, VkSamplerCreateInfo* samplerInfo)
+{
+	if (image != VK_NULL_HANDLE)
+		destroy(device, allocator);
+
+	VkBool32 res = vmaCreateImage(allocator, &imgInfo, &allocCreateInfo, &image, &memory, &allocInfo) == VK_SUCCESS;
+	viewInfo->image = image;
+	if (viewInfo)
+		res = (vkCreateImageView(device, viewInfo, VK_NULL_HANDLE, &view) == VK_SUCCESS) & res;
+	if (samplerInfo)
+		res = (vkCreateSampler(device, samplerInfo, VK_NULL_HANDLE, &sampler) == VK_SUCCESS) & res;
+
+	descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	descriptorInfo.imageView = view;
+	descriptorInfo.sampler = sampler;
+
+	return res;
+}
+
+void vkImageStruct::destroy(const VkDevice& device, const VmaAllocator& allocator)
+{
+	if (sampler != VK_NULL_HANDLE)
+		vkDestroySampler(device, sampler, VK_NULL_HANDLE);
+	if (view != VK_NULL_HANDLE)
+		vkDestroyImageView(device, view, VK_NULL_HANDLE);
+
+	vmaDestroyImage(allocator, image, memory);
+
+	image = VK_NULL_HANDLE;
+	view = VK_NULL_HANDLE;
+	sampler = VK_NULL_HANDLE;
+	memory = VK_NULL_HANDLE;
+}
+
+VkBool32 vkBufferStruct::create(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+{
+	if (buffer != VK_NULL_HANDLE)
+		destroy(allocator);
+
+	VkBool32 res = vmaCreateBuffer(allocator, &createInfo, &allocCreateInfo, &buffer, &memory, &allocInfo) == VK_SUCCESS;
+	descriptorInfo.buffer = buffer;
+	descriptorInfo.offset = 0;
+	descriptorInfo.range = createInfo.size;
+
+	return res;
+}
+
+void vkBufferStruct::destroy(const VmaAllocator& allocator)
+{
+	vmaDestroyBuffer(allocator, buffer, memory);
+
+	allocInfo = {};
+	descriptorInfo = {};
+
+	buffer = VK_NULL_HANDLE;
+	memory = VK_NULL_HANDLE;
+}
 
 VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI)
 {
+	if (pipeline != VK_NULL_HANDLE)
+		destroy(device, objectCI.descriptorPool);
+
 	VkDescriptorSetLayoutCreateInfo dsetInfo{};
 	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dsetInfo.bindingCount = objectCI.bindingsCount;
@@ -29,7 +95,7 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 	layoutInfo.pPushConstantRanges = objectCI.pPushContants;
 	vkCreatePipelineLayout(device, &layoutInfo, VK_NULL_HANDLE, &pipelineLayout);
 
-	const std::array<VkShaderStageFlagBits, 5> _stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
+	const std::array<const VkShaderStageFlagBits, 5> _stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
 	const std::array<const char*, 5> _stage_postfix = { "_vert.spv", "_tesc.spv", "_tese.spv", "_geom.spv", "_frag.spv" };
 	std::map<VkShaderStageFlagBits, VkShaderModule> shaders;
 
@@ -37,7 +103,7 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 	{
 		if ((objectCI.shaderStages & _stages[i]) != 0)
 		{
-			std::ifstream shaderFile(objectCI.shaderName + _stage_postfix[i], std::ios::ate | std::ios::binary);
+			std::ifstream shaderFile(exec_path + "shaders\\" + objectCI.shaderName + _stage_postfix[i], std::ios::ate | std::ios::binary);
 			std::size_t fileSize = (std::size_t)shaderFile.tellg();
 			shaderFile.seekg(0);
 			std::vector<char> shaderCode(fileSize);
@@ -57,8 +123,10 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.vertexBindingDescriptionCount = objectCI.vertexInputBindingsCount;
+	vertexInputInfo.pVertexBindingDescriptions = objectCI.vertexInputBindings;
+	vertexInputInfo.vertexAttributeDescriptionCount = objectCI.vertexInputAttributesCount;
+	vertexInputInfo.pVertexAttributeDescriptions = objectCI.vertexInputAttributes;
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
 	inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -125,9 +193,7 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 	pipelineStagesCI.reserve(shaders.size());
 
 	for (const auto& [_stage, _module] : shaders)
-	{
 		pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, _stage, _module, "main", VK_NULL_HANDLE);
-	}
 
 	VkGraphicsPipelineCreateInfo pipelineCI{};
 	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -148,9 +214,7 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 	VkBool32 res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &pipeline) == VK_SUCCESS;
 
 	for (const auto& [_stage, _module] : shaders)
-	{
 		vkDestroyShaderModule(device, _module, VK_NULL_HANDLE);
-	}
 
 	return res;
 }
@@ -162,4 +226,81 @@ void vkShaderPipeline::destroy(const VkDevice& device, const VkDescriptorPool& p
 	if (pool != VK_NULL_HANDLE)
 		vkFreeDescriptorSets(device, pool, 1, &descriptorSet);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, VK_NULL_HANDLE);
+
+	pipeline = VK_NULL_HANDLE;
+	pipelineLayout = VK_NULL_HANDLE;
+	descriptorSet = VK_NULL_HANDLE;
+	descriptorSetLayout = VK_NULL_HANDLE;
+}
+
+void vkMesh::loadMesh(const VmaAllocator& allocator, const char* path)
+{
+	std::unordered_map<vkVertex, uint32_t> uniqueVertices{};
+	std::vector<uint32_t> indices;
+	std::vector<vkVertex> vertices;
+	Assimp::Importer importer;
+	std::string file = exec_path + path;
+	const aiScene* model = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs);
+	auto err = importer.GetErrorString();
+
+	assert(model != nullptr);
+
+	for (int mesh_ind = 0; mesh_ind < model->mNumMeshes; mesh_ind++)
+	{
+		auto num_vert = model->mMeshes[mesh_ind]->mNumVertices;
+		auto cur_mesh = model->mMeshes[mesh_ind];
+		auto name3 = model->mMeshes[mesh_ind]->mName;
+		auto uv_ind = mesh_ind;
+
+		for (int vert_ind = 0; vert_ind < num_vert; vert_ind++)
+		{
+			vkVertex vertex{ 
+				mesh_ind,
+				{cur_mesh->mVertices[vert_ind].x, -cur_mesh->mVertices[vert_ind].y, cur_mesh->mVertices[vert_ind].z}
+			};
+
+			if (uniqueVertices.count(vertex) == 0)
+			{
+				int index = uniqueVertices.size();
+				uniqueVertices[vertex] = index;
+
+				indices.push_back(index);
+				vertices.push_back(std::move(vertex));
+			}
+			else
+			{
+				indices.push_back(uniqueVertices[vertex]);
+			}
+		}
+	}
+
+	VkBufferCreateInfo sbInfo{};
+	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.size = sizeof(vkVertex) * uniqueVertices.size();
+	VmaAllocationCreateInfo sbAlloc{};
+	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+	sbAlloc.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	vertexBuffer.create(allocator, sbInfo, sbAlloc);
+	sbInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	sbInfo.size = sizeof(uint32_t) * indices.size();
+	indexBuffer.create(allocator, sbInfo, sbAlloc);
+
+	vmaMapMemory(allocator, vertexBuffer.memory, &vertexBuffer.allocInfo.pMappedData);
+	memcpy(vertexBuffer.allocInfo.pMappedData, vertices.data(), sizeof(vkVertex) * uniqueVertices.size());
+	vmaUnmapMemory(allocator, vertexBuffer.memory);
+
+	vmaMapMemory(allocator, indexBuffer.memory, &indexBuffer.allocInfo.pMappedData);
+	memcpy(indexBuffer.allocInfo.pMappedData, indices.data(), sizeof(uint32_t) * indices.size());
+	vmaUnmapMemory(allocator, indexBuffer.memory);
+
+	indicesCount = indices.size();
+	verticesCount = vertices.size();
+}
+
+void vkMesh::destroy(const VmaAllocator& allocator)
+{
+	vertexBuffer.destroy(allocator);
+	indexBuffer.destroy(allocator);
 }

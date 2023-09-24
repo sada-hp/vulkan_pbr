@@ -31,8 +31,7 @@ int main(int argc, char** argv)
 	struct CameraCustomization
 	{
 		glm::vec3 camera_pyr = glm::vec3(0.f);
-		float camera_zoom = 1.f;
-
+		float camera_zoom = -75.f;
 	} CC;
 
 	render.userPointer1 = &CC;
@@ -65,7 +64,7 @@ int main(int argc, char** argv)
 			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.y), glm::vec3(0, 1, 0));
 			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.z), glm::vec3(0, 0, 1));
 			rndr->camera.orientation = q;
-			rndr->camera.position = glm::vec3(0.f, 0.f, -5.f * cam_customs.camera_zoom) * rndr->camera.orientation;
+			rndr->camera.position = glm::vec3(0.f, 0.f, cam_customs.camera_zoom) * rndr->camera.orientation;
 		});
 
 	glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset)
@@ -73,11 +72,11 @@ int main(int argc, char** argv)
 			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
 			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
 
-			cam_customs.camera_zoom -= yoffset;
-			rndr->camera.position = glm::vec3(0.f, 0.f, -5.f * cam_customs.camera_zoom) * rndr->camera.orientation;
+			cam_customs.camera_zoom += yoffset;
+			rndr->camera.position = glm::vec3(0.f, 0.f, cam_customs.camera_zoom) * rndr->camera.orientation;
 		});
 
-	render.camera.position.z = -5.f * CC.camera_zoom;
+	render.camera.position.z = CC.camera_zoom;
 	unsigned long long frame_count = 0;
 	auto count_start = std::chrono::steady_clock::now();
 	while (!glfwWindowShouldClose(pWindow))

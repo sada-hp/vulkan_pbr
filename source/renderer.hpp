@@ -44,78 +44,6 @@ private:
 	friend class VulkanBase;
 };
 
-struct vkQueueStruct
-{
-	VkQueue queue = VK_NULL_HANDLE;
-	uint32_t index = 0;
-};
-
-struct vkImageStruct
-{
-	VkBool32 create(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo* imgInfo, VkImageViewCreateInfo* viewInfo, const VkSamplerCreateInfo* samplerInfo, const VmaAllocationCreateInfo* allocCreateInfo)
-	{
-		assert(imgInfo != VK_NULL_HANDLE);
-
-		VkBool32 res = vmaCreateImage(allocator, imgInfo, allocCreateInfo, &image, &memory, &allocInfo) == VK_SUCCESS;
-		viewInfo->image = image;
-		if (viewInfo)
-			res = (vkCreateImageView(device, viewInfo, VK_NULL_HANDLE, &view) == VK_SUCCESS) & res;
-		if (samplerInfo)
-			res = (vkCreateSampler(device, samplerInfo, VK_NULL_HANDLE, &sampler) == VK_SUCCESS) & res;
-
-		descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		descriptorInfo.imageView = view;
-		descriptorInfo.sampler = sampler;
-
-		return res;
-	}
-
-	void destroy(const VkDevice& device, const VmaAllocator& allocator)
-	{
-		vkDestroySampler(device, sampler, VK_NULL_HANDLE);
-		vkDestroyImageView(device, view, VK_NULL_HANDLE);
-		vmaDestroyImage(allocator, image, memory);
-		image = VK_NULL_HANDLE;
-		view = VK_NULL_HANDLE;
-		sampler = VK_NULL_HANDLE;
-		memory = VK_NULL_HANDLE;
-	}
-
-	VkImage image = VK_NULL_HANDLE;
-	VkImageView view = VK_NULL_HANDLE;
-	VkSampler sampler = VK_NULL_HANDLE;
-	VmaAllocation memory = VK_NULL_HANDLE;
-	VmaAllocationInfo allocInfo = {};
-	VkDescriptorImageInfo descriptorInfo = {};
-};
-
-struct vkBufferStruct
-{
-	VkBool32 create(const VmaAllocator& allocator, const VkBufferCreateInfo* createInfo, const VmaAllocationCreateInfo* allocCreateInfo)
-	{
-		VkBool32 res = vmaCreateBuffer(allocator, createInfo, allocCreateInfo, &buffer, &memory, &allocInfo) == VK_SUCCESS;
-		descriptorInfo.buffer = buffer;
-		descriptorInfo.offset = 0;
-		descriptorInfo.range = createInfo->size;
-
-		return res;
-	}
-
-	void destroy(const VmaAllocator& allocator)
-	{
-		vmaDestroyBuffer(allocator, buffer, memory);
-		allocInfo = {};
-		descriptorInfo = {};
-		buffer = VK_NULL_HANDLE;
-		memory = VK_NULL_HANDLE;
-	}
-
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VmaAllocation memory = VK_NULL_HANDLE;
-	VmaAllocationInfo allocInfo = {};
-	VkDescriptorBufferInfo descriptorInfo = {};
-};
-
 class VulkanBase
 {
 	std::vector<const char*> _extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -155,7 +83,8 @@ class VulkanBase
 
 	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
 
-	vkShaderPipeline triangle;
+	vkShaderPipeline sword;
+	vkMesh swordMesh;
 	vkShaderPipeline skybox;
 public:
 	/*
