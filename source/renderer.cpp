@@ -52,7 +52,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	res = _ubo.create(_allocator, uboInfo, uboAllocCreateInfo) & res;
+	_ubo.fill(_allocator, uboInfo, uboAllocCreateInfo);
 
 	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -70,11 +70,11 @@ VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(_logicalDevice, _presentFences.size(), _presentFences.data(), VK_TRUE, UINT64_MAX);
 
-	_ubo.destroy(_allocator);
-	_skyboxImg.destroy(_logicalDevice, _allocator);
-	sword.destroy(_logicalDevice, _descriptorPool);
-	swordMesh.destroy(_allocator);
-	skybox.destroy(_logicalDevice, _descriptorPool);
+	_ubo.free();
+	_skyboxImg.free();
+	sword.free();
+	swordMesh.free();
+	skybox.free();
 
 	vkDestroyDescriptorPool(_logicalDevice, _descriptorPool, VK_NULL_HANDLE);
 	vkDestroyFence(_logicalDevice, _transferFence, VK_NULL_HANDLE);
@@ -99,14 +99,14 @@ VulkanBase::~VulkanBase() noexcept
 			return true;
 		});
 	vkDestroyRenderPass(_logicalDevice, _renderPass, VK_NULL_HANDLE);
-	std::erase_if(_swapchainViews, [&, this](VkImageView view)
+	std::erase_if(_swapchainViews, [&, this](VkImageView& view)
 		{
 			vkDestroyImageView(_logicalDevice, view, VK_NULL_HANDLE);
 			return true;
 		});
-	std::erase_if(_depthAttachments, [&, this](vkImageStruct img)
+	std::erase_if(_depthAttachments, [&, this](vkImageStruct& img)
 		{
-			img.destroy(_logicalDevice, _allocator);
+			img.free();
 			return true;
 		});
 	vkDestroySwapchainKHR(_logicalDevice, _swapchain, VK_NULL_HANDLE);
@@ -221,12 +221,12 @@ void VulkanBase::HandleResize()
 			vkDestroyFramebuffer(_logicalDevice, fb, VK_NULL_HANDLE);
 			return true;
 		});
-	std::erase_if(_depthAttachments, [&, this](vkImageStruct img)
+	std::erase_if(_depthAttachments, [&, this](vkImageStruct& img)
 		{
-			img.destroy(_logicalDevice, _allocator);
+			img.free();
 			return true;
 		});
-	std::erase_if(_swapchainViews, [&, this](VkImageView view)
+	std::erase_if(_swapchainViews, [&, this](VkImageView& view)
 		{
 			vkDestroyImageView(_logicalDevice, view, VK_NULL_HANDLE);
 			return true;
@@ -476,7 +476,7 @@ VkBool32 VulkanBase::_initializeSwapchainImages()
 
 	for (auto& attachment : _depthAttachments)
 	{
-		res = attachment.create(_logicalDevice, _allocator, depthInfo, allocCreateInfo , &viewInfo) & res;
+		res = attachment.fill(_logicalDevice, _allocator, depthInfo, allocCreateInfo , &viewInfo) & res;
 	}
 
 	return res;
@@ -812,8 +812,8 @@ VkBool32 VulkanBase::_prepareScene()
 		triCI.vertexInputAttributesCount = vertAttributes.size();
 		triCI.vertexInputAttributes = vertAttributes.data();
 
-		res = sword.create(_logicalDevice, triCI) & res;
-		swordMesh.loadMesh(_allocator, "content\\sword.fbx");
+		res = sword.fill(_logicalDevice, triCI) & res;
+		swordMesh.fill(_allocator, "content\\sword.fbx");
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////cube_texture
@@ -839,7 +839,6 @@ VkBool32 VulkanBase::_prepareScene()
 
 		std::for_each(loaders.begin(), loaders.end(), [](const auto& it) {it.wait(); });
 
-		vkBufferStruct stagingBuffer{};
 		VkBufferCreateInfo sbInfo{};
 		sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		sbInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -850,7 +849,7 @@ VkBool32 VulkanBase::_prepareScene()
 		VmaAllocationCreateInfo sbAlloc{};
 		sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
 		sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-		stagingBuffer.create(_allocator, sbInfo, sbAlloc);
+		vkBufferStruct stagingBuffer(_allocator, sbInfo, sbAlloc);
 
 		memcpy(stagingBuffer.allocInfo.pMappedData, pixels, resolution * 6);
 		vmaFlushAllocation(_allocator, stagingBuffer.memory, 0, VK_WHOLE_SIZE);
@@ -901,7 +900,7 @@ VkBool32 VulkanBase::_prepareScene()
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
 		samplerInfo.maxLod = 1;
-		_skyboxImg.create(_logicalDevice, _allocator, skyInfo, skyAlloc, &skyView, &samplerInfo);
+		_skyboxImg.fill(_logicalDevice, _allocator, skyInfo, skyAlloc, &skyView, &samplerInfo);
 		VkCommandBuffer cmd;
 		VkCommandBufferAllocateInfo cmdAlloc{};
 		cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -969,8 +968,6 @@ VkBool32 VulkanBase::_prepareScene()
 		vkFreeCommandBuffers(_logicalDevice, _graphicsPool, 1, &cmd);
 
 		_generate_mip_maps(_skyboxImg.image, { 2048, 2048 }, skySubRes);
-
-		stagingBuffer.destroy(_allocator);
 		free(pixels);
 	}
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////skybox
@@ -1007,7 +1004,7 @@ VkBool32 VulkanBase::_prepareScene()
 		skyboxCI.shaderName = "background";
 		skyboxCI.shaderStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		res = skybox.create(_logicalDevice, skyboxCI) & res;
+		res = skybox.fill(_logicalDevice, skyboxCI) & res;
 	}
 
 	return res;

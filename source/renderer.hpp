@@ -78,8 +78,8 @@ class VulkanBase
 
 	GLFWwindow* _glfwWindow = VK_NULL_HANDLE;
 
-	vkBufferStruct _ubo = {};
-	vkImageStruct _skyboxImg = {};
+	vkBufferStruct _ubo;
+	vkImageStruct _skyboxImg;
 
 	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
 

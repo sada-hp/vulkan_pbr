@@ -6,11 +6,23 @@
 
 extern std::string exec_path;
 
-VkBool32 vkImageStruct::create(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo, VkSamplerCreateInfo* samplerInfo)
+vkImageStruct::vkImageStruct(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo, VkSamplerCreateInfo* samplerInfo)
+	: _device(device), _allocator(allocator)
 {
-	if (image != VK_NULL_HANDLE)
-		destroy(device, allocator);
+	fill(_device, _allocator, imgInfo, allocCreateInfo, viewInfo, samplerInfo);
+}
 
+vkImageStruct::~vkImageStruct()
+{
+	free();
+}
+
+VkBool32 vkImageStruct::fill(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo, VkSamplerCreateInfo* samplerInfo)
+{
+	free();
+
+	_device = device;
+	_allocator = allocator;
 	VkBool32 res = vmaCreateImage(allocator, &imgInfo, &allocCreateInfo, &image, &memory, &allocInfo) == VK_SUCCESS;
 	viewInfo->image = image;
 	if (viewInfo)
@@ -25,14 +37,14 @@ VkBool32 vkImageStruct::create(const VkDevice& device, const VmaAllocator& alloc
 	return res;
 }
 
-void vkImageStruct::destroy(const VkDevice& device, const VmaAllocator& allocator)
+void vkImageStruct::free()
 {
 	if (sampler != VK_NULL_HANDLE)
-		vkDestroySampler(device, sampler, VK_NULL_HANDLE);
+		vkDestroySampler(_device, sampler, VK_NULL_HANDLE);
 	if (view != VK_NULL_HANDLE)
-		vkDestroyImageView(device, view, VK_NULL_HANDLE);
-
-	vmaDestroyImage(allocator, image, memory);
+		vkDestroyImageView(_device, view, VK_NULL_HANDLE);
+	if (image != VK_NULL_HANDLE)
+		vmaDestroyImage(_allocator, image, memory);
 
 	image = VK_NULL_HANDLE;
 	view = VK_NULL_HANDLE;
@@ -40,11 +52,22 @@ void vkImageStruct::destroy(const VkDevice& device, const VmaAllocator& allocato
 	memory = VK_NULL_HANDLE;
 }
 
-VkBool32 vkBufferStruct::create(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+vkBufferStruct::vkBufferStruct(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+	: _allocator(allocator)
 {
-	if (buffer != VK_NULL_HANDLE)
-		destroy(allocator);
+	fill(_allocator, createInfo, allocCreateInfo);
+}
 
+vkBufferStruct::~vkBufferStruct()
+{
+	free();
+}
+
+VkBool32 vkBufferStruct::fill(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+{
+	free();
+	
+	_allocator = allocator;
 	VkBool32 res = vmaCreateBuffer(allocator, &createInfo, &allocCreateInfo, &buffer, &memory, &allocInfo) == VK_SUCCESS;
 	descriptorInfo.buffer = buffer;
 	descriptorInfo.offset = 0;
@@ -53,9 +76,10 @@ VkBool32 vkBufferStruct::create(const VmaAllocator& allocator, const VkBufferCre
 	return res;
 }
 
-void vkBufferStruct::destroy(const VmaAllocator& allocator)
+void vkBufferStruct::free()
 {
-	vmaDestroyBuffer(allocator, buffer, memory);
+	if (buffer != VK_NULL_HANDLE)
+		vmaDestroyBuffer(_allocator, buffer, memory);
 
 	allocInfo = {};
 	descriptorInfo = {};
@@ -64,11 +88,23 @@ void vkBufferStruct::destroy(const VmaAllocator& allocator)
 	memory = VK_NULL_HANDLE;
 }
 
-VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI)
+vkShaderPipeline::vkShaderPipeline(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI)
+	: _device(device), _pool(objectCI.descriptorPool)
 {
-	if (pipeline != VK_NULL_HANDLE)
-		destroy(device, objectCI.descriptorPool);
+	fill(_device, objectCI);
+}
 
+vkShaderPipeline::~vkShaderPipeline()
+{
+	free();
+}
+
+VkBool32 vkShaderPipeline::fill(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI)
+{
+	free();
+
+	_device = device;
+	_pool = objectCI.descriptorPool;
 	VkDescriptorSetLayoutCreateInfo dsetInfo{};
 	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dsetInfo.bindingCount = objectCI.bindingsCount;
@@ -219,22 +255,35 @@ VkBool32 vkShaderPipeline::create(const VkDevice& device, const vkShaderPipeline
 	return res;
 }
 
-void vkShaderPipeline::destroy(const VkDevice& device, const VkDescriptorPool& pool)
+void vkShaderPipeline::free()
 {
-	vkDestroyPipeline(device, pipeline, VK_NULL_HANDLE);
-	vkDestroyPipelineLayout(device, pipelineLayout, VK_NULL_HANDLE);
-	if (pool != VK_NULL_HANDLE)
-		vkFreeDescriptorSets(device, pool, 1, &descriptorSet);
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, VK_NULL_HANDLE);
+	if (pipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(_device, pipeline, VK_NULL_HANDLE);
+	if (pipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(_device, pipelineLayout, VK_NULL_HANDLE);
+	if (_pool != VK_NULL_HANDLE)
+		vkFreeDescriptorSets(_device, _pool, 1, &descriptorSet);
+	if (descriptorSetLayout != VK_NULL_HANDLE)
+		vkDestroyDescriptorSetLayout(_device, descriptorSetLayout, VK_NULL_HANDLE);
 
 	pipeline = VK_NULL_HANDLE;
 	pipelineLayout = VK_NULL_HANDLE;
 	descriptorSet = VK_NULL_HANDLE;
 	descriptorSetLayout = VK_NULL_HANDLE;
+	_pool = VK_NULL_HANDLE;
 }
 
-void vkMesh::loadMesh(const VmaAllocator& allocator, const char* path)
+vkMesh::vkMesh(const VmaAllocator& allocator, const char* path)
+	: _allocator(allocator)
 {
+	fill(_allocator, path);
+}
+
+VkBool32 vkMesh::fill(const VmaAllocator& allocator, const char* path)
+{
+	free();
+
+	_allocator = allocator;
 	std::unordered_map<vkVertex, uint32_t> uniqueVertices{};
 	std::vector<uint32_t> indices;
 	std::vector<vkVertex> vertices;
@@ -254,7 +303,7 @@ void vkMesh::loadMesh(const VmaAllocator& allocator, const char* path)
 
 		for (int vert_ind = 0; vert_ind < num_vert; vert_ind++)
 		{
-			vkVertex vertex{ 
+			vkVertex vertex{
 				mesh_ind,
 				{cur_mesh->mVertices[vert_ind].x, -cur_mesh->mVertices[vert_ind].y, cur_mesh->mVertices[vert_ind].z}
 			};
@@ -282,10 +331,10 @@ void vkMesh::loadMesh(const VmaAllocator& allocator, const char* path)
 	VmaAllocationCreateInfo sbAlloc{};
 	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
 	sbAlloc.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	vertexBuffer.create(allocator, sbInfo, sbAlloc);
+	vertexBuffer.fill(allocator, sbInfo, sbAlloc);
 	sbInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 	sbInfo.size = sizeof(uint32_t) * indices.size();
-	indexBuffer.create(allocator, sbInfo, sbAlloc);
+	indexBuffer.fill(allocator, sbInfo, sbAlloc);
 
 	vmaMapMemory(allocator, vertexBuffer.memory, &vertexBuffer.allocInfo.pMappedData);
 	memcpy(vertexBuffer.allocInfo.pMappedData, vertices.data(), sizeof(vkVertex) * uniqueVertices.size());
@@ -297,10 +346,14 @@ void vkMesh::loadMesh(const VmaAllocator& allocator, const char* path)
 
 	indicesCount = indices.size();
 	verticesCount = vertices.size();
+
+	return 1;
 }
 
-void vkMesh::destroy(const VmaAllocator& allocator)
+void vkMesh::free()
 {
-	vertexBuffer.destroy(allocator);
-	indexBuffer.destroy(allocator);
+	indicesCount = 0;
+	verticesCount = 0;
+	vertexBuffer.free();
+	indexBuffer.free();
 }

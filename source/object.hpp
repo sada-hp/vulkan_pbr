@@ -36,8 +36,50 @@ struct vkQueueStruct
 
 struct vkImageStruct
 {
-	VkBool32 create(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo = VK_NULL_HANDLE, VkSamplerCreateInfo* samplerInfo = VK_NULL_HANDLE);
-	void destroy(const VkDevice& device, const VmaAllocator& allocator);
+	vkImageStruct() = default;
+	vkImageStruct(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo = VK_NULL_HANDLE, VkSamplerCreateInfo* samplerInfo = VK_NULL_HANDLE);
+	vkImageStruct(const vkImageStruct& other) = delete;
+	void operator=(const vkImageStruct& other) = delete;
+	vkImageStruct(vkImageStruct&& other) noexcept
+		: _device(other._device), _allocator(other._allocator), image(other.image), view(other.view), sampler(other.sampler), memory(other.memory),
+		allocInfo(std::move(other.allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
+	{
+		other.image = VK_NULL_HANDLE;
+		other.view = VK_NULL_HANDLE;
+		other.sampler = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+	void operator=(vkImageStruct&& other) noexcept
+	{
+		if (sampler != VK_NULL_HANDLE)
+			vkDestroySampler(_device, sampler, VK_NULL_HANDLE);
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(_device, view, VK_NULL_HANDLE);
+		if (image != VK_NULL_HANDLE)
+			vmaDestroyImage(_allocator, image, memory);
+
+		_device = other._device;
+		_allocator = other._allocator;
+		image = other.image;
+		view = other.view;
+		sampler = other.sampler;
+		memory = other.memory;
+		allocInfo = std::move(other.allocInfo);
+		descriptorInfo = std::move(other.descriptorInfo);
+
+		other.image = VK_NULL_HANDLE;
+		other.view = VK_NULL_HANDLE;
+		other.sampler = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+	~vkImageStruct();
+
+	VkBool32 fill(const VkDevice& device, const VmaAllocator& allocator, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo, VkImageViewCreateInfo* viewInfo = VK_NULL_HANDLE, VkSamplerCreateInfo* samplerInfo = VK_NULL_HANDLE);
+	void free();
 
 	VkImage image = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
@@ -45,28 +87,104 @@ struct vkImageStruct
 	VmaAllocation memory = VK_NULL_HANDLE;
 	VmaAllocationInfo allocInfo = {};
 	VkDescriptorImageInfo descriptorInfo = {};
+private:
+	VkDevice _device = VK_NULL_HANDLE;
+	VmaAllocator _allocator = VK_NULL_HANDLE;
 };
 
 struct vkBufferStruct
 {
-	VkBool32 create(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo);
-	void destroy(const VmaAllocator& allocator);
+	vkBufferStruct() = default;
+	vkBufferStruct(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+	vkBufferStruct(const vkBufferStruct& other) = delete;
+	void operator=(const vkBufferStruct& other) = delete;
+	vkBufferStruct(vkBufferStruct&& other) noexcept
+		: _allocator(other._allocator), buffer(other.buffer), memory(other.memory), allocInfo(std::move(allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
+	{
+		other.buffer = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+	void operator=(vkBufferStruct&& other) noexcept
+	{
+		if (buffer != VK_NULL_HANDLE)
+			vmaDestroyBuffer(_allocator, buffer, memory);
+
+		_allocator = other._allocator;
+		buffer = other.buffer;
+		memory = other.memory;
+		allocInfo = std::move(other.allocInfo);
+		descriptorInfo = std::move(other.descriptorInfo);
+
+		other.buffer = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+	~vkBufferStruct();
+
+	VkBool32 fill(const VmaAllocator& allocator, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+	void free();
 
 	VkBuffer buffer = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;
 	VmaAllocationInfo allocInfo = {};
 	VkDescriptorBufferInfo descriptorInfo = {};
+private:
+	VmaAllocator _allocator = VK_NULL_HANDLE;
 };
 
 struct vkShaderPipeline
 {
-	VkBool32 create(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI);
-	void destroy(const VkDevice& device, const VkDescriptorPool& pool = VK_NULL_HANDLE);
+	vkShaderPipeline() = default;
+	vkShaderPipeline(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI);
+	vkShaderPipeline(const vkShaderPipeline& other) = delete;
+	void operator=(const vkShaderPipeline& other) = delete;
+	vkShaderPipeline(vkShaderPipeline&& other) noexcept
+		: _device(other._device), _pool(other._pool), pipeline(other.pipeline), pipelineLayout(other.pipelineLayout), 
+		descriptorSet(other.descriptorSet), descriptorSetLayout(other.descriptorSetLayout)
+	{
+		other.pipeline = VK_NULL_HANDLE;
+		other.pipelineLayout = VK_NULL_HANDLE;
+		other.descriptorSet = VK_NULL_HANDLE;
+		other.descriptorSetLayout = VK_NULL_HANDLE;
+	}
+	void operator=(vkShaderPipeline&& other) noexcept
+	{
+		if (pipeline != VK_NULL_HANDLE)
+			vkDestroyPipeline(_device, pipeline, VK_NULL_HANDLE);
+		if (pipelineLayout != VK_NULL_HANDLE)
+			vkDestroyPipelineLayout(_device, pipelineLayout, VK_NULL_HANDLE);
+		if (_pool != VK_NULL_HANDLE)
+			vkFreeDescriptorSets(_device, _pool, 1, &descriptorSet);
+		if (descriptorSetLayout != VK_NULL_HANDLE)
+			vkDestroyDescriptorSetLayout(_device, descriptorSetLayout, VK_NULL_HANDLE);
+
+		_device = other._device;
+		_pool = other._pool;
+		pipeline = other.pipeline;
+		pipelineLayout = other.pipelineLayout;
+		descriptorSet = other.descriptorSet;
+		descriptorSetLayout = other.descriptorSetLayout;
+
+		other.pipeline = VK_NULL_HANDLE;
+		other.pipelineLayout = VK_NULL_HANDLE;
+		other.descriptorSet = VK_NULL_HANDLE;
+		other.descriptorSetLayout = VK_NULL_HANDLE;
+	}
+	~vkShaderPipeline();
+
+	VkBool32 fill(const VkDevice& device, const vkShaderPipelineCreateInfo& objectCI);
+	void free();
 
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+private:
+	VkDevice _device = VK_NULL_HANDLE;
+	VkDescriptorPool _pool = VK_NULL_HANDLE;
 };
 
 struct vkVertex
@@ -113,11 +231,34 @@ struct std::hash<vkVertex>
 
 struct vkMesh
 {
-	void loadMesh(const VmaAllocator& allocator, const char* path);
-	void destroy(const VmaAllocator& allocator);
+	vkMesh() = default;
+	vkMesh(const VmaAllocator& allocator, const char* path);
+	vkMesh(const vkMesh& other) = delete;
+	void operator=(const vkMesh& other) = delete;
+	vkMesh(vkMesh&& other) noexcept
+		: _allocator(other._allocator), vertexBuffer(std::move(other.vertexBuffer)), indexBuffer(std::move(other.indexBuffer)),
+		indicesCount(other.indicesCount), verticesCount(other.verticesCount)
+	{
+		other.indicesCount = 0;
+		other.verticesCount = 0;
+	}
+	void operator =(vkMesh&& other) noexcept
+	{
+		_allocator = other._allocator;
+		vertexBuffer = std::move(other.vertexBuffer);
+		indexBuffer = std::move(other.indexBuffer);
+		indicesCount = other.indicesCount;
+		verticesCount = other.verticesCount;
+	}
+	~vkMesh() = default;
+
+	VkBool32 fill(const VmaAllocator& allocator, const char* path);
+	void free();
 
 	vkBufferStruct vertexBuffer = {};
 	vkBufferStruct indexBuffer = {};
-	int indicesCount = 0;
-	int verticesCount = 0;
+	uint32_t indicesCount = 0;
+	uint32_t verticesCount = 0;
+private:
+	VmaAllocator _allocator = VK_NULL_HANDLE;
 };

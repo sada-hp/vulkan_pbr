@@ -72,7 +72,7 @@ int main(int argc, char** argv)
 			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
 			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
 
-			cam_customs.camera_zoom += yoffset;
+			cam_customs.camera_zoom += 7.5f * yoffset;
 			rndr->camera.position = glm::vec3(0.f, 0.f, cam_customs.camera_zoom) * rndr->camera.orientation;
 		});
 
