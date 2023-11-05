@@ -1,6 +1,38 @@
 include_directories(${DemoPrj_SOURCE_DIR}/include)
+include_directories(${DemoPrj_SOURCE_DIR}/source)
 link_directories(${DemoPrj_SOURCE_DIR}/libraries)
-add_executable(source entry.cpp renderer.cpp renderer.hpp pch.hpp object.cpp object.hpp)
+
+set(
+    ROOT_SOURCES 
+	"entry.cpp"
+	"renderer.cpp"
+	"renderer.hpp"
+	"pch.hpp"
+	"object.cpp"
+	"object.hpp"
+	"file_manager.cpp"
+	"file_manager.hpp"
+	"scope.cpp"
+	"scope.hpp"
+	"vulkan_api.cpp"
+	"vulkan_api.hpp"
+)
+set(
+    VULKAN_SOURCES 
+	"vulkan_objects/buffer.cpp"
+	"vulkan_objects/buffer.hpp"
+	"vulkan_objects/image.cpp"
+	"vulkan_objects/image.hpp"
+	"vulkan_objects/mesh.cpp"
+	"vulkan_objects/mesh.hpp"
+	"vulkan_objects/vertex.hpp"
+	"vulkan_objects/queue.cpp"
+	"vulkan_objects/queue.hpp"
+)
+add_executable(source ${ROOT_SOURCES} ${VULKAN_SOURCES})
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VULKAN_SOURCES})
+
 add_compile_definitions("DEBUG=$<CONFIG:Debug>")
 set_target_properties(source PROPERTIES  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DemoPrj_SOURCE_DIR}/bin)
 set_target_properties(source PROPERTIES  RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DemoPrj_SOURCE_DIR}/bin)
