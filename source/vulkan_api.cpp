@@ -1,13 +1,10 @@
 #include "pch.hpp"
 #include "vulkan_api.hpp"
 
-VkBool32 GenerateMipMaps(const VkDevice& device, const VkCommandBuffer& cmd, const VkImage& image, const VkExtent2D& dimensions, const VkImageSubresourceRange& subRange)
+VkBool32 GenerateMipMaps(VkCommandBuffer& cmd, const VkImage& image, const VkExtent2D& dimensions, const VkImageSubresourceRange& subRange)
 {
 	if (subRange.levelCount == 1)
 		return 0;
-
-	VkFence mipFence;
-	CreateFence(device, &mipFence);
 
 	for (int k = 0; k < subRange.layerCount; k++) {
 		VkImageMemoryBarrier barrier{};
@@ -86,7 +83,61 @@ VkBool32 GenerateMipMaps(const VkDevice& device, const VkCommandBuffer& cmd, con
 			1, &barrier);
 	}
 
-	vkDestroyFence(device, mipFence, VK_NULL_HANDLE);
+	return 1;
+}
+
+VkBool32 CopyBufferToImage(VkCommandBuffer& cmd, const VkImage& image, const VkBuffer& buffer, const VkImageSubresourceRange& subRes, const VkExtent3D& extent, VkImageLayout layout)
+{
+	VkBufferImageCopy region{};
+	region.imageSubresource.aspectMask = subRes.aspectMask;
+	region.imageSubresource.baseArrayLayer = subRes.baseArrayLayer;
+	region.imageSubresource.layerCount = subRes.layerCount;
+	region.imageSubresource.mipLevel = subRes.baseMipLevel;
+	region.bufferOffset = 0u;
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent = extent;
+
+	TransitionImageLayout(cmd, image, subRes, layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	vkCmdCopyBufferToImage(cmd, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+
+	return 1;
+}
+
+VkBool32 TransitionImageLayout(VkCommandBuffer& cmd, const VkImage& image, const VkImageSubresourceRange& subRes, VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+	const std::unordered_map<VkImageLayout, VkPipelineStageFlags> stageTable = {
+		{VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
+		{VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
+		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
+		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT}
+	};
+
+	const std::unordered_map<VkImageLayout, VkAccessFlags> accessTable = {
+		{VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_NONE_KHR},
+		{VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_NONE_KHR},
+		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT},
+		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT},
+		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_MEMORY_READ_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT}
+	};
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange = subRes;
+	barrier.srcAccessMask = accessTable.at(oldLayout);
+	barrier.dstAccessMask = accessTable.at(newLayout);
+	vkCmdPipelineBarrier(cmd, stageTable.at(oldLayout), stageTable.at(newLayout), 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	return 1;
 }
@@ -105,7 +156,7 @@ VkBool32 CreateSemaphore(const VkDevice& device, VkSemaphore* outSemaphore)
 	return vkCreateSemaphore(device, &createInfo, VK_NULL_HANDLE, outSemaphore) == VK_SUCCESS;
 }
 
-VkBool32 AllocateBuffers(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers)
+VkBool32 AllocateCommandBuffers(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers)
 {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -324,4 +375,17 @@ VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhy
 VkBool32 CreateRenderPass(const VkDevice& device, const VkRenderPassCreateInfo& info, VkRenderPass* outRenderPass)
 {
 	return vkCreateRenderPass(device, &info, VK_NULL_HANDLE, outRenderPass) == VK_SUCCESS;
+}
+
+VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd)
+{
+	VkCommandBufferBeginInfo cmdBegin{};
+	cmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	return vkBeginCommandBuffer(cmd, &cmdBegin) == VK_SUCCESS;
+}
+
+VkBool32 EndCommandBuffer(VkCommandBuffer& cmd)
+{
+	return vkEndCommandBuffer(cmd) == VK_SUCCESS;
 }

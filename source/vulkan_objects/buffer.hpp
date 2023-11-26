@@ -8,17 +8,33 @@
 struct Buffer
 {
 	Buffer(const RenderScope& Scope, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+
 	Buffer(const Buffer& other) = delete;
+
 	void operator=(const Buffer& other) = delete;
+
 	Buffer(Buffer&& other) noexcept
-		: Scope(other.Scope), buffer(other.buffer), memory(other.memory), allocInfo(std::move(allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
+		: Scope(other.Scope), buffer(std::move(other.buffer)), memory(std::move(other.memory)), allocInfo(std::move(allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
 	{
 		other.buffer = VK_NULL_HANDLE;
 		other.memory = VK_NULL_HANDLE;
 		other.allocInfo = {};
 		other.descriptorInfo = {};
 	}
-	void operator=(Buffer&& other) = delete;
+
+	void operator=(Buffer&& other) noexcept {
+		Scope = other.Scope;
+		other.buffer = std::move(other.buffer);
+		memory = std::move(other.memory);
+		allocInfo = std::move(other.allocInfo);
+		descriptorInfo = std::move(other.descriptorInfo);
+
+		other.buffer = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+
 	~Buffer();
 
 	const VkBuffer& GetBuffer() const { return buffer; };
@@ -38,7 +54,7 @@ private:
 	VmaAllocation memory = VK_NULL_HANDLE;
 	VmaAllocationInfo allocInfo = {};
 	VkDescriptorBufferInfo descriptorInfo = {};
-	void* _mapped = VK_NULL_HANDLE;
+	void* mappedMemory = VK_NULL_HANDLE;
 
-	const RenderScope& Scope;
+	const RenderScope* Scope = VK_NULL_HANDLE;
 };

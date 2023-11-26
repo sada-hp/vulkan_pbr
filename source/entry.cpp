@@ -82,7 +82,6 @@ int main(int argc, char** argv)
 	while (!glfwWindowShouldClose(pWindow))
 	{
 		glfwPollEvents();
-		glfwSwapBuffers(pWindow);
 		render.Step();
 		frame_count++;
 		auto count_end = std::chrono::steady_clock::now();
@@ -95,6 +94,8 @@ int main(int argc, char** argv)
 			count_start = count_end;
 			frame_count = 0;
 		}
+
+		glfwSwapBuffers(pWindow);
 	}
 
 	glfwDestroyWindow(pWindow);

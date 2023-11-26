@@ -1,4 +1,5 @@
 #include "queue.hpp"
+#include "vulkan_api.hpp"
 
 Queue::Queue(const VkDevice& inDevice, uint32_t inFamily)
 	: device(inDevice), family(inFamily)
@@ -41,23 +42,12 @@ const Queue& Queue::Submit(const VkCommandBuffer& cmd) const
 	return *this;
 }
 
-const Queue& Queue::AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const
+void Queue::AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const
 {
-	allocated_buffers += count;
-
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandBufferCount = count;
-	allocInfo.commandPool = pool;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	vkAllocateCommandBuffers(device, &allocInfo, outBuffers);
-	return *this;
+	::AllocateCommandBuffers(device, pool, count, outBuffers);
 }
 
-const Queue& Queue::FreeCommandBuffers(uint32_t count, VkCommandBuffer* buffers) const
+void Queue::FreeCommandBuffers(uint32_t count, VkCommandBuffer* buffers) const
 {
-	allocated_buffers -= count;
-
 	vkFreeCommandBuffers(device, pool, count, buffers);
-	return *this;
 }

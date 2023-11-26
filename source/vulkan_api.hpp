@@ -13,7 +13,7 @@
 * @param[in] dimensions - image size
 * @param[in] subRange - specify number of mipLevels and arrayLayers here
 */
-VkBool32 GenerateMipMaps(const VkDevice& device, const VkCommandBuffer& cmd, const VkImage& image, const VkExtent2D& dimensions, const VkImageSubresourceRange& subRange);
+VkBool32 GenerateMipMaps(VkCommandBuffer& cmd, const VkImage& image, const VkExtent2D& dimensions, const VkImageSubresourceRange& subRange);
 /*
 * !@brief Creates synchronization fence
 *
@@ -42,7 +42,7 @@ VkBool32 CreateSemaphore(const VkDevice& device, VkSemaphore* outSemaphore);
 *
 * @return VK_TRUE if allocation was successful, VK_FALSE otherwise
 */
-VkBool32 AllocateBuffers(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers);
+VkBool32 AllocateCommandBuffers(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers);
 /*
 * !@brief Initialize descriptor pool object
 *
@@ -127,3 +127,11 @@ VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const std::vector<
 VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice);
 
 VkBool32 CreateRenderPass(const VkDevice& device, const VkRenderPassCreateInfo& info, VkRenderPass* outRenderPass);
+
+VkBool32 CopyBufferToImage(VkCommandBuffer& cmd, const VkImage& image, const VkBuffer& buffer, const VkImageSubresourceRange& subRes, const VkExtent3D& extent, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
+
+VkBool32 TransitionImageLayout(VkCommandBuffer& cmd, const VkImage& image, const VkImageSubresourceRange& subRes, VkImageLayout oldLayout, VkImageLayout newLayout);
+
+VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd);
+
+VkBool32 EndCommandBuffer(VkCommandBuffer& cmd);

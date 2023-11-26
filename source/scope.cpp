@@ -5,7 +5,7 @@ RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const
 {
 	assert(physicalDevice == VK_NULL_HANDLE);
 
-	assert(::EnumeratePhysicalDevices(instance, device_extensions, &physicalDevice));
+	::EnumeratePhysicalDevices(instance, device_extensions, &physicalDevice);
 	return *this;
 }
 
@@ -13,7 +13,7 @@ RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& fe
 {
 	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice == VK_NULL_HANDLE);
 
-	assert(::CreateLogicalDevice(physicalDevice, features, device_extensions, FindDeviceQueues(physicalDevice, queues), &logicalDevice));
+	::CreateLogicalDevice(physicalDevice, features, device_extensions, FindDeviceQueues(physicalDevice, queues), &logicalDevice);
 
 	for (const auto& queue : queues) {
 		uint32_t queueFamilies = FindDeviceQueues(physicalDevice, { queue })[0];
@@ -26,7 +26,8 @@ RenderScope& RenderScope::CreateMemoryAllocator(const VkInstance& instance)
 {
 	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice != VK_NULL_HANDLE && allocator == VK_NULL_HANDLE);
 
-	assert(::CreateAllocator(instance, physicalDevice, logicalDevice, &allocator));
+	::CreateAllocator(instance, physicalDevice, logicalDevice, &allocator);
+
 	return *this;
 }
 
@@ -37,8 +38,11 @@ RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
 
-	assert(::CreateSwapchain(logicalDevice, physicalDevice, surface, { swapchainFormat , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }, surfaceCapabilities.currentExtent, &swapchain));
+	if (::CreateSwapchain(logicalDevice, physicalDevice, surface, { swapchainFormat , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }, surfaceCapabilities.currentExtent, &swapchain)) {
+		vkGetSwapchainImagesKHR(logicalDevice, swapchain, &framesInFlight, VK_NULL_HANDLE);
+	}
 	swapchainExtent = surfaceCapabilities.currentExtent;
+
 	return *this;
 }
 
@@ -85,25 +89,36 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	createInfo.subpassCount = 1;
 	createInfo.pSubpasses = &subpassDescription;
 
-	assert(::CreateRenderPass(logicalDevice, createInfo, &renderPass));
+	::CreateRenderPass(logicalDevice, createInfo, &renderPass);
 
 	return *this;
 }
 
-RenderScope& RenderScope::RecreateSwapchain(const VkSurfaceKHR& surface)
+RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes)
+{
+	if (descriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);
+	}
+
+	::CreateDescriptorPool(logicalDevice, poolSizes.data(), poolSizes.size(), setsCount, &descriptorPool);
+
+	return *this;
+}
+
+void RenderScope::RecreateSwapchain(const VkSurfaceKHR& surface)
 {
 	vkDestroySwapchainKHR(logicalDevice, swapchain, VK_NULL_HANDLE);
 	swapchain = VK_NULL_HANDLE;
 
 	CreateSwapchain(surface);
-
-	return *this;
 }
 
 void RenderScope::Destroy()
 {
 	available_queues.clear();
 
+	if (descriptorPool != VK_NULL_HANDLE)
+		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);
 	if (renderPass != VK_NULL_HANDLE)
 		vkDestroyRenderPass(logicalDevice, renderPass, VK_NULL_HANDLE);
 	if (swapchain != VK_NULL_HANDLE)
@@ -113,17 +128,19 @@ void RenderScope::Destroy()
 	if (logicalDevice != VK_NULL_HANDLE)
 		vkDestroyDevice(logicalDevice, VK_NULL_HANDLE);
 
+	descriptorPool = VK_NULL_HANDLE;
 	renderPass = VK_NULL_HANDLE;
 	swapchain = VK_NULL_HANDLE;
 	allocator = VK_NULL_HANDLE;
 	logicalDevice = VK_NULL_HANDLE;
 }
 
-bool RenderScope::IsReadyToUse() const
+VkBool32 RenderScope::IsReadyToUse() const
 {
 	return logicalDevice != VK_NULL_HANDLE
 		&& physicalDevice != VK_NULL_HANDLE
 		&& allocator != VK_NULL_HANDLE
 		&& swapchain != VK_NULL_HANDLE
-		&& renderPass != VK_NULL_HANDLE;
+		&& renderPass != VK_NULL_HANDLE
+		&& descriptorPool != VK_NULL_HANDLE;
 }

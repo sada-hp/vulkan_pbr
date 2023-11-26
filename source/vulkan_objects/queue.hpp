@@ -6,16 +6,18 @@ class Queue
 {
 public:
 	Queue() = delete;
+
 	Queue(const VkDevice& device, uint32_t family);
+
 	~Queue();
 
 	const Queue& Wait() const;
 
 	const Queue& Submit(const VkCommandBuffer& cmd) const;
 
-	const Queue& AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const;
+	void AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const;
 
-	const Queue& FreeCommandBuffers(uint32_t count, VkCommandBuffer* buffers) const;
+	void FreeCommandBuffers(uint32_t count, VkCommandBuffer* buffers) const;
 
 	const VkQueue& GetQueue() const { return queue; };
 
@@ -27,6 +29,4 @@ private:
 	VkFence fence = VK_NULL_HANDLE;
 	VkCommandPool pool = VK_NULL_HANDLE;
 	const VkDevice device = VK_NULL_HANDLE;
-
-	mutable int allocated_buffers = 0;
 };

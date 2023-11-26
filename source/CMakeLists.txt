@@ -28,10 +28,19 @@ set(
 	"vulkan_objects/vertex.hpp"
 	"vulkan_objects/queue.cpp"
 	"vulkan_objects/queue.hpp"
+	"vulkan_objects/pipeline.cpp"
+	"vulkan_objects/pipeline.hpp"
+	"vulkan_objects/descriptor_set.cpp"
+	"vulkan_objects/descriptor_set.hpp"
 )
-add_executable(source ${ROOT_SOURCES} ${VULKAN_SOURCES})
+set(
+    DEBUG_SOURCES 
+	"debug_objects/debug_layers.cpp"
+)
+add_executable(source ${ROOT_SOURCES} ${VULKAN_SOURCES} ${DEBUG_SOURCES})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VULKAN_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${DEBUG_SOURCES})
 
 add_compile_definitions("DEBUG=$<CONFIG:Debug>")
 set_target_properties(source PROPERTIES  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DemoPrj_SOURCE_DIR}/bin)

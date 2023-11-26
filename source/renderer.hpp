@@ -26,26 +26,26 @@ struct ViewCameraStruct
 
 		if (position != old_pos || orientation != old_ori)
 		{
-			MVP = projection * glm::translate(glm::mat4_cast(orientation), position);
+			VP = projection * glm::translate(glm::mat4_cast(orientation), position);
 
 			old_pos = position;
 			old_ori = orientation;
 		}
 
-		return MVP;
+		return VP;
 	}
 
 	ObjectPosition position = glm::vec3(0.f);
 	ObjectOrientation orientation = glm::quat_cast(glm::mat4(1.f));
 
 private:
-	mutable TransformMatrix MVP = glm::mat4(1.f);
+	mutable TransformMatrix VP = glm::mat4(1.f);
 	glm::mat4 projection = glm::mat4(1.f);
 
 	void set_projection(const glm::mat4& proj = glm::mat4(1.f))
 	{
 		projection = proj;
-		MVP = projection * glm::translate(glm::mat4_cast(orientation), position);
+		VP = projection * glm::translate(glm::mat4_cast(orientation), position);
 	}
 
 	friend class VulkanBase;
@@ -53,30 +53,26 @@ private:
 
 class VulkanBase
 {
-	std::vector<const char*> _extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	std::vector<VkImage> _swapchainImages = {};
-	std::vector<VkImageView> _swapchainViews = {};
-	std::vector<std::unique_ptr<Image>> _depthAttachments = {};
-	std::vector<VkFramebuffer> _framebuffers = {};
-	std::vector<VkFence> _presentFences = {};
-	std::vector<VkSemaphore> _presentSemaphores = {};
-	std::vector<VkCommandBuffer> _presentBuffers = {};
-	VkSemaphore _swapchainSemaphore = VK_NULL_HANDLE;
+	std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	std::vector<VkImage> swapchainImages = {};
+	std::vector<VkImageView> swapchainViews = {};
+	std::vector<std::unique_ptr<Image>> depthAttachments = {};
+	std::vector<VkFramebuffer> framebuffers = {};
+	std::vector<VkFence> presentFences = {};
+	std::vector<VkSemaphore> presentSemaphores = {};
+	std::vector<VkCommandBuffer> presentBuffers = {};
+	VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
 
-	VkInstance _instance = VK_NULL_HANDLE;
-	VkSurfaceKHR _surface = VK_NULL_HANDLE;
+	VkInstance instance = VK_NULL_HANDLE;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 	RenderScope Scope;
-	GLFWwindow* _glfwWindow = VK_NULL_HANDLE;
+	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
 
-	std::unique_ptr<Buffer> _ubo = {};
-	std::unique_ptr<Image> _skyboxImg;
+	std::unique_ptr<Buffer> ubo = {};
 
-	VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
-
-	vkShaderPipeline sword = {};
-	std::unique_ptr<Mesh> swordMesh = {};
-	vkShaderPipeline skybox = {};
+	std::unique_ptr<GraphicsObject> sword;
+	std::unique_ptr<GraphicsObject> skybox;
 public:
 	/*
 	* !@brief Should be modified to control the scene
@@ -139,7 +135,6 @@ private:
 	std::vector<const char*> getRequiredExtensions();
 
 #ifdef VALIDATION
-
 	VkDebugUtilsMessengerEXT debugMessenger;
 	const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 

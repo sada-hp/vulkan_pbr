@@ -8,10 +8,13 @@
 struct Image
 {
 	Image(const RenderScope& Scope);
+
 	Image(const Image& other) = delete;
+
 	void operator=(const Image& other) = delete;
+
 	Image(Image&& other) noexcept
-		: Scope(other.Scope), image(other.image), view(other.view), sampler(other.sampler), memory(other.memory),
+		: Scope(other.Scope), image(std::move(other.image)), view(std::move(other.view)), sampler(std::move(other.sampler)), memory(std::move(other.memory)),
 		allocInfo(std::move(other.allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
 	{
 		other.image = VK_NULL_HANDLE;
@@ -21,9 +24,25 @@ struct Image
 		other.allocInfo = {};
 		other.descriptorInfo = {};
 	}
-	void operator=(Image&& other) = delete;
+
+	void operator=(Image&& other) {
+		Scope = other.Scope;
+		image = std::move(other.image);
+		view = std::move(other.view);
+		sampler = std::move(other.sampler);
+		memory = std::move(other.memory);
+		allocInfo = std::move(other.allocInfo);
+		descriptorInfo = std::move(other.descriptorInfo);
+
+		other.image = VK_NULL_HANDLE;
+		other.view = VK_NULL_HANDLE;
+		other.sampler = VK_NULL_HANDLE;
+		other.memory = VK_NULL_HANDLE;
+		other.allocInfo = {};
+		other.descriptorInfo = {};
+	}
+
 	~Image();
-	void Free();
 
 	Image& CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
 
@@ -53,5 +72,5 @@ private:
 	VkImageSubresourceRange subRange = {};
 	VkExtent3D imageSize = {};
 
-	const RenderScope& Scope;
+	const RenderScope* Scope = VK_NULL_HANDLE;
 };
