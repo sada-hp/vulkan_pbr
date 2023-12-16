@@ -6,6 +6,82 @@ extern std::string exec_path;
 Pipeline::Pipeline(const RenderScope& InScope)
 	: Scope(&InScope)
 {
+
+}
+
+ComputePipeline::ComputePipeline(const RenderScope& Scope)
+	: Pipeline(Scope)
+{
+
+}
+
+ComputePipeline::~ComputePipeline()
+{
+
+}
+
+ComputePipeline& ComputePipeline::SetShaderName(const std::string& inIhaderName)
+{
+	shaderName = inIhaderName;
+	
+	return *this;
+}
+
+ComputePipeline& ComputePipeline::AddDescriptorLayout(VkDescriptorSetLayout layout)
+{
+	descriptorLayouts.push_back(layout);
+	
+	return *this;
+}
+
+void ComputePipeline::Construct()
+{
+	assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderName != "");
+
+	VkPipelineLayoutCreateInfo pipelineLayoutCI{};
+	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCI.setLayoutCount = descriptorLayouts.size();
+	pipelineLayoutCI.pSetLayouts = descriptorLayouts.data();
+	pipelineLayoutCI.pushConstantRangeCount = pushConstants.size();
+	pipelineLayoutCI.pPushConstantRanges = pushConstants.data();
+	vkCreatePipelineLayout(Scope->GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &pipelineLayout);
+
+	VkShaderModule shader = VK_NULL_HANDLE;
+	VkPipelineShaderStageCreateInfo pipelineStageCI{};
+
+	std::ifstream shaderFile(exec_path + "shaders\\" + shaderName + "_comp.spv", std::ios::ate | std::ios::binary);
+	std::size_t fileSize = (std::size_t)shaderFile.tellg();
+	shaderFile.seekg(0);
+	std::vector<char> shaderCode(fileSize);
+	shaderFile.read(shaderCode.data(), fileSize);
+	shaderFile.close();
+
+	VkShaderModuleCreateInfo shaderModuleCI{};
+	shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCI.codeSize = shaderCode.size();
+	shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
+	vkCreateShaderModule(Scope->GetDevice(), &shaderModuleCI, VK_NULL_HANDLE, &shader);
+
+	pipelineStageCI = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, VK_SHADER_STAGE_COMPUTE_BIT, shader, "main", VK_NULL_HANDLE };
+
+	VkPipelineShaderStageCreateInfo compShaderStageInfo{};
+	compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	compShaderStageInfo.module = shader;
+	compShaderStageInfo.pName = "main";
+
+	VkComputePipelineCreateInfo pipelineCI{};
+	pipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineCI.layout = pipelineLayout;
+	pipelineCI.stage = pipelineStageCI;
+	vkCreateComputePipelines(Scope->GetDevice(), VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &pipeline);
+
+	vkDestroyShaderModule(Scope->GetDevice(), shader, VK_NULL_HANDLE);
+}
+
+void ComputePipeline::BindPipeline(VkCommandBuffer cmd) const
+{
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 }
 
 Pipeline::~Pipeline()
@@ -14,7 +90,17 @@ Pipeline::~Pipeline()
 	vkDestroyPipeline(Scope->GetDevice(), pipeline, VK_NULL_HANDLE);
 }
 
-Pipeline& Pipeline::SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings)
+GraphicsPipeline::GraphicsPipeline(const RenderScope& InScope)
+	: Pipeline(InScope)
+{
+}
+
+GraphicsPipeline::~GraphicsPipeline()
+{
+
+}
+
+GraphicsPipeline& GraphicsPipeline::SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings)
 {
 	vertexInput.vertexBindingDescriptionCount = count;
 	vertexInput.pVertexBindingDescriptions = bindings;
@@ -22,7 +108,7 @@ Pipeline& Pipeline::SetVertexInputBindings(uint32_t count, VkVertexInputBindingD
 	return *this;
 }
 
-Pipeline& Pipeline::SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes)
+GraphicsPipeline& GraphicsPipeline::SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes)
 {
 	vertexInput.vertexAttributeDescriptionCount = count;
 	vertexInput.pVertexAttributeDescriptions = attributes;
@@ -30,21 +116,21 @@ Pipeline& Pipeline::SetVertexAttributeBindings(uint32_t count, VkVertexInputAttr
 	return *this;
 }
 
-Pipeline& Pipeline::SetPrimitiveTopology(VkPrimitiveTopology topology)
+GraphicsPipeline& GraphicsPipeline::SetPrimitiveTopology(VkPrimitiveTopology topology)
 {
 	inputAssembly.topology = topology;
 
 	return *this;
 }
 
-Pipeline& Pipeline::SetPolygonMode(VkPolygonMode mode)
+GraphicsPipeline& GraphicsPipeline::SetPolygonMode(VkPolygonMode mode)
 {
 	rasterizationState.polygonMode = mode;
 
 	return *this;
 }
 
-Pipeline& Pipeline::SetCullMode(VkCullModeFlags mode, VkFrontFace front)
+GraphicsPipeline& GraphicsPipeline::SetCullMode(VkCullModeFlags mode, VkFrontFace front)
 {
 	rasterizationState.cullMode = mode;
 	rasterizationState.frontFace = front;
@@ -52,7 +138,7 @@ Pipeline& Pipeline::SetCullMode(VkCullModeFlags mode, VkFrontFace front)
 	return *this;
 }
 
-Pipeline& Pipeline::SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor)
+GraphicsPipeline& GraphicsPipeline::SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor)
 {
 	rasterizationState.depthBiasEnable = depthBiasConstantFactor != 0.f && depthBiasClamp != 0.f && depthBiasSlopeFactor != 0.f;
 	rasterizationState.depthBiasConstantFactor = depthBiasConstantFactor;
@@ -62,7 +148,7 @@ Pipeline& Pipeline::SetDepthBias(float depthBiasConstantFactor, float depthBiasC
 	return *this;
 }
 
-Pipeline& Pipeline::SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments)
+GraphicsPipeline& GraphicsPipeline::SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments)
 {
 	blendAttachments.resize(count);
 	memcpy(blendAttachments.data(), attachments, count * sizeof(VkPipelineColorBlendAttachmentState));
@@ -72,7 +158,7 @@ Pipeline& Pipeline::SetBlendAttachments(uint32_t count, VkPipelineColorBlendAtta
 	return *this;
 }
 
-Pipeline& Pipeline::SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable, VkCompareOp depthCompareOp)
+GraphicsPipeline& GraphicsPipeline::SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable, VkCompareOp depthCompareOp)
 {
 	depthStencilState.depthTestEnable = depthTestEnable;
 	depthStencilState.depthWriteEnable = depthWriteEnable;
@@ -81,14 +167,14 @@ Pipeline& Pipeline::SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteE
 	return *this;
 }
 
-Pipeline& Pipeline::SetSampling(VkSampleCountFlagBits samples)
+GraphicsPipeline& GraphicsPipeline::SetSampling(VkSampleCountFlagBits samples)
 {
 	multisampleState.rasterizationSamples = samples;
 
 	return *this;
 }
 
-Pipeline& Pipeline::SetShaderStages(const std::string& inShaderName, VkShaderStageFlagBits inStages)
+GraphicsPipeline& GraphicsPipeline::SetShaderStages(const std::string& inShaderName, VkShaderStageFlagBits inStages)
 {
 	shaderName = inShaderName;
 	shaderStagesFlags = inStages;
@@ -96,14 +182,14 @@ Pipeline& Pipeline::SetShaderStages(const std::string& inShaderName, VkShaderSta
 	return *this;
 }
 
-Pipeline& Pipeline::AddDescriptorLayout(VkDescriptorSetLayout layout)
+GraphicsPipeline& GraphicsPipeline::AddDescriptorLayout(VkDescriptorSetLayout layout)
 {
 	descriptorLayouts.push_back(layout);
 
 	return *this;
 }
 
-Pipeline& Pipeline::SetSubpass(uint32_t inSubpass)
+GraphicsPipeline& GraphicsPipeline::SetSubpass(uint32_t inSubpass)
 {
 	subpass = inSubpass;
 
@@ -111,10 +197,17 @@ Pipeline& Pipeline::SetSubpass(uint32_t inSubpass)
 }
 
 //TODO: Check pipeline cache?
-//TODO: Will need support for compute pipelines in the future
-void Pipeline::Construct()
+void GraphicsPipeline::Construct()
 {
 	assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderName != "");
+
+	VkPipelineLayoutCreateInfo pipelineLayoutCI{};
+	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCI.setLayoutCount = descriptorLayouts.size();
+	pipelineLayoutCI.pSetLayouts = descriptorLayouts.data();
+	pipelineLayoutCI.pushConstantRangeCount = pushConstants.size();
+	pipelineLayoutCI.pPushConstantRanges = pushConstants.data();
+	vkCreatePipelineLayout(Scope->GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &pipelineLayout);
 
 	std::vector<VkShaderModule> shaders;
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStagesCI{};
@@ -145,14 +238,6 @@ void Pipeline::Construct()
 		}
 	}
 
-	VkPipelineLayoutCreateInfo pipelineLayoutCI{};
-	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCI.setLayoutCount = descriptorLayouts.size();
-	pipelineLayoutCI.pSetLayouts = descriptorLayouts.data();
-	pipelineLayoutCI.pushConstantRangeCount = pushConstants.size();
-	pipelineLayoutCI.pPushConstantRanges = pushConstants.data();
-	vkCreatePipelineLayout(Scope->GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &pipelineLayout);
-
 	VkGraphicsPipelineCreateInfo pipelineCI{};
 	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineCI.subpass = subpass;
@@ -170,18 +255,12 @@ void Pipeline::Construct()
 	pipelineCI.layout = pipelineLayout;
 	vkCreateGraphicsPipelines(Scope->GetDevice(), VK_NULL_HANDLE, 1, &pipelineCI, VK_NULL_HANDLE, &pipeline);
 
-
 	for (auto& shader : shaders) {
 		vkDestroyShaderModule(Scope->GetDevice(), shader, VK_NULL_HANDLE);
 	}
 }
 
-void Pipeline::BindPipeline(VkCommandBuffer cmd) const
+void GraphicsPipeline::BindPipeline(VkCommandBuffer cmd) const
 {
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-}
-
-void Pipeline::BindSet(VkCommandBuffer cmd, const DescriptorSet& set) const
-{
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &set.descriptorSet, 0, VK_NULL_HANDLE);
 }

@@ -73,6 +73,8 @@ class VulkanBase
 
 	std::unique_ptr<GraphicsObject> sword;
 	std::unique_ptr<GraphicsObject> skybox;
+
+	std::unique_ptr<Image> worley;
 public:
 	/*
 	* !@brief Should be modified to control the scene

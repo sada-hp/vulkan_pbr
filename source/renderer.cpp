@@ -158,12 +158,12 @@ void VulkanBase::Step() const
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		skybox->pipeline.BindSet(cmd, skybox->descriptorSet);
+		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
 		skybox->pipeline.BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		VkDeviceSize offsets[] = { 0 };
-		sword->pipeline.BindSet(cmd, sword->descriptorSet);
+		sword->descriptorSet.BindSet(cmd, sword->pipeline);
 		sword->pipeline.BindPipeline(cmd);
 		vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
 		vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
@@ -361,6 +361,7 @@ VkBool32 VulkanBase::prepare_scene()
 	sword->mesh = fileManager->ImportMesh("content\\sword.fbx");
 	sword->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
 		.Allocate();
+
 	sword->pipeline.SetVertexInputBindings(1, &vertBindings)
 		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
 		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
@@ -375,6 +376,7 @@ VkBool32 VulkanBase::prepare_scene()
 	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
 		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
 		.Allocate();
+
 	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
 		.Construct();

@@ -14,7 +14,7 @@ struct GraphicsObject
 	{
 	}
 
-	Pipeline pipeline;
+	GraphicsPipeline pipeline;
 	DescriptorSet descriptorSet;
 
 	//move to resource manager

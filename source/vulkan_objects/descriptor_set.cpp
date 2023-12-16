@@ -80,3 +80,8 @@ void DescriptorSet::Allocate()
 
 	vkUpdateDescriptorSets(Scope->GetDevice(), writes.size(), writes.data(), 0, VK_NULL_HANDLE);
 }
+
+void DescriptorSet::BindSet(VkCommandBuffer cmd, const Pipeline& pipeline)
+{
+	vkCmdBindDescriptorSets(cmd, pipeline.GetBindPoint(), pipeline.GetLayout(), 0, 1, &descriptorSet, 0, VK_NULL_HANDLE);
+}

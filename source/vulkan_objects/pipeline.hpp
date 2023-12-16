@@ -1,12 +1,19 @@
 #pragma once
 #include "vulkan_api.hpp"
-#include "descriptor_set.hpp"
 #include "scope.hpp"
+
+enum class EPipelineType
+{
+	Graphics = 0,
+	Compute = 1
+};
 
 class Pipeline
 {
 public:
 	Pipeline(const RenderScope& Scope);
+
+	virtual ~Pipeline();
 
 	Pipeline(const Pipeline& other) = delete;
 
@@ -28,42 +35,18 @@ public:
 		other.pipelineLayout = VK_NULL_HANDLE;
 	}
 
-	~Pipeline();
+	virtual void Construct() = 0;
 
-	Pipeline& SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings);
+	virtual void BindPipeline(VkCommandBuffer cmd) const = 0;
 
-	Pipeline& SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes);
+	virtual Pipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) = 0;
 
-	Pipeline& SetPrimitiveTopology(VkPrimitiveTopology topology);
+	virtual const VkPipelineBindPoint& GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
 
-	Pipeline& SetPolygonMode(VkPolygonMode mode);
+	virtual const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
 
-	Pipeline& SetCullMode(VkCullModeFlags mode, VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE);
-
-	Pipeline& SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor);
-
-	Pipeline& SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments);
-
-	Pipeline& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL);
-
-	Pipeline& SetSampling(VkSampleCountFlagBits samples);
-	
-	Pipeline& SetShaderStages(const std::string& shaderName, VkShaderStageFlagBits stages);
-
-	Pipeline& AddDescriptorLayout(VkDescriptorSetLayout layout);
-
-	Pipeline& SetSubpass(uint32_t subpass);
-
-	void Construct();
-
-	void BindPipeline(VkCommandBuffer cmd) const;
-
-	void BindSet(VkCommandBuffer cmd, const DescriptorSet& set) const;
-
-private:
-	uint32_t subpass = 0;
+protected:
 	std::string shaderName = "";
-	VkShaderStageFlagBits shaderStagesFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
@@ -71,6 +54,92 @@ private:
 
 	std::vector<VkDescriptorSetLayout> descriptorLayouts{};
 	std::vector<VkPushConstantRange> pushConstants{};
+};
+
+class ComputePipeline : public Pipeline
+{
+public:
+	ComputePipeline(const RenderScope& Scope);
+
+	ComputePipeline(const ComputePipeline& other) = delete;
+
+	void operator=(const ComputePipeline& other) = delete;
+
+	ComputePipeline(ComputePipeline&& other) noexcept
+		: Pipeline(std::move(other))
+	{
+	}
+
+	void operator=(ComputePipeline&& other) noexcept {
+		Pipeline::operator=(std::move(other));
+	}
+
+	~ComputePipeline();
+
+	ComputePipeline& SetShaderName(const std::string& shaderName);
+
+	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
+
+	void Construct() override;
+
+	void BindPipeline(VkCommandBuffer cmd) const override;
+
+	const VkPipelineBindPoint& GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_COMPUTE; };
+};
+
+class GraphicsPipeline : public Pipeline
+{
+public:
+	GraphicsPipeline(const RenderScope& Scope);
+
+	GraphicsPipeline(const GraphicsPipeline& other) = delete;
+
+	void operator=(const GraphicsPipeline& other) = delete;
+
+	GraphicsPipeline(GraphicsPipeline&& other) noexcept
+		: Pipeline(std::move(other))
+	{
+	}
+
+	void operator=(GraphicsPipeline&& other) noexcept {
+		Pipeline::operator=(std::move(other));
+	}
+
+	~GraphicsPipeline();
+
+	GraphicsPipeline& SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings);
+
+	GraphicsPipeline& SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes);
+
+	GraphicsPipeline& SetPrimitiveTopology(VkPrimitiveTopology topology);
+
+	GraphicsPipeline& SetPolygonMode(VkPolygonMode mode);
+
+	GraphicsPipeline& SetCullMode(VkCullModeFlags mode, VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE);
+
+	GraphicsPipeline& SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor);
+
+	GraphicsPipeline& SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments);
+
+	GraphicsPipeline& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL);
+
+	GraphicsPipeline& SetSampling(VkSampleCountFlagBits samples);
+	
+	GraphicsPipeline& SetShaderStages(const std::string& shaderName, VkShaderStageFlagBits stages);
+
+	GraphicsPipeline& SetSubpass(uint32_t subpass);
+
+	GraphicsPipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
+
+	void Construct() override;
+
+	void BindPipeline(VkCommandBuffer cmd) const override;
+
+	const VkPipelineBindPoint& GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
+
+private:
+	uint32_t subpass = 0;
+	VkShaderStageFlagBits shaderStagesFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 
 	VkPipelineVertexInputStateCreateInfo vertexInput{
 		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

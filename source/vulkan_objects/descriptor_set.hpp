@@ -1,5 +1,6 @@
 #pragma once
 #include "vulkan_api.hpp"
+#include "pipeline.hpp"
 #include "buffer.hpp"
 #include "image.hpp"
 #include "scope.hpp"
@@ -36,7 +37,9 @@ public:
 
 	void Allocate();
 
-	VkDescriptorSetLayout GetLayout() const { return descriptorSetLayout; };
+	void BindSet(VkCommandBuffer cmd, const Pipeline& pipeline);
+
+	const VkDescriptorSetLayout& GetLayout() const { return descriptorSetLayout; };
 
 private:
 	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
@@ -45,6 +48,4 @@ private:
 	std::vector<VkWriteDescriptorSet> writes;
 
 	const RenderScope* Scope;
-
-	friend class Pipeline;
 };
