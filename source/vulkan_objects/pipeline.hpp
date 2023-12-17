@@ -4,8 +4,9 @@
 
 enum class EPipelineType
 {
-	Graphics = 0,
-	Compute = 1
+	None = 0,
+	Graphics = 1,
+	Compute = 2
 };
 
 class Pipeline
@@ -41,7 +42,9 @@ public:
 
 	virtual Pipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) = 0;
 
-	virtual const VkPipelineBindPoint& GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
+	virtual const VkPipelineBindPoint GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
+
+	virtual EPipelineType GetPipelineType() const { return EPipelineType::None; };
 
 	virtual const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
 
@@ -84,7 +87,9 @@ public:
 
 	void BindPipeline(VkCommandBuffer cmd) const override;
 
-	const VkPipelineBindPoint& GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_COMPUTE; };
+	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_COMPUTE; };
+
+	virtual EPipelineType GetPipelineType() const override { return EPipelineType::Compute; };
 };
 
 class GraphicsPipeline : public Pipeline
@@ -135,7 +140,9 @@ public:
 
 	void BindPipeline(VkCommandBuffer cmd) const override;
 
-	const VkPipelineBindPoint& GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
+	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
+
+	virtual EPipelineType GetPipelineType() const override { return EPipelineType::Graphics; };
 
 private:
 	uint32_t subpass = 0;

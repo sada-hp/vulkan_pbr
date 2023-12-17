@@ -9,6 +9,8 @@ struct Image
 {
 	Image(const RenderScope& Scope);
 
+	Image(const RenderScope& Scope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+
 	Image(const Image& other) = delete;
 
 	void operator=(const Image& other) = delete;
@@ -25,7 +27,7 @@ struct Image
 		other.descriptorInfo = {};
 	}
 
-	void operator=(Image&& other) {
+	void operator=(Image&& other) noexcept {
 		Scope = other.Scope;
 		image = std::move(other.image);
 		view = std::move(other.view);
@@ -49,6 +51,10 @@ struct Image
 	Image& CreateImageView(const VkImageViewCreateInfo& viewInfo);
 
 	Image& CreateSampler(const VkSamplerCreateInfo& samplerInfo);
+
+	Image& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout);
+
+	Image& GenerateMipMaps(VkCommandBuffer& cmd);
 
 	const VkImage& GetImage() const { return image; };
 

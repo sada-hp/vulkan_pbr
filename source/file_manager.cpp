@@ -115,7 +115,7 @@ std::unique_ptr<Image> FileManager::create_image(void* pixels, int count, int w,
 	subRes.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	subRes.baseArrayLayer = 0;
 	subRes.baseMipLevel = 0;
-	subRes.layerCount = 6;
+	subRes.layerCount = count;
 	subRes.levelCount = mipLevels;
 	VkImageCreateInfo imageCI{};
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -170,6 +170,7 @@ std::unique_ptr<Image> FileManager::create_image(void* pixels, int count, int w,
 		.AllocateCommandBuffers(1, &cmd);
 
 	BeginOneTimeSubmitCmd(cmd);
+	target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, { (uint32_t)w, (uint32_t)h, 1u });
 	EndCommandBuffer(cmd);
 
@@ -182,8 +183,7 @@ std::unique_ptr<Image> FileManager::create_image(void* pixels, int count, int w,
 		.AllocateCommandBuffers(1, &cmd);
 
 	BeginOneTimeSubmitCmd(cmd);
-	TransitionImageLayout(cmd, target->GetImage(), target->GetSubResourceRange(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	GenerateMipMaps(cmd, target->GetImage(), { (uint32_t)w, (uint32_t)h }, subRes);
+	target->GenerateMipMaps(cmd);
 	EndCommandBuffer(cmd);
 
 	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)

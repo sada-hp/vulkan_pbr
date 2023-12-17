@@ -13,21 +13,20 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	assert(exec_path != "");
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
+	std::vector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
 	deviceFeatures.fullDrawIndexUint32 = VK_TRUE;
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
-
-	VkBool32 res = create_instance();
-	
-	res = (glfwCreateWindowSurface(instance, glfwWindow, VK_NULL_HANDLE, &surface) == VK_SUCCESS) & res;
-
-	std::vector<VkDescriptorPoolSize> poolSizes(3);
 	poolSizes[0].descriptorCount = 100u;
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLER;
 	poolSizes[1].descriptorCount = 100u;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[2].descriptorCount = 100u;
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+	VkBool32 res = create_instance();
+	
+	res = (glfwCreateWindowSurface(instance, glfwWindow, VK_NULL_HANDLE, &surface) == VK_SUCCESS) & res;
 
 	Scope.CreatePhysicalDevice(instance, extensions)
 		.CreateLogicalDevice(deviceFeatures, extensions, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT })
@@ -57,21 +56,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 			res = CreateFence(Scope.GetDevice(), &it) & res;
 	});
 
-	VkBufferCreateInfo uboInfo{};
-	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	uboInfo.size = sizeof(TransformMatrix);
-	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	VmaAllocationCreateInfo uboAllocCreateInfo{};
-	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
-
 	res = prepare_scene() & res;
-
-	glm::mat4 projection = glm::perspective(30.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
-	projection[1][1] *= -1;
-	camera.set_projection(projection);
 
 	assert(res != 0);
 }
@@ -83,6 +68,7 @@ VulkanBase::~VulkanBase() noexcept
 	skybox.reset();
 	sword.reset();
 	ubo.reset();
+	worley.reset();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -355,6 +341,49 @@ VkBool32 VulkanBase::prepare_scene()
 	auto vertAttributes = Vertex::getAttributeDescriptions();
 	auto vertBindings = Vertex::getBindingDescription();
 
+	VkBufferCreateInfo uboInfo{};
+	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	uboInfo.size = sizeof(TransformMatrix);
+	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VmaAllocationCreateInfo uboAllocCreateInfo{};
+	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
+
+	std::vector<uint32_t> queueFamilyIndices;
+	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+	VkImageCreateInfo worleyInfo{};
+	worleyInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	worleyInfo.arrayLayers = 1u;
+	worleyInfo.extent = { 512u, 512u, 1u };
+	worleyInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	worleyInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	worleyInfo.mipLevels = 1u;
+	worleyInfo.flags = 0u;
+	worleyInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	worleyInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	worleyInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+	worleyInfo.queueFamilyIndexCount = queueFamilyIndices.size();
+	worleyInfo.pQueueFamilyIndices = queueFamilyIndices.data();
+	worleyInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	worleyInfo.imageType = VK_IMAGE_TYPE_2D;
+	VmaAllocationCreateInfo worleyAllocCreateInfo{};
+	worleyAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+	VkImageViewCreateInfo worleyImageView{};
+	worleyImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	worleyImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	worleyImageView.format = VK_FORMAT_R8G8B8A8_UNORM;
+	worleyImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	worleyImageView.subresourceRange.baseArrayLayer = 0u;
+	worleyImageView.subresourceRange.baseMipLevel = 0u;
+	worleyImageView.subresourceRange.layerCount = 1u;
+	worleyImageView.subresourceRange.levelCount = 1u;
+	worley = std::make_unique<Image>(Scope);
+	worley->CreateImage(worleyInfo, worleyAllocCreateInfo)
+		.CreateImageView(worleyImageView);
+
 	sword = std::make_unique<GraphicsObject>(Scope);
 	skybox = std::make_unique<GraphicsObject>(Scope);
 
@@ -380,6 +409,10 @@ VkBool32 VulkanBase::prepare_scene()
 	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
 		.Construct();
+
+	glm::mat4 projection = glm::perspective(30.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
+	projection[1][1] *= -1;
+	camera.set_projection(projection);
 
 	return res;
 }

@@ -4,16 +4,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <array>
-/*
-* !@brief Generate given number of mip levels for given VkImage
-* 
-* @param[in] device - device the image belongs to
-* @param[in] cmd - command buffer to populate with commands. YOU HAVE TO ALLOCATE, SUBMIT AND FREE PROVIDED COMMAND BUFFER YOURSELF!
-* @param[in] image - target image. IMAGE SHOULD BE TRANSITIONED TO TRANSFER_SRC LAYOUT BEFOREHAND!
-* @param[in] dimensions - image size
-* @param[in] subRange - specify number of mipLevels and arrayLayers here
-*/
-VkBool32 GenerateMipMaps(VkCommandBuffer& cmd, const VkImage& image, const VkExtent2D& dimensions, const VkImageSubresourceRange& subRange);
+
 /*
 * !@brief Creates synchronization fence
 *
@@ -129,8 +120,6 @@ VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhy
 VkBool32 CreateRenderPass(const VkDevice& device, const VkRenderPassCreateInfo& info, VkRenderPass* outRenderPass);
 
 VkBool32 CopyBufferToImage(VkCommandBuffer& cmd, const VkImage& image, const VkBuffer& buffer, const VkImageSubresourceRange& subRes, const VkExtent3D& extent, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
-
-VkBool32 TransitionImageLayout(VkCommandBuffer& cmd, const VkImage& image, const VkImageSubresourceRange& subRes, VkImageLayout oldLayout, VkImageLayout newLayout);
 
 VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd);
 
