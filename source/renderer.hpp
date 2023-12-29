@@ -75,6 +75,8 @@ class VulkanBase
 	std::unique_ptr<GraphicsObject> skybox;
 
 	std::unique_ptr<Image> worley;
+	std::unique_ptr<ComputePipeline> worley_pipeline;
+	std::unique_ptr<DescriptorSet> worley_set;
 public:
 	/*
 	* !@brief Should be modified to control the scene

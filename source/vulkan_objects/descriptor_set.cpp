@@ -54,6 +54,27 @@ DescriptorSet& DescriptorSet::AddImageSampler(uint32_t binding, VkShaderStageFla
 	return *this;
 }
 
+DescriptorSet& DescriptorSet::AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const Image& image)
+{
+	VkDescriptorSetLayoutBinding DSBinding{};
+	DSBinding.binding = binding;
+	DSBinding.descriptorCount = 1;
+	DSBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	DSBinding.stageFlags = stages;
+
+	VkWriteDescriptorSet DSWrites{};
+	DSWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	DSWrites.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	DSWrites.descriptorCount = 1;
+	DSWrites.dstBinding = binding;
+	DSWrites.pImageInfo = &image.GetDescriptor();
+
+	bindings.push_back(DSBinding);
+	writes.push_back(DSWrites);
+
+	return *this;
+}
+
 void DescriptorSet::Allocate()
 {
 	if (descriptorSet != VK_NULL_HANDLE) {

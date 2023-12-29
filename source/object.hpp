@@ -12,6 +12,7 @@ struct GraphicsObject
 	GraphicsObject(const RenderScope& Scope)
 		: pipeline(Scope), descriptorSet(Scope)
 	{
+
 	}
 
 	GraphicsPipeline pipeline;

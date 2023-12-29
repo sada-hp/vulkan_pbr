@@ -50,7 +50,9 @@ struct Image
 
 	Image& CreateImageView(const VkImageViewCreateInfo& viewInfo);
 
-	Image& CreateSampler(const VkSamplerCreateInfo& samplerInfo);
+	Image& CreateSampler(SamplerFlagBits flags);
+
+	Image& TransitionLayout(VkImageLayout newLayout);
 
 	Image& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout);
 

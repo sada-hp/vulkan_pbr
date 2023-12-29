@@ -47,7 +47,6 @@ void ComputePipeline::Construct()
 	vkCreatePipelineLayout(Scope->GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &pipelineLayout);
 
 	VkShaderModule shader = VK_NULL_HANDLE;
-	VkPipelineShaderStageCreateInfo pipelineStageCI{};
 
 	std::ifstream shaderFile(exec_path + "shaders\\" + shaderName + "_comp.spv", std::ios::ate | std::ios::binary);
 	std::size_t fileSize = (std::size_t)shaderFile.tellg();
@@ -62,13 +61,15 @@ void ComputePipeline::Construct()
 	shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
 	vkCreateShaderModule(Scope->GetDevice(), &shaderModuleCI, VK_NULL_HANDLE, &shader);
 
-	pipelineStageCI = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, VK_SHADER_STAGE_COMPUTE_BIT, shader, "main", VK_NULL_HANDLE };
-
-	VkPipelineShaderStageCreateInfo compShaderStageInfo{};
-	compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	compShaderStageInfo.module = shader;
-	compShaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo pipelineStageCI = { 
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, 
+		VK_NULL_HANDLE, 
+		0, 
+		VK_SHADER_STAGE_COMPUTE_BIT, 
+		shader, 
+		"main", 
+		VK_NULL_HANDLE 
+	};
 
 	VkComputePipelineCreateInfo pipelineCI{};
 	pipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

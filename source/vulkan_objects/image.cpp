@@ -4,6 +4,7 @@
 Image::Image(const RenderScope& InScope)
 	: Scope(&InScope)
 {
+
 }
 
 Image::Image(const RenderScope& InScope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
@@ -14,8 +15,6 @@ Image::Image(const RenderScope& InScope, const VkImageCreateInfo& imgInfo, const
 
 Image::~Image()
 {
-	if (sampler != VK_NULL_HANDLE)
-		vkDestroySampler(Scope->GetDevice(), sampler, VK_NULL_HANDLE);
 	if (view != VK_NULL_HANDLE)
 		vkDestroyImageView(Scope->GetDevice(), view, VK_NULL_HANDLE);
 	if (image != VK_NULL_HANDLE)
@@ -23,7 +22,7 @@ Image::~Image()
 
 	image = VK_NULL_HANDLE;
 	view = VK_NULL_HANDLE;
-	sampler = VK_NULL_HANDLE;
+	//sampler = VK_NULL_HANDLE;
 	memory = VK_NULL_HANDLE;
 }
 
@@ -57,15 +56,28 @@ Image& Image::CreateImageView(const VkImageViewCreateInfo& viewInfo)
 	return *this;
 }
 
-Image& Image::CreateSampler(const VkSamplerCreateInfo& samplerInfo)
+Image& Image::CreateSampler(SamplerFlagBits flags)
 {
-	if (sampler != VK_NULL_HANDLE)
-		vkDestroySampler(Scope->GetDevice(), sampler, VK_NULL_HANDLE);
-
-	VkBool32 res = vkCreateSampler(Scope->GetDevice(), &samplerInfo, VK_NULL_HANDLE, &sampler) == VK_SUCCESS;
+	sampler = Scope->GetSampler(flags);
 	descriptorInfo.sampler = sampler;
+	return *this;
+}
 
-	assert(res);
+Image& Image::TransitionLayout(VkImageLayout newLayout)
+{
+	VkCommandBuffer cmd;
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(1, &cmd);
+
+	::BeginOneTimeSubmitCmd(cmd);
+	TransitionLayout(cmd, newLayout);
+	::EndCommandBuffer(cmd);
+
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
 	return *this;
 }
 
@@ -92,6 +104,8 @@ Image& Image::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
 		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_MEMORY_READ_BIT},
 		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT}
 	};
+
+	assert(stageTable.contains(newLayout));
 
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

@@ -11,6 +11,7 @@ extern std::string exec_path;
 FileManager::FileManager(const RenderScope& InScope)
 	: Scope(InScope)
 {
+
 }
 
 std::unique_ptr<Image> FileManager::ImportImage(const char* path, const VkImageCreateFlags& flags)
@@ -142,28 +143,9 @@ std::unique_ptr<Image> FileManager::create_image(void* pixels, int count, int w,
 	VkPhysicalDeviceProperties properties{};
 	vkGetPhysicalDeviceProperties(Scope.GetPhysicalDevice(), &properties);
 	std::unique_ptr<Image> target = std::make_unique<Image>(Scope);
-
-	VkSamplerCreateInfo samplerCI{};
-	samplerCI.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerCI.magFilter = VK_FILTER_LINEAR;
-	samplerCI.minFilter = VK_FILTER_LINEAR;
-	samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerCI.anisotropyEnable = VK_TRUE;
-	samplerCI.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-	samplerCI.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerCI.unnormalizedCoordinates = VK_FALSE;
-	samplerCI.compareEnable = VK_FALSE;
-	samplerCI.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerCI.mipLodBias = 0.0f;
-	samplerCI.minLod = 0.0f;
-	samplerCI.maxLod = 1;
-
 	target->CreateImage(imageCI, skyAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(samplerCI);
+		.CreateSampler(SamplerFlagBits::RepeatUVW | SamplerFlagBits::AnisatropyEnabled);
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)

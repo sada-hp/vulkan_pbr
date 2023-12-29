@@ -69,6 +69,8 @@ VulkanBase::~VulkanBase() noexcept
 	sword.reset();
 	ubo.reset();
 	worley.reset();
+	worley_pipeline.reset();
+	worley_set.reset();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -358,7 +360,7 @@ VkBool32 VulkanBase::prepare_scene()
 	worleyInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	worleyInfo.arrayLayers = 1u;
 	worleyInfo.extent = { 512u, 512u, 1u };
-	worleyInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	worleyInfo.format = VK_FORMAT_R8_UNORM;
 	worleyInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	worleyInfo.mipLevels = 1u;
 	worleyInfo.flags = 0u;
@@ -374,7 +376,7 @@ VkBool32 VulkanBase::prepare_scene()
 	VkImageViewCreateInfo worleyImageView{};
 	worleyImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	worleyImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	worleyImageView.format = VK_FORMAT_R8G8B8A8_UNORM;
+	worleyImageView.format = VK_FORMAT_R8_UNORM;
 	worleyImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	worleyImageView.subresourceRange.baseArrayLayer = 0u;
 	worleyImageView.subresourceRange.baseMipLevel = 0u;
@@ -382,7 +384,17 @@ VkBool32 VulkanBase::prepare_scene()
 	worleyImageView.subresourceRange.levelCount = 1u;
 	worley = std::make_unique<Image>(Scope);
 	worley->CreateImage(worleyInfo, worleyAllocCreateInfo)
-		.CreateImageView(worleyImageView);
+		.CreateImageView(worleyImageView)
+		.CreateSampler(SamplerFlagBits::AnisatropyEnabled)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	worley_pipeline = std::make_unique<ComputePipeline>(Scope);
+	worley_set = std::make_unique<DescriptorSet>(Scope);
+	worley_set->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *worley)
+		.Allocate();
+	worley_pipeline->SetShaderName("worley")
+		.AddDescriptorLayout(worley_set->GetLayout())
+		.Construct();
 
 	sword = std::make_unique<GraphicsObject>(Scope);
 	skybox = std::make_unique<GraphicsObject>(Scope);

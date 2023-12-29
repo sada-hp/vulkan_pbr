@@ -117,6 +117,10 @@ void RenderScope::Destroy()
 {
 	available_queues.clear();
 
+	for (auto pair : samplers)
+		vkDestroySampler(logicalDevice, pair.second, VK_NULL_HANDLE);
+	samplers.clear();
+
 	if (descriptorPool != VK_NULL_HANDLE)
 		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);
 	if (renderPass != VK_NULL_HANDLE)
@@ -143,4 +147,45 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& swapchain != VK_NULL_HANDLE
 		&& renderPass != VK_NULL_HANDLE
 		&& descriptorPool != VK_NULL_HANDLE;
+}
+
+const VkSampler& RenderScope::GetSampler(SamplerFlagBits flags) const
+{
+	if (samplers.count(flags)) {
+		return samplers[flags];
+	}
+	else {
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = uint32_t(flags & SamplerFlagBits::NearestMagFilter) > 0u ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+		samplerInfo.minFilter = uint32_t(flags & SamplerFlagBits::NearestMagFilter) > 0u ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = uint32_t(flags & SamplerFlagBits::RepeatU) > 0u ?
+			uint32_t(flags & SamplerFlagBits::MirrorU) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
+			: uint32_t(flags & SamplerFlagBits::MirrorU) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeV = uint32_t(flags & SamplerFlagBits::RepeatV) > 0u ?
+			uint32_t(flags & SamplerFlagBits::MirrorV) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
+			: uint32_t(flags & SamplerFlagBits::MirrorV) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeW = uint32_t(flags & SamplerFlagBits::RepeatW) > 0u ?
+			uint32_t(flags & SamplerFlagBits::MirrorW) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
+			: uint32_t(flags & SamplerFlagBits::MirrorW) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		if (uint32_t(flags & SamplerFlagBits::AnisatropyEnabled) > 0u){
+			VkPhysicalDeviceProperties properties{};
+			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+			samplerInfo.anisotropyEnable = VK_TRUE;
+			samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		}
+
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = uint32_t(flags & SamplerFlagBits::Unnormalized) > 0u;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = uint32_t(flags & SamplerFlagBits::NearestMipFilter) > 0u ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 1;
+		vkCreateSampler(logicalDevice, &samplerInfo, VK_NULL_HANDLE, &samplers[flags]);
+
+		return samplers[flags];
+	}
 }
