@@ -5,7 +5,7 @@ layout(local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2) in;
 layout (binding = 0, r8) uniform writeonly image2D outImage;
 
 vec2 rand_point(vec2 co) {
-    return abs(vec2(fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453), fract(sin(dot(co, vec2(69.1337, 53.1234))) * 43758.5453)));
+    return fract(abs(sin(vec2(dot(co, vec2(12.9898, 78.233)), dot(co, vec2(69.1337, 53.1234))))) * 43758.5453);
 }
 
 void main()
