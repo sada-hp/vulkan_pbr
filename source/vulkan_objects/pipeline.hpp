@@ -81,15 +81,23 @@ public:
 
 	ComputePipeline& SetShaderName(const std::string& shaderName);
 
+	ComputePipeline& SetWorkGroupSizes(uint32_t x_group, uint32_t y_group, uint32_t z_group);
+
 	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
 
 	void Construct() override;
 
 	void BindPipeline(VkCommandBuffer cmd) const override;
 
+	void Dispatch(VkCommandBuffer cmd, uint32_t size_x, uint32_t size_y, uint32_t size_z);
+
 	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_COMPUTE; };
 
 	virtual EPipelineType GetPipelineType() const override { return EPipelineType::Compute; };
+private:
+	uint32_t x_batch_size = 1;
+	uint32_t y_batch_size = 1;
+	uint32_t z_batch_size = 1;
 };
 
 class GraphicsPipeline : public Pipeline

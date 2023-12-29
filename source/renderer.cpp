@@ -112,7 +112,22 @@ void VulkanBase::Step() const
 
 	ubo->Update((void*)&camera.GetViewProjection());
 
-	//////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////Compute
+	{
+		VkCommandBuffer cmd;
+		Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+			.AllocateCommandBuffers(1, &cmd);
+		::BeginOneTimeSubmitCmd(cmd);
+		worley_set->BindSet(cmd, *worley_pipeline);
+		worley_pipeline->BindPipeline(cmd);
+		worley_pipeline->Dispatch(cmd, worley->GetExtent().width, worley->GetExtent().height, 1u);
+		::EndCommandBuffer(cmd);
+		Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+			.Submit(cmd)
+			.Wait()
+			.FreeCommandBuffers(1, &cmd);
+	}
+	//////////////////////////////////////////////////////////Graphics
 	{
 		VkResult res;
 		const VkCommandBuffer& cmd = presentBuffers[image_index];
@@ -160,7 +175,6 @@ void VulkanBase::Step() const
 		vkCmdEndRenderPass(cmd);
 		vkEndCommandBuffer(cmd);
 	}
-	//////////////////////////////////////////////////////////
 
 	VkSubmitInfo submitInfo{};
 	std::array<VkSemaphore, 1> waitSemaphores = { swapchainSemaphore };
@@ -393,6 +407,7 @@ VkBool32 VulkanBase::prepare_scene()
 	worley_set->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *worley)
 		.Allocate();
 	worley_pipeline->SetShaderName("worley")
+		.SetWorkGroupSizes(32u, 32u, 1u)
 		.AddDescriptorLayout(worley_set->GetLayout())
 		.Construct();
 

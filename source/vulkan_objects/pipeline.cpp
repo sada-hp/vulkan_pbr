@@ -27,6 +27,15 @@ ComputePipeline& ComputePipeline::SetShaderName(const std::string& inIhaderName)
 	return *this;
 }
 
+ComputePipeline& ComputePipeline::SetWorkGroupSizes(uint32_t x_group, uint32_t y_group, uint32_t z_group)
+{
+	x_batch_size = x_group;
+	y_batch_size = y_group;
+	z_batch_size = z_group;
+
+	return *this;
+}
+
 ComputePipeline& ComputePipeline::AddDescriptorLayout(VkDescriptorSetLayout layout)
 {
 	descriptorLayouts.push_back(layout);
@@ -71,6 +80,26 @@ void ComputePipeline::Construct()
 		VK_NULL_HANDLE 
 	};
 
+	std::array<VkSpecializationMapEntry, 3> entries;
+	std::array<uint32_t, 3> data = { x_batch_size, y_batch_size, z_batch_size };
+	entries[0].constantID = 0;
+	entries[0].offset = 0;
+	entries[0].size = sizeof(uint32_t);
+	entries[1].constantID = 1;
+	entries[1].offset = sizeof(uint32_t);
+	entries[1].size = sizeof(uint32_t);
+	entries[2].constantID = 2;
+	entries[2].offset = sizeof(uint32_t) * 2;
+	entries[2].size = sizeof(uint32_t);
+
+	VkSpecializationInfo specializationInfo;
+	specializationInfo.mapEntryCount = entries.size();
+	specializationInfo.pMapEntries = entries.data();
+	specializationInfo.dataSize = sizeof(uint32_t) * data.size();
+	specializationInfo.pData = data.data();
+
+	pipelineStageCI.pSpecializationInfo = &specializationInfo;
+
 	VkComputePipelineCreateInfo pipelineCI{};
 	pipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	pipelineCI.layout = pipelineLayout;
@@ -83,6 +112,11 @@ void ComputePipeline::Construct()
 void ComputePipeline::BindPipeline(VkCommandBuffer cmd) const
 {
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+}
+
+void ComputePipeline::Dispatch(VkCommandBuffer cmd, uint32_t size_x, uint32_t size_y, uint32_t size_z)
+{
+	vkCmdDispatch(cmd, size_x, size_y, size_z);
 }
 
 Pipeline::~Pipeline()
