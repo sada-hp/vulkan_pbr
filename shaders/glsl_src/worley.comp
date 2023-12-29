@@ -4,15 +4,8 @@ layout(local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2) in;
 
 layout (binding = 0, r8) uniform writeonly image2D outImage;
 
-const vec2 neighbour_samples[8] = {
-    vec2(1, 0), vec2(0, 1),
-    vec2(-1, 0), vec2(0, -1),
-    vec2(1, 1), vec2(-1, 1),
-    vec2(1, -1), vec2(-1, -1)
-};
-
-float rand(vec2 co){
-    return abs(fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453));
+vec2 rand_point(vec2 co) {
+    return abs(vec2(fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453), fract(sin(dot(co, vec2(69.1337, 53.1234))) * 43758.5453)));
 }
 
 void main()
@@ -22,15 +15,17 @@ void main()
     const vec2 local_size = vec2(gl_WorkGroupSize.xy);
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / local_size;
 
-    vec2 point = vec2(rand(group), rand(local_size - group));
+    vec2 point = rand_point(group);
     float min_d = distance(point + group, cell_loc);
 
-    for (int i = 0; i < 8 && min_d >= 1e-2; i++) {
-        vec2 neigbour_group = group + neighbour_samples[i];
-        neigbour_group.x = neigbour_group.x >= 0 ? float(uint(neigbour_group.x) % gl_NumWorkGroups.x) : float(gl_NumWorkGroups.x) + neigbour_group.x;
-        neigbour_group.y = neigbour_group.y >= 0 ? float(uint(neigbour_group.y) % gl_NumWorkGroups.y) : float(gl_NumWorkGroups.y) + neigbour_group.y;
-        point = vec2(rand(neigbour_group), rand(local_size - neigbour_group));
-        min_d = min(min_d, distance(point + neigbour_group, cell_loc));
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            vec2 neigbour_group = group + vec2(x, y);
+            neigbour_group.x = neigbour_group.x >= 0 ? mod(neigbour_group.x, gl_NumWorkGroups.x) : float(gl_NumWorkGroups.x) + neigbour_group.x;
+            neigbour_group.y = neigbour_group.y >= 0 ? mod(neigbour_group.y, gl_NumWorkGroups.y) : float(gl_NumWorkGroups.y) + neigbour_group.y;
+            point = rand_point(neigbour_group);
+            min_d = min(min_d, distance(point + neigbour_group, cell_loc));
+        }
     }
 
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(min_d));
