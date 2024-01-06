@@ -7,22 +7,19 @@
 #include "vulkan_objects/mesh.hpp"
 #include "file_manager.hpp"
 #include "vulkan_api.hpp"
+#include "noise.hpp"
 
 #if DEBUG == 1
 	#define VALIDATION
 #endif
 
-using ObjectPosition = glm::vec3;
-using ObjectOrientation = glm::quat;
-using TransformMatrix = glm::mat4;
-
 struct ViewCameraStruct
 {
-	const TransformMatrix& GetViewProjection() const
+	const TMat4& GetViewProjection() const
 	{
 		//cache
-		static ObjectPosition old_pos = glm::vec3(0.f);
-		static ObjectOrientation old_ori = glm::quat_cast(glm::mat4(1.f));
+		static TVec3 old_pos = glm::vec3(0.f);
+		static TQuat old_ori = glm::quat_cast(glm::mat4(1.f));
 
 		if (position != old_pos || orientation != old_ori)
 		{
@@ -35,14 +32,14 @@ struct ViewCameraStruct
 		return VP;
 	}
 
-	ObjectPosition position = glm::vec3(0.f);
-	ObjectOrientation orientation = glm::quat_cast(glm::mat4(1.f));
+	TVec3 position = TVec3(0.f);
+	TQuat orientation = glm::quat_cast(glm::mat4(1.f));
 
 private:
-	mutable TransformMatrix VP = glm::mat4(1.f);
-	glm::mat4 projection = glm::mat4(1.f);
+	mutable TMat4 VP = glm::mat4(1.f);
+	TMat4 projection = glm::mat4(1.f);
 
-	void set_projection(const glm::mat4& proj = glm::mat4(1.f))
+	void set_projection(const TMat4& proj = TMat4(1.f))
 	{
 		projection = proj;
 		VP = projection * glm::translate(glm::mat4_cast(orientation), position);
@@ -53,14 +50,14 @@ private:
 
 class VulkanBase
 {
-	std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	std::vector<VkImage> swapchainImages = {};
-	std::vector<VkImageView> swapchainViews = {};
-	std::vector<std::unique_ptr<Image>> depthAttachments = {};
-	std::vector<VkFramebuffer> framebuffers = {};
-	std::vector<VkFence> presentFences = {};
-	std::vector<VkSemaphore> presentSemaphores = {};
-	std::vector<VkCommandBuffer> presentBuffers = {};
+	TVector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	TVector<VkImage> swapchainImages = {};
+	TVector<VkImageView> swapchainViews = {};
+	TVector<TAuto<Image>> depthAttachments = {};
+	TVector<VkFramebuffer> framebuffers = {};
+	TVector<VkFence> presentFences = {};
+	TVector<VkSemaphore> presentSemaphores = {};
+	TVector<VkCommandBuffer> presentBuffers = {};
 	VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
 
 	VkInstance instance = VK_NULL_HANDLE;
@@ -69,14 +66,14 @@ class VulkanBase
 	RenderScope Scope;
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
 
-	std::unique_ptr<Buffer> ubo = {};
+	TAuto<Buffer> ubo = {};
 
-	std::unique_ptr<GraphicsObject> sword;
-	std::unique_ptr<GraphicsObject> skybox;
+	TAuto<GraphicsObject> sword;
+	TAuto<GraphicsObject> skybox;
 
-	std::unique_ptr<Image> worley;
-	std::unique_ptr<ComputePipeline> worley_pipeline;
-	std::unique_ptr<DescriptorSet> worley_set;
+	TAuto<Image> worley;
+	TAuto<Image> simplex;
+
 public:
 	/*
 	* !@brief Should be modified to control the scene
@@ -105,14 +102,13 @@ public:
 	/*
 	* !@brief Renders the next frame of simulation
 	*/
-	void Step() const;
+	void Step();
 	/*
 	* !@brief Handles recreation of swapchain dependant objects
 	*/
 	void HandleResize();
 
 private:
-	std::unique_ptr<FileManager> fileManager;
 	/*
 	* !@brief Create VkInstance object to use with glfw context
 	* 
@@ -136,11 +132,11 @@ private:
 	*/
 	VkBool32 prepare_scene();
 
-	std::vector<const char*> getRequiredExtensions();
+	TVector<const char*> getRequiredExtensions();
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT debugMessenger;
-	const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+	const TVector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 
 	VkResult createDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
 

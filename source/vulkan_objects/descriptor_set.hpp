@@ -46,8 +46,8 @@ public:
 private:
 	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-	std::vector<VkDescriptorSetLayoutBinding> bindings;
-	std::vector<VkWriteDescriptorSet> writes;
+	TVector<VkDescriptorSetLayoutBinding> bindings;
+	TVector<VkWriteDescriptorSet> writes;
 
 	const RenderScope* Scope;
 };

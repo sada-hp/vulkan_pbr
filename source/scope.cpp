@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "scope.hpp"
 
-RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const std::vector<const char*>& device_extensions)
+RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const TVector<const char*>& device_extensions)
 {
 	assert(physicalDevice == VK_NULL_HANDLE);
 
@@ -9,7 +9,7 @@ RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const
 	return *this;
 }
 
-RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues)
+RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const TVector<const char*>& device_extensions, const TVector<VkQueueFlagBits>& queues)
 {
 	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice == VK_NULL_HANDLE);
 
@@ -49,7 +49,7 @@ RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 RenderScope& RenderScope::CreateDefaultRenderPass()
 {
 	VkRenderPassCreateInfo createInfo{};
-	std::array<VkAttachmentDescription, 2> attachments;
+	TArray<VkAttachmentDescription, 2> attachments;
 
 	//Color attachment
 	attachments[0].format = swapchainFormat;
@@ -94,7 +94,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	return *this;
 }
 
-RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes)
+RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes)
 {
 	if (descriptorPool != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);

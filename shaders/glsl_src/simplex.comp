@@ -1,0 +1,48 @@
+#version 450
+
+layout(local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2) in;
+
+layout (constant_id = 3) const uint cellx = 8;
+layout (constant_id = 4) const uint celly = 8;
+layout (constant_id = 5) const uint octaves = 1;
+
+layout (binding = 0, r8) uniform writeonly image2D outImage;
+
+float rand(vec2 co)
+{
+    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+float noise(vec2 x) {
+    vec2 i = floor(x);
+    vec2 f = fract(x);
+
+	float a = rand(i);
+    float b = rand(i + vec2(1.0, 0.0));
+    float c = rand(i + vec2(0.0, 1.0));
+    float d = rand(i + vec2(1.0, 1.0));
+
+    vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+}
+
+float fbm(vec2 x) {
+	float v = 0.0;
+	float a = 0.5;
+	vec2 shift = vec2(100);
+    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.50));
+	for (int i = 0; i < octaves; ++i) {
+		v += a * noise(x);
+		x = rot * x * 2.0 + shift;
+		a *= 0.5;
+	}
+	return v;
+}
+
+void main()
+{
+    const vec2 local_size = vec2(cellx, celly);
+    const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / local_size;
+
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(fbm(cell_loc)));
+}

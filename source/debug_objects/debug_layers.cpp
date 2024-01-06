@@ -46,7 +46,7 @@ VkBool32 VulkanBase::checkValidationLayerSupport() const
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, VK_NULL_HANDLE);
 
-	std::vector<VkLayerProperties> availableLayers(layerCount);
+	TVector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
 	for (const char* layerName : validationLayers)

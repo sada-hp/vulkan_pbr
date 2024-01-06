@@ -36,9 +36,9 @@ public:
 	RenderScope() {};
 	~RenderScope() { Destroy(); };
 
-	RenderScope& CreatePhysicalDevice(const VkInstance& instance, const std::vector<const char*>& device_extensions);
+	RenderScope& CreatePhysicalDevice(const VkInstance& instance, const TVector<const char*>& device_extensions);
 
-	RenderScope& CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues);
+	RenderScope& CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const TVector<const char*>& device_extensions, const TVector<VkQueueFlagBits>& queues);
 
 	RenderScope& CreateMemoryAllocator(const VkInstance& instance);
 
@@ -46,7 +46,7 @@ public:
 
 	RenderScope& CreateDefaultRenderPass();
 
-	RenderScope& CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes);
+	RenderScope& CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes);
 
 	void RecreateSwapchain(const VkSurfaceKHR& surface);
 

@@ -36,17 +36,17 @@ struct Mesh
 
 	~Mesh() = default;
 
-	std::shared_ptr<const Buffer> GetVertexBuffer() const { return vertexBuffer; };
+	TShared<const Buffer> GetVertexBuffer() const { return vertexBuffer; };
 
-	std::shared_ptr<const Buffer> GetIndexBuffer() const { return indexBuffer; };
+	TShared<const Buffer> GetIndexBuffer() const { return indexBuffer; };
 
 	uint32_t GetIndicesCount() const { return indicesCount; };
 
 	uint32_t GetVerticesCount() const { return verticesCount; };
 
 private:
-	std::shared_ptr<Buffer> vertexBuffer = {};
-	std::shared_ptr<Buffer> indexBuffer = {};
+	TShared<Buffer> vertexBuffer = {};
+	TShared<Buffer> indexBuffer = {};
 	uint32_t indicesCount = 0;
 	uint32_t verticesCount = 0;
 

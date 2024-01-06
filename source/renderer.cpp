@@ -13,7 +13,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	assert(exec_path != "");
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
-	std::vector<VkDescriptorPoolSize> poolSizes(3);
+	TVector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
 	deviceFeatures.fullDrawIndexUint32 = VK_TRUE;
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
@@ -37,8 +37,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
-
-	fileManager = std::make_unique<FileManager>(Scope);
 
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
@@ -69,8 +67,7 @@ VulkanBase::~VulkanBase() noexcept
 	sword.reset();
 	ubo.reset();
 	worley.reset();
-	worley_pipeline.reset();
-	worley_set.reset();
+	simplex.reset();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -94,12 +91,13 @@ VulkanBase::~VulkanBase() noexcept
 	std::erase_if(depthAttachments, [&, this](std::unique_ptr<Image>& img) {
 			return true;
 		});
+
 	Scope.Destroy();
 	vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
 	vkDestroyInstance(instance, VK_NULL_HANDLE);
 }
 
-void VulkanBase::Step() const
+void VulkanBase::Step()
 {
 	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
 		return;
@@ -112,21 +110,6 @@ void VulkanBase::Step() const
 
 	ubo->Update((void*)&camera.GetViewProjection());
 
-	//////////////////////////////////////////////////////////Compute
-	{
-		VkCommandBuffer cmd;
-		Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-			.AllocateCommandBuffers(1, &cmd);
-		::BeginOneTimeSubmitCmd(cmd);
-		worley_set->BindSet(cmd, *worley_pipeline);
-		worley_pipeline->BindPipeline(cmd);
-		worley_pipeline->Dispatch(cmd, worley->GetExtent().width, worley->GetExtent().height, 1u);
-		::EndCommandBuffer(cmd);
-		Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-			.Submit(cmd)
-			.Wait()
-			.FreeCommandBuffers(1, &cmd);
-	}
 	//////////////////////////////////////////////////////////Graphics
 	{
 		VkResult res;
@@ -177,8 +160,8 @@ void VulkanBase::Step() const
 	}
 
 	VkSubmitInfo submitInfo{};
-	std::array<VkSemaphore, 1> waitSemaphores = { swapchainSemaphore };
-	std::array<VkSemaphore, 1> signalSemaphores = { presentSemaphores[image_index] };
+	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphore };
+	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[image_index] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -301,7 +284,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		swapchainViews.push_back(imageView);
 	}
 
-	const std::array<uint32_t, 2> queueIndices = { Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex()};
+	const TArray<uint32_t, 2> queueIndices = { Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex()};
 	VmaAllocationCreateInfo allocCreateInfo{};
 	VkImageCreateInfo depthInfo{};
 	depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -360,61 +343,20 @@ VkBool32 VulkanBase::prepare_scene()
 	VkBufferCreateInfo uboInfo{};
 	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	uboInfo.size = sizeof(TransformMatrix);
+	uboInfo.size = sizeof(TMat4);
 	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
 
-	std::vector<uint32_t> queueFamilyIndices;
-	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-	VkImageCreateInfo worleyInfo{};
-	worleyInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	worleyInfo.arrayLayers = 1u;
-	worleyInfo.extent = { 512u, 512u, 1u };
-	worleyInfo.format = VK_FORMAT_R8_UNORM;
-	worleyInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	worleyInfo.mipLevels = 1u;
-	worleyInfo.flags = 0u;
-	worleyInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	worleyInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	worleyInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-	worleyInfo.queueFamilyIndexCount = queueFamilyIndices.size();
-	worleyInfo.pQueueFamilyIndices = queueFamilyIndices.data();
-	worleyInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-	worleyInfo.imageType = VK_IMAGE_TYPE_2D;
-	VmaAllocationCreateInfo worleyAllocCreateInfo{};
-	worleyAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-	VkImageViewCreateInfo worleyImageView{};
-	worleyImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	worleyImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	worleyImageView.format = VK_FORMAT_R8_UNORM;
-	worleyImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	worleyImageView.subresourceRange.baseArrayLayer = 0u;
-	worleyImageView.subresourceRange.baseMipLevel = 0u;
-	worleyImageView.subresourceRange.layerCount = 1u;
-	worleyImageView.subresourceRange.levelCount = 1u;
-	worley = std::make_unique<Image>(Scope);
-	worley->CreateImage(worleyInfo, worleyAllocCreateInfo)
-		.CreateImageView(worleyImageView)
-		.CreateSampler(SamplerFlagBits::AnisatropyEnabled)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
-
-	worley_pipeline = std::make_unique<ComputePipeline>(Scope);
-	worley_set = std::make_unique<DescriptorSet>(Scope);
-	worley_set->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *worley)
-		.Allocate();
-	worley_pipeline->SetShaderName("worley")
-		.SetWorkGroupSizes(32u, 32u, 1u)
-		.AddDescriptorLayout(worley_set->GetLayout())
-		.Construct();
+	worley = GRNoise::GenerateWorley(Scope, { 512u, 512u }, { 32u, 32u });
+	simplex = GRNoise::GenerateSimplex(Scope, { 512u, 512u }, { 32u, 32u, 10u });
 
 	sword = std::make_unique<GraphicsObject>(Scope);
 	skybox = std::make_unique<GraphicsObject>(Scope);
 
-	sword->mesh = fileManager->ImportMesh("content\\sword.fbx");
+	sword->mesh = GRFile::ImportMesh(Scope, "content\\sword.fbx");
 	sword->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
 		.Allocate();
 
@@ -424,11 +366,11 @@ VkBool32 VulkanBase::prepare_scene()
 		.AddDescriptorLayout(sword->descriptorSet.GetLayout())
 		.Construct();
 
-	std::array<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
+	TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
 		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
 		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
 
-	skybox->textures.push_back(fileManager->ImportImages(sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
+	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
 	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
 		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
 		.Allocate();
@@ -444,13 +386,13 @@ VkBool32 VulkanBase::prepare_scene()
 	return res;
 }
 
-std::vector<const char*> VulkanBase::getRequiredExtensions()
+TVector<const char*> VulkanBase::getRequiredExtensions()
 {
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions;
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-	std::vector<const char*> rqextensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	TVector<const char*> rqextensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 #ifdef VALIDATION
 	rqextensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);

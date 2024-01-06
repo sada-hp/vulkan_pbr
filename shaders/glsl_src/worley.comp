@@ -2,27 +2,30 @@
 
 layout(local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2) in;
 
+layout (constant_id = 3) const uint cellx = 8;
+layout (constant_id = 4) const uint celly = 8;
+
 layout (binding = 0, r8) uniform writeonly image2D outImage;
 
-vec2 rand_point(vec2 co) {
+vec2 rand_point(vec2 co)
+{
     return fract(abs(sin(vec2(dot(co, vec2(12.9898, 78.233)), dot(co, vec2(69.1337, 53.1234))))) * 43758.5453);
 }
 
 void main()
 {
-    vec2 group = vec2(gl_WorkGroupID.xy);
-    const vec2 total_size = vec2(gl_NumWorkGroups.xy * gl_WorkGroupSize.xy);
-    const vec2 local_size = vec2(gl_WorkGroupSize.xy);
+    const vec2 local_size = vec2(cellx, celly);
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / local_size;
+    const vec2 group = floor(cell_loc);
+    const vec2 num_groups = vec2(gl_NumWorkGroups.x / cellx, gl_NumWorkGroups.y / celly);
 
-    vec2 point = rand_point(group);
-    float min_d = distance(point + group, cell_loc);
-
+    vec2 point;
+    float min_d = 1.0;
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             vec2 neigbour_group = group + vec2(x, y);
-            neigbour_group.x = neigbour_group.x >= 0 ? mod(neigbour_group.x, gl_NumWorkGroups.x) : float(gl_NumWorkGroups.x) + neigbour_group.x;
-            neigbour_group.y = neigbour_group.y >= 0 ? mod(neigbour_group.y, gl_NumWorkGroups.y) : float(gl_NumWorkGroups.y) + neigbour_group.y;
+            neigbour_group.x = neigbour_group.x >= 0 ? mod(neigbour_group.x, num_groups.x) : float(num_groups.x) + neigbour_group.x;
+            neigbour_group.y = neigbour_group.y >= 0 ? mod(neigbour_group.y, num_groups.y) : float(num_groups.y) + neigbour_group.y;
             point = rand_point(neigbour_group);
             min_d = min(min_d, distance(point + neigbour_group, cell_loc));
         }

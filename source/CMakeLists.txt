@@ -16,6 +16,8 @@ set(
 	"scope.hpp"
 	"vulkan_api.cpp"
 	"vulkan_api.hpp"
+	"noise.cpp"
+	"noise.hpp"
 )
 set(
     VULKAN_SOURCES 

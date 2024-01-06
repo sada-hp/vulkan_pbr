@@ -21,8 +21,14 @@ public:
 	void operator=(const Pipeline& other) = delete;
 
 	Pipeline(Pipeline&& other) noexcept
-		: Scope(other.Scope), pipeline(std::move(other.pipeline)), pipelineLayout(std::move(other.pipelineLayout))
+		: Scope(other.Scope), pipeline(std::move(other.pipeline)), pipelineLayout(std::move(other.pipelineLayout)),
+		specializationConstants(std::move(other.specializationConstants)), shaderName(std::move(other.shaderName)),
+		pushConstants(std::move(other.pushConstants)), descriptorLayouts(std::move(other.descriptorLayouts))
 	{
+		other.shaderName = "";
+		other.pushConstants.clear();
+		other.descriptorLayouts.clear();
+		other.specializationConstants.clear();
 		other.pipeline = VK_NULL_HANDLE;
 		other.pipelineLayout = VK_NULL_HANDLE;
 	}
@@ -32,15 +38,31 @@ public:
 		pipeline = std::move(other.pipeline);
 		pipelineLayout = std::move(other.pipelineLayout);
 
+		pushConstants = std::move(other.pushConstants);
+		descriptorLayouts = std::move(other.descriptorLayouts);
+		specializationConstants = std::move(other.specializationConstants);
+
+		shaderName = std::move(other.shaderName);
+
+		other.shaderName = "";
+		other.pushConstants.clear();
+		other.descriptorLayouts.clear();
+		other.specializationConstants.clear();
 		other.pipeline = VK_NULL_HANDLE;
 		other.pipelineLayout = VK_NULL_HANDLE;
 	}
 
 	virtual void Construct() = 0;
 
-	virtual void BindPipeline(VkCommandBuffer cmd) const = 0;
+	virtual Pipeline& BindPipeline(VkCommandBuffer cmd) = 0;
+
+	virtual Pipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages) = 0;
 
 	virtual Pipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) = 0;
+
+	virtual Pipeline& AddPushConstant(VkPushConstantRange constantRange) = 0 ;
+
+	virtual Pipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage) = 0;
 
 	virtual const VkPipelineBindPoint GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
 
@@ -55,8 +77,9 @@ protected:
 
 	const RenderScope* Scope;
 
-	std::vector<VkDescriptorSetLayout> descriptorLayouts{};
-	std::vector<VkPushConstantRange> pushConstants{};
+	TVector<VkDescriptorSetLayout> descriptorLayouts{};
+	TVector<VkPushConstantRange> pushConstants{};
+	std::map<VkShaderStageFlagBits, std::map<uint32_t, std::any>> specializationConstants;
 };
 
 class ComputePipeline : public Pipeline
@@ -81,13 +104,17 @@ public:
 
 	ComputePipeline& SetShaderName(const std::string& shaderName);
 
-	ComputePipeline& SetWorkGroupSizes(uint32_t x_group, uint32_t y_group, uint32_t z_group);
-
 	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
+
+	ComputePipeline& AddPushConstant(VkPushConstantRange constantRange) override;
+
+	ComputePipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT) override;
 
 	void Construct() override;
 
-	void BindPipeline(VkCommandBuffer cmd) const override;
+	ComputePipeline& BindPipeline(VkCommandBuffer cmd) override;
+
+	ComputePipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages = VK_SHADER_STAGE_COMPUTE_BIT) override;
 
 	void Dispatch(VkCommandBuffer cmd, uint32_t size_x, uint32_t size_y, uint32_t size_z);
 
@@ -144,9 +171,15 @@ public:
 
 	GraphicsPipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
 
+	GraphicsPipeline& AddPushConstant(VkPushConstantRange constantRange) override;
+
+	GraphicsPipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage) override;
+
 	void Construct() override;
 
-	void BindPipeline(VkCommandBuffer cmd) const override;
+	GraphicsPipeline& BindPipeline(VkCommandBuffer cmd) override;
+
+	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages) override;
 
 	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
 
@@ -201,7 +234,7 @@ private:
 		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 	};
 
-	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{ 
+	TVector<VkPipelineColorBlendAttachmentState> blendAttachments{ 
 		defaultAttachment
 	};
 
@@ -251,7 +284,7 @@ private:
 		VK_NULL_HANDLE
 	};
 
-	const std::array<VkDynamicState, 2> dynamics{ 
+	const TArray<VkDynamicState, 2> dynamics{ 
 		VK_DYNAMIC_STATE_VIEWPORT, 
 		VK_DYNAMIC_STATE_SCISSOR 
 	};

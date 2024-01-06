@@ -19,6 +19,6 @@ struct GraphicsObject
 	DescriptorSet descriptorSet;
 
 	//move to resource manager
-	std::unique_ptr<Mesh> mesh;
-	std::vector<std::unique_ptr<Image>> textures;
+	TAuto<Mesh> mesh;
+	TVector<TAuto<Image>> textures;
 };

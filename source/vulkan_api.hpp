@@ -5,6 +5,39 @@
 #include <vector>
 #include <array>
 
+template<typename T>
+using TAuto = std::unique_ptr<T>;
+
+template<typename T>
+using TShared = std::shared_ptr<T>;
+
+template<typename T>
+using TWeak = std::weak_ptr<T>;
+
+template<typename T, size_t S>
+using TArray = std::array<T, S>;
+
+template<typename T>
+using TVector = std::vector<T>;
+
+using TMat4 = glm::mat4;
+using TMat3 = glm::mat3;
+using TMat2 = glm::mat2;
+
+using TVec4 = glm::vec4;
+using TVec3 = glm::vec3;
+using TVec2 = glm::vec2;
+
+using TUVec4 = glm::uvec4;
+using TUVec3 = glm::uvec3;
+using TUVec2 = glm::uvec2;
+
+using TIVec4 = glm::ivec4;
+using TIVec3 = glm::ivec3;
+using TIVec2 = glm::ivec2;
+
+using TQuat = glm::quat;
+
 /*
 * !@brief Creates synchronization fence
 *
@@ -54,7 +87,7 @@ VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize
 *
 * @return collection of family indices ordered respectively to the flags collection
 */
-std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const std::vector<VkQueueFlagBits>& flags);
+TVector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const TVector<VkQueueFlagBits>& flags);
 /*
 * !@brief Checks if GPU supports specified extensions
 *
@@ -63,7 +96,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 *
 * @return VK_TRUE if GPU supports specified extensions, VK_FALSE otherwise
 */
-VkBool32 EnumerateDeviceExtensions(const VkPhysicalDevice& physicalDevice, const std::vector<const char*>& desired_extensions);
+VkBool32 EnumerateDeviceExtensions(const VkPhysicalDevice& physicalDevice, const TVector<const char*>& desired_extensions);
 /*
 * !@brief Initializes VkSwapchainKHR object based on the surface capabilities
 *
@@ -96,7 +129,7 @@ VkSurfaceFormatKHR GetSurfaceFormat(const VkPhysicalDevice& physicalDevice, cons
 */
 VkBool32 CreateCommandPool(const VkDevice& device, const uint32_t targetQueueIndex, VkCommandPool* outPool);
 
-VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer);
+VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const TVector<VkImageView>& attachments, VkFramebuffer* outFramebuffer);
 /*
 * !@brief Initialize Vulkan Memmory Allocator to handle allocations
 *
@@ -109,13 +142,13 @@ VkBool32 CreateAllocator(const VkInstance& instance, const VkPhysicalDevice& phy
 *
 * @return VK_TRUE if suitable device was found, VK_FALSE otherwise
 */
-VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const std::vector<const char*>& device_extensions, VkPhysicalDevice* outPhysicalDevice);
+VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const TVector<const char*>& device_extensions, VkPhysicalDevice* outPhysicalDevice);
 /*
 * !@brief Initilizes logical device based on suitable physical device
 *
 * @return VK_TRUE if device was created successfuly, VK_FALSE otherwise
 */
-VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice);
+VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const TVector<const char*>& device_extensions, const TVector<uint32_t>& queues, VkDevice* outDevice);
 
 VkBool32 CreateRenderPass(const VkDevice& device, const VkRenderPassCreateInfo& info, VkRenderPass* outRenderPass);
 
@@ -124,3 +157,7 @@ VkBool32 CopyBufferToImage(VkCommandBuffer& cmd, const VkImage& image, const VkB
 VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd);
 
 VkBool32 EndCommandBuffer(VkCommandBuffer& cmd);
+
+TVector<unsigned char> ReadBytes(std::any target);
+
+size_t ReadSize(std::any target);
