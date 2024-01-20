@@ -264,7 +264,7 @@ VkBool32 EndCommandBuffer(VkCommandBuffer& cmd)
 	return vkEndCommandBuffer(cmd) == VK_SUCCESS;
 }
 
-TVector<unsigned char> ReadBytes(std::any target)
+TVector<unsigned char> AnyTypeToBytes(std::any target)
 {
 	TVector<unsigned char> buf;
 

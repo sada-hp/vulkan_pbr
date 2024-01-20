@@ -9,6 +9,7 @@ enum class EPipelineType
 	Compute = 2
 };
 
+//Use some pattern to get rid of useless structs after construction?
 class Pipeline
 {
 public:
@@ -52,17 +53,7 @@ public:
 		other.pipelineLayout = VK_NULL_HANDLE;
 	}
 
-	virtual void Construct() = 0;
-
 	virtual Pipeline& BindPipeline(VkCommandBuffer cmd) = 0;
-
-	virtual Pipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages) = 0;
-
-	virtual Pipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) = 0;
-
-	virtual Pipeline& AddPushConstant(VkPushConstantRange constantRange) = 0 ;
-
-	virtual Pipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage) = 0;
 
 	virtual const VkPipelineBindPoint GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
 
@@ -104,17 +95,17 @@ public:
 
 	ComputePipeline& SetShaderName(const std::string& shaderName);
 
-	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
+	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout);
 
-	ComputePipeline& AddPushConstant(VkPushConstantRange constantRange) override;
+	ComputePipeline& AddPushConstant(VkPushConstantRange constantRange);
 
-	ComputePipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT) override;
+	ComputePipeline& AddSpecializationConstant(uint32_t id, std::any value);
 
-	void Construct() override;
+	void Construct();
 
 	ComputePipeline& BindPipeline(VkCommandBuffer cmd) override;
 
-	ComputePipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages = VK_SHADER_STAGE_COMPUTE_BIT) override;
+	ComputePipeline& PushConstants(VkCommandBuffer cmd, const void* data);
 
 	void Dispatch(VkCommandBuffer cmd, uint32_t size_x, uint32_t size_y, uint32_t size_z);
 
@@ -169,17 +160,17 @@ public:
 
 	GraphicsPipeline& SetSubpass(uint32_t subpass);
 
-	GraphicsPipeline& AddDescriptorLayout(VkDescriptorSetLayout layout) override;
+	GraphicsPipeline& AddDescriptorLayout(VkDescriptorSetLayout layout);
 
-	GraphicsPipeline& AddPushConstant(VkPushConstantRange constantRange) override;
+	GraphicsPipeline& AddPushConstant(VkPushConstantRange constantRange);
 
-	GraphicsPipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage) override;
+	GraphicsPipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage);
 
-	void Construct() override;
+	void Construct();
 
 	GraphicsPipeline& BindPipeline(VkCommandBuffer cmd) override;
 
-	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages) override;
+	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages);
 
 	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
 

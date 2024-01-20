@@ -11,5 +11,5 @@ layout (binding = 0, r8) uniform writeonly image2D outImage;
 void main()
 {
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(fbm_worley(cell_loc * frequency, frequency, octaves)));
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(fbm_perlin(cell_loc * frequency, frequency, octaves)));
 }

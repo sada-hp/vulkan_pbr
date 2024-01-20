@@ -64,10 +64,9 @@ VulkanBase::~VulkanBase() noexcept
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
 
 	skybox.reset();
-	sword.reset();
+	volume.reset();
 	ubo.reset();
-	worley.reset();
-	simplex.reset();
+	CloudShape.reset();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -149,11 +148,9 @@ void VulkanBase::Step()
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		VkDeviceSize offsets[] = { 0 };
-		sword->descriptorSet.BindSet(cmd, sword->pipeline);
-		sword->pipeline.BindPipeline(cmd);
-		vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
-		vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-		vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
+		volume->descriptorSet.BindSet(cmd, volume->pipeline);
+		volume->pipeline.BindPipeline(cmd);
+		vkCmdDraw(cmd, 36, 1, 0, 0);
 		
 		vkCmdEndRenderPass(cmd);
 		vkEndCommandBuffer(cmd);
@@ -350,20 +347,16 @@ VkBool32 VulkanBase::prepare_scene()
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
 
-	worley = GRNoise::GenerateWorley(Scope, { 512u, 512u }, { 32u, 32u });
-	simplex = GRNoise::GenerateSimplex(Scope, { 512u, 512u }, { 32u, 32u, 10u });
+	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u, 4u);
 
-	sword = std::make_unique<GraphicsObject>(Scope);
+	volume = std::make_unique<GraphicsObject>(Scope);
 	skybox = std::make_unique<GraphicsObject>(Scope);
 
-	sword->mesh = GRFile::ImportMesh(Scope, "content\\sword.fbx");
-	sword->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
 		.Allocate();
 
-	sword->pipeline.SetVertexInputBindings(1, &vertBindings)
-		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
-		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-		.AddDescriptorLayout(sword->descriptorSet.GetLayout())
+	volume->pipeline.SetShaderStages("volumetric", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		.AddDescriptorLayout(volume->descriptorSet.GetLayout())
 		.Construct();
 
 	TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),

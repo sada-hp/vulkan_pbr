@@ -68,11 +68,9 @@ class VulkanBase
 
 	TAuto<Buffer> ubo = {};
 
-	TAuto<GraphicsObject> sword;
+	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
-
-	TAuto<Image> worley;
-	TAuto<Image> simplex;
+	TAuto<Image> CloudShape;
 
 public:
 	/*

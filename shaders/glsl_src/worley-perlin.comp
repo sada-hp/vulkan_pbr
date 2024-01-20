@@ -1,0 +1,21 @@
+#version 460
+#include "noise.glsl"
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (constant_id = 0) const uint frequency = 4;
+layout (constant_id = 1) const uint worley_octaves = 4;
+layout (constant_id = 2) const uint perlin_octaves = 4;
+
+layout (binding = 0, r8) uniform writeonly image2D outImage;
+
+void main()
+{
+    const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+
+    float w = fbm_worley(cell_loc * frequency, frequency, worley_octaves);
+    float p = fbm_perlin(cell_loc * frequency, frequency, perlin_octaves);
+    float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
+
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(perlin_worley));
+}

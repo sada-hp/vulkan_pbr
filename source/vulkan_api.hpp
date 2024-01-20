@@ -158,6 +158,4 @@ VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd);
 
 VkBool32 EndCommandBuffer(VkCommandBuffer& cmd);
 
-TVector<unsigned char> ReadBytes(std::any target);
-
-size_t ReadSize(std::any target);
+TVector<unsigned char> AnyTypeToBytes(std::any target);

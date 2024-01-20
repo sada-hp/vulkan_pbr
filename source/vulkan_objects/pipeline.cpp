@@ -41,7 +41,7 @@ ComputePipeline& ComputePipeline::AddPushConstant(VkPushConstantRange constantRa
 	return *this;
 }
 
-ComputePipeline& ComputePipeline::AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage)
+ComputePipeline& ComputePipeline::AddSpecializationConstant(uint32_t id, std::any value)
 {
 	specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT][id] = value;
 
@@ -79,7 +79,7 @@ void ComputePipeline::Construct()
 	size_t specialization_entry = 0ull, specialization_offset = 0ull;
 	TVector<VkSpecializationMapEntry> specialization_entries(specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT].size());
 	for (auto [id, val] : specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT]) {
-		TVector<unsigned char> specialization_bytes(std::move(ReadBytes(val)));
+		TVector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
 
 		specialization_data.resize(specialization_data.size() + specialization_bytes.size());
 		specialization_entries[specialization_entry].constantID = id;
@@ -123,9 +123,9 @@ ComputePipeline& ComputePipeline::BindPipeline(VkCommandBuffer cmd)
 	return *this;
 }
 
-ComputePipeline& ComputePipeline::PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages)
+ComputePipeline& ComputePipeline::PushConstants(VkCommandBuffer cmd, const void* data)
 {
-	vkCmdPushConstants(cmd, pipelineLayout, stages, 0, sizeof(data), data);
+	vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(data), data);
 
 	return *this;
 }
@@ -304,7 +304,7 @@ void GraphicsPipeline::Construct()
 			size_t specialization_entry = 0ull, specialization_offset = 0ull;
 			TVector<VkSpecializationMapEntry> specialization_entries(specializationConstants[stages[i]].size());
 			for (auto [id, val] : specializationConstants[stages[i]]) {
-				TVector<unsigned char> specialization_bytes(std::move(ReadBytes(val)));
+				TVector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
 
 				specialization_data.resize(specialization_data.size() + specialization_bytes.size());
 				specialization_entries[specialization_entry].constantID = id;
