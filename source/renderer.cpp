@@ -7,6 +7,13 @@
 
 extern std::string exec_path;
 
+struct UniformBuffer
+{
+	TMat4 ViewProjection;
+	TVec3 CameraPosition;
+	TVec2 Aspect;
+};
+
 VulkanBase::VulkanBase(GLFWwindow* window)
 	: glfwWindow(window)
 {
@@ -107,10 +114,15 @@ void VulkanBase::Step()
 	vkWaitForFences(Scope.GetDevice(), 1, &presentFences[image_index], VK_TRUE, UINT64_MAX);
 	vkResetFences(Scope.GetDevice(), 1, &presentFences[image_index]);
 
-	ubo->Update((void*)&camera.GetViewProjection());
-
-	//////////////////////////////////////////////////////////Graphics
+	//UBO
 	{
+		UniformBuffer Uniform{ camera.GetViewProjection(), camera.position, TVec2(1.0, Scope.GetSwapchainExtent().width / Scope.GetSwapchainExtent().height)};
+		ubo->Update((void*)&Uniform);
+	}
+
+	//Graphics
+	{
+
 		VkResult res;
 		const VkCommandBuffer& cmd = presentBuffers[image_index];
 		VkCommandBufferBeginInfo beginInfo{};
@@ -143,9 +155,10 @@ void VulkanBase::Step()
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
-		skybox->pipeline.BindPipeline(cmd);
-		vkCmdDraw(cmd, 36, 1, 0, 0);
+
+		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
+		//skybox->pipeline.BindPipeline(cmd);
+		//vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		VkDeviceSize offsets[] = { 0 };
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
@@ -340,37 +353,50 @@ VkBool32 VulkanBase::prepare_scene()
 	VkBufferCreateInfo uboInfo{};
 	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	uboInfo.size = sizeof(TMat4);
+	uboInfo.size = sizeof(UniformBuffer);
 	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
 
-	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u, 4u);
+	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u, 4u, 4u);
 
 	volume = std::make_unique<GraphicsObject>(Scope);
-	skybox = std::make_unique<GraphicsObject>(Scope);
-
-	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
 		.Allocate();
+
+	VkPipelineColorBlendAttachmentState blendState{};
+	blendState.blendEnable = true;
+	blendState.colorBlendOp = VK_BLEND_OP_ADD;
+	blendState.alphaBlendOp = VK_BLEND_OP_ADD;
+	blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 
 	volume->pipeline.SetShaderStages("volumetric", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		.SetBlendAttachments(1, &blendState)
 		.AddDescriptorLayout(volume->descriptorSet.GetLayout())
+		.SetCullMode(VK_CULL_MODE_BACK_BIT)
 		.Construct();
 
-	TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
-		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
-		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
+	//TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
+	//	("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
+	//	("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
 
-	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
-		.Allocate();
+	//skybox = std::make_unique<GraphicsObject>(Scope);
+	//skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
+	//skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+	//	.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+	//	.Allocate();
 
-	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
-		.Construct();
+	//skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+	//	.SetCullMode(VK_CULL_MODE_FRONT_BIT)
+	//	.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
+	//	.Construct();
 
 	glm::mat4 projection = glm::perspective(30.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
 	projection[1][1] *= -1;

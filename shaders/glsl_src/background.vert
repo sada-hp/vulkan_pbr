@@ -1,9 +1,5 @@
-#version 450
-
-layout(binding=0) uniform UnfiormBuffer
-{
-    mat4 ViewProj;
-} ubo;
+#version 460
+#include "ubo.glsl"
 
 const vec3 vertices[8] = vec3[] (
     vec3(1.0, 1.0, 1.0),

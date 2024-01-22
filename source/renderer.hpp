@@ -17,32 +17,71 @@ struct ViewCameraStruct
 {
 	const TMat4& GetViewProjection() const
 	{
-		//cache
-		static TVec3 old_pos = glm::vec3(0.f);
-		static TQuat old_ori = glm::quat_cast(glm::mat4(1.f));
-
-		if (position != old_pos || orientation != old_ori)
+		if (dirtyViewMatrix || dirtyProjectionMatrix)
 		{
 			VP = projection * glm::translate(glm::mat4_cast(orientation), position);
 
-			old_pos = position;
-			old_ori = orientation;
+			dirtyViewMatrix = false;
+			dirtyProjectionMatrix = false;
 		}
 
 		return VP;
 	}
 
-	TVec3 position = TVec3(0.f);
-	TQuat orientation = glm::quat_cast(glm::mat4(1.f));
+	const TVec3& Translate(const TVec3& offset)
+	{
+		position += offset;
+		dirtyViewMatrix = true;
+
+		return position;
+	}
+
+	const TVec3& SetPosition(const TVec3& new_position)
+	{
+		position = new_position;
+		dirtyViewMatrix = true;
+
+		return position;
+	}
+
+	const TVec3& GetPosition()
+	{
+		return position;
+	}
+
+	const TQuat& Rotate(const TQuat& angle)
+	{
+		orientation = angle * orientation;
+		dirtyViewMatrix = true;
+
+		return orientation;
+	}
+
+	const TQuat& SetRotation(const TQuat& angle)
+	{
+		orientation = angle;
+		dirtyViewMatrix = true;
+
+		return orientation;
+	}
+
+	const TQuat& GetOrientation()
+	{
+		return orientation;
+	}
 
 private:
-	mutable TMat4 VP = glm::mat4(1.f);
+	TVec3 position = TVec3(0.f);
+	TQuat orientation = glm::quat_cast(glm::mat4(1.f));
 	TMat4 projection = glm::mat4(1.f);
+	mutable TMat4 VP = glm::mat4(1.f);
+	mutable bool dirtyViewMatrix = true;
+	mutable bool dirtyProjectionMatrix = true;
 
 	void set_projection(const TMat4& proj = TMat4(1.f))
 	{
 		projection = proj;
-		VP = projection * glm::translate(glm::mat4_cast(orientation), position);
+		dirtyProjectionMatrix = true;
 	}
 
 	friend class VulkanBase;

@@ -1,9 +1,5 @@
 #version 460
-
-layout(binding=0) uniform UnfiormBuffer
-{
-    mat4 ViewProj;
-} ubo;
+#include "ubo.glsl"
 
 const vec3 vertices[8] = vec3[] (
     vec3(1.0, 1.0, 1.0),
@@ -17,16 +13,19 @@ const vec3 vertices[8] = vec3[] (
 );
 
 const uint indices[36] = uint[] (
-    2, 1, 0, 3, 1, 2,
-	4, 5, 6, 6, 5, 7,
-	6, 2, 0, 0, 4, 6,
-	5, 0, 1, 0, 5, 4,
-	1, 7, 5, 7, 1, 3,
-	3, 6, 7, 6, 3, 2
+    0, 1, 2, 2, 1, 3,
+	6, 5, 4, 7, 5, 6,
+	0, 2, 6, 6, 4, 0,
+	1, 0, 5, 4, 5, 0,
+	5, 7, 1, 3, 1, 7,
+	7, 6, 3, 2, 3, 6
 );
+
+layout(location = 0) out vec3 WorldPosition;
 
 void main()
 {
     vec3 pos = vertices[indices[gl_VertexIndex]];
-    gl_Position = ubo.ViewProj * vec4(pos * 20.0, 1.0);
+    WorldPosition = 50.0 * pos;
+    gl_Position = ubo.ViewProj * vec4(WorldPosition, 1.0);
 }

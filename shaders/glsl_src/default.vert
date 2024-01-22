@@ -1,9 +1,5 @@
 #version 460
-
-layout(binding=0) uniform UnfiormBuffer
-{
-    mat4 ViewProj;
-} ubo;
+#include "ubo.glsl"
 
 layout(location = 0) in vec3 vertPosition;
 

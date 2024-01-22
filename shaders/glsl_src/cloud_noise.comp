@@ -3,19 +3,20 @@
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout (constant_id = 0) const uint frequency = 4;
-layout (constant_id = 1) const uint worley_octaves = 4;
-layout (constant_id = 2) const uint perlin_octaves = 4;
+layout (constant_id = 0) const uint frequency_worley = 4;
+layout (constant_id = 1) const uint frequency_perlin = 4;
+layout (constant_id = 2) const uint worley_octaves = 4;
+layout (constant_id = 3) const uint perlin_octaves = 4;
 
 layout (binding = 0, rgba8) uniform writeonly image3D outImage;
 
 void main()
 {
     const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
-    float worley01 = fbm_worley(cell_loc * frequency, frequency, worley_octaves);
-    float worley02 = fbm_worley(cell_loc * frequency * 2.0, frequency * 2.0, worley_octaves);
-    float worley03 = fbm_worley(cell_loc * frequency * 4.0, frequency * 4.0, worley_octaves);
-    float perlin = fbm_perlin(cell_loc, frequency, perlin_octaves);
+    float worley01 = fbm_worley(cell_loc, frequency_worley, worley_octaves);
+    float worley02 = fbm_worley(cell_loc, frequency_worley * 2.0, worley_octaves);
+    float worley03 = fbm_worley(cell_loc, frequency_worley * 4.0, worley_octaves);
+    float perlin = fbm_perlin(cell_loc, frequency_perlin, perlin_octaves);
     float perlin_worley = remap(perlin, 0.0, 1.0, worley01, 1.0);
 
     imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(perlin_worley, worley01, worley02, worley03));
