@@ -64,7 +64,7 @@ int main(int argc, char** argv)
 			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.y), glm::vec3(0, 1, 0));
 			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.z), glm::vec3(0, 0, 1));
 			rndr->camera.SetRotation(q);
-			rndr->camera.SetPosition(glm::vec3(0.f, 0.f, cam_customs.camera_zoom)* rndr->camera.GetOrientation());
+			rndr->camera.SetPosition(glm::vec3(0.f, 0.f, cam_customs.camera_zoom) * q);
 		});
 
 	glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset)

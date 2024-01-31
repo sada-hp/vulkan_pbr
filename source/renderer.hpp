@@ -17,15 +17,36 @@ struct ViewCameraStruct
 {
 	const TMat4& GetViewProjection() const
 	{
-		if (dirtyViewMatrix || dirtyProjectionMatrix)
+		if (dirtyViewMatrix)
 		{
-			VP = projection * glm::translate(glm::mat4_cast(orientation), position);
-
+			view = glm::translate(glm::mat4_cast(orientation), position);
+			dirtyViewProjectionMatrix = true;
 			dirtyViewMatrix = false;
-			dirtyProjectionMatrix = false;
+		}
+
+		if (dirtyViewProjectionMatrix)
+		{
+			VP = projection * view;
+			dirtyViewProjectionMatrix = false;
 		}
 
 		return VP;
+	}
+
+	const TMat4& GetProjectionMatrix() const
+	{
+		return projection;
+	}
+
+	const TMat4& GetViewMatrix() const
+	{
+		if (dirtyViewMatrix) {
+			view = glm::translate(glm::mat4_cast(orientation), -position);
+			dirtyViewMatrix = false;
+			dirtyViewProjectionMatrix = true;
+		}
+
+		return view;
 	}
 
 	const TVec3& Translate(const TVec3& offset)
@@ -73,15 +94,16 @@ struct ViewCameraStruct
 private:
 	TVec3 position = TVec3(0.f);
 	TQuat orientation = glm::quat_cast(glm::mat4(1.f));
-	TMat4 projection = glm::mat4(1.f);
+	mutable TMat4 projection = glm::mat4(1.f);
+	mutable TMat4 view = glm::mat4(1.f);
 	mutable TMat4 VP = glm::mat4(1.f);
 	mutable bool dirtyViewMatrix = true;
-	mutable bool dirtyProjectionMatrix = true;
+	mutable bool dirtyViewProjectionMatrix = true;
 
 	void set_projection(const TMat4& proj = TMat4(1.f))
 	{
 		projection = proj;
-		dirtyProjectionMatrix = true;
+		dirtyViewProjectionMatrix = true;
 	}
 
 	friend class VulkanBase;
@@ -106,10 +128,13 @@ class VulkanBase
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
 
 	TAuto<Buffer> ubo = {};
+	TAuto<Buffer> view = {};
 
 	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
+	TAuto<GraphicsObject> sword;
 	TAuto<Image> CloudShape;
+	TAuto<Image> WeatherImage;
 
 public:
 	/*

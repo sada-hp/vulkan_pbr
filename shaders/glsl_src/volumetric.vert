@@ -21,11 +21,14 @@ const uint indices[36] = uint[] (
 	7, 6, 3, 2, 3, 6
 );
 
-layout(location = 0) out vec3 WorldPosition;
+layout(location = 0) out vec3 Position;
 
 void main()
 {
     vec3 pos = vertices[indices[gl_VertexIndex]];
-    WorldPosition = 50.0 * pos;
-    gl_Position = ubo.ViewProj * vec4(WorldPosition, 1.0);
+    vec4 WorldPosition = vec4(50.0 * pos, 1.0);
+    vec4 ViewPosition = ubo.ViewMatrix * WorldPosition;
+
+    Position = WorldPosition.xyz;
+    gl_Position = ubo.ProjectionMatrix * ViewPosition;
 }
