@@ -12,6 +12,7 @@ struct UniformBuffer
 	TMat4 ViewProjection;
 	TMat4 ProjectionMatrixInverse;
 	TMat4 ViewMatrixInverse;
+	float Time;
 };
 
 struct ViewBuffer
@@ -51,6 +52,10 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
 
+	glm::mat4 projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
+	projection[1][1] *= -1;
+	camera.set_projection(projection);
+
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
 	presentFences.resize(swapchainImages.size());
@@ -81,7 +86,9 @@ VulkanBase::~VulkanBase() noexcept
 	ubo.reset();
 	view.reset();
 	CloudShape.reset();
+	CloudDetail.reset();
 	WeatherImage.reset();
+	Gradient.reset();
 	sword.reset();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
@@ -112,7 +119,7 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyInstance(instance, VK_NULL_HANDLE);
 }
 
-void VulkanBase::Step()
+void VulkanBase::Step(float DeltaTime)
 {
 	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
 		return;
@@ -125,10 +132,12 @@ void VulkanBase::Step()
 
 	//UBO
 	{
+		float Time = glfwGetTime();
 		UniformBuffer Uniform{ 
 			TMat4(camera.GetViewProjection()), 
 			TMat4(camera.GetProjectionMatrix()),
 			TMat4(camera.GetViewMatrix()),
+			Time
 		};
 
 		ubo->Update((void*)&Uniform, sizeof(Uniform));
@@ -154,7 +163,7 @@ void VulkanBase::Step()
 		res = vkBeginCommandBuffer(cmd, &beginInfo);
 
 		VkClearValue clearValues[2];
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 		clearValues[1].depthStencil = { 1.0f, 0 };
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -180,20 +189,20 @@ void VulkanBase::Step()
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
+		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
 		//skybox->pipeline.BindPipeline(cmd);
 		//vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		VkDeviceSize offsets[] = { 0 };
-		//sword->descriptorSet.BindSet(cmd, sword->pipeline);
-		//sword->pipeline.BindPipeline(cmd);
-		//vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
-		//vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-		//vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
+		sword->descriptorSet.BindSet(cmd, sword->pipeline);
+		sword->pipeline.BindPipeline(cmd);
+		vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
+		vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
 
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
 		volume->pipeline.BindPipeline(cmd);
-		vkCmdDraw(cmd, 36, 1, 0, 0);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		vkCmdEndRenderPass(cmd);
 		vkEndCommandBuffer(cmd);
@@ -397,15 +406,21 @@ VkBool32 VulkanBase::prepare_scene()
 	viewInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	view = std::make_unique<Buffer>(Scope, viewInfo, uboAllocCreateInfo);
 
-	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u, 4u, 4u);
-	WeatherImage = GRFile::ImportImage(Scope, "Content\\weather_map.jpg");
-	WeatherImage->CreateSampler(SamplerFlagBits::None);
+	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 8u, 4u, 4u);
+	CloudDetail = GRNoise::GenerateWorley(Scope, { 32u, 32u, 32u }, 4u, 1u);
+
+	//WeatherImage = GRFile::ImportImage(Scope, "Content\\weather_map.jpg");
+	//WeatherImage->CreateSampler(SamplerFlagBits::RepeatUVW);
+
+	Gradient = GRFile::ImportImage(Scope, "Content\\Gradient.jpg");
+	Gradient->CreateSampler(SamplerFlagBits::AnisatropyEnabled);
 	 
 	volume = std::make_unique<GraphicsObject>(Scope);
 	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
 		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
 		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *WeatherImage)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
+		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
 		.Allocate();
 
 
@@ -422,23 +437,23 @@ VkBool32 VulkanBase::prepare_scene()
 	volume->pipeline.SetShaderStages("volumetric", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.SetBlendAttachments(1, &blendState)
 		.AddDescriptorLayout(volume->descriptorSet.GetLayout())
-		.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.Construct();
 
-	//TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
-	//	("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
-	//	("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
+	TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
+		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
+		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
 
-	//skybox = std::make_unique<GraphicsObject>(Scope);
-	//skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	//skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-	//	.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
-	//	.Allocate();
+	skybox = std::make_unique<GraphicsObject>(Scope);
+	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
+	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+		.Allocate();
 
-	//skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-	//	.SetCullMode(VK_CULL_MODE_FRONT_BIT)
-	//	.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
-	//	.Construct();
+	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		.SetCullMode(VK_CULL_MODE_NONE)
+		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
+		.Construct();
 
 	sword = std::make_unique<GraphicsObject>(Scope);
 
@@ -452,10 +467,6 @@ VkBool32 VulkanBase::prepare_scene()
 		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.AddDescriptorLayout(sword->descriptorSet.GetLayout())
 		.Construct();
-
-	glm::mat4 projection = glm::perspective(30.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
-	projection[1][1] *= -1;
-	camera.set_projection(projection);
 
 	return res;
 }

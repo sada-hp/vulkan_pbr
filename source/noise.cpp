@@ -38,7 +38,7 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 	TAuto<Image> noise = std::make_unique<Image>(Scope);
 	noise->CreateImage(noiseInfo, noiseAllocCreateInfo)
 		.CreateImageView(noiseImageView)
-		.CreateSampler(SamplerFlagBits::AnisatropyEnabled | SamplerFlagBits::RepeatUVW)
+		.CreateSampler(SamplerFlagBits::RepeatUVW)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	TAuto<ComputePipeline> noise_pipeline = std::make_unique<ComputePipeline>(Scope);
@@ -71,19 +71,19 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 	return noise;
 }
 
-TAuto<Image> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency, uint32_t octaves)
+TAuto<Image> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate_noise("perlin", Scope, VK_FORMAT_R8_UNORM, { imageSize.width, imageSize.height, 1u }, { frequency, octaves });
+	return generate_noise("perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
 }
 
-TAuto<Image> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency, uint32_t octaves)
+TAuto<Image> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate_noise("worley", Scope, VK_FORMAT_R8_UNORM, { imageSize.width, imageSize.height, 1u }, { frequency, octaves });
+	return generate_noise("worley", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { frequency, octaves });
 }
 
-TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
+TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
 {
-	return generate_noise("worley_perlin", Scope, VK_FORMAT_R8_UNORM, { imageSize.width, imageSize.height, 1u }, { frequency, worley_octaves, perlin_octaves });
+	return generate_noise("worley_perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
 }
 
 TAuto<Image> GRNoise::GenerateCloudNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency, uint32_t worley_octaves, uint32_t perlin_octaves)

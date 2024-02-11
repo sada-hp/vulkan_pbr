@@ -127,14 +127,16 @@ class VulkanBase
 	RenderScope Scope;
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
 
-	TAuto<Buffer> ubo = {};
+	TAuto<Buffer> ubo = {};		
 	TAuto<Buffer> view = {};
 
 	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
 	TAuto<GraphicsObject> sword;
 	TAuto<Image> CloudShape;
+	TAuto<Image> CloudDetail;
 	TAuto<Image> WeatherImage;
+	TAuto<Image> Gradient;
 
 public:
 	/*
@@ -164,7 +166,7 @@ public:
 	/*
 	* !@brief Renders the next frame of simulation
 	*/
-	void Step();
+	void Step(float DeltaTime);
 	/*
 	* !@brief Handles recreation of swapchain dependant objects
 	*/

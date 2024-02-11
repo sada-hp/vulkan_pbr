@@ -44,16 +44,16 @@ int main(int argc, char** argv)
 			switch (key)
 			{
 			case GLFW_KEY_RIGHT:
-				cam_customs.camera_pyr.y += 10.f;
-				break;
-			case GLFW_KEY_LEFT:
 				cam_customs.camera_pyr.y -= 10.f;
 				break;
+			case GLFW_KEY_LEFT:
+				cam_customs.camera_pyr.y += 10.f;
+				break;
 			case GLFW_KEY_UP:
-				cam_customs.camera_pyr.x -= 10.f;
+				cam_customs.camera_pyr.x += 10.f;
 				break;
 			case GLFW_KEY_DOWN:
-				cam_customs.camera_pyr.x += 10.f;
+				cam_customs.camera_pyr.x -= 10.f;
 				break;
 			default:
 				break;
@@ -77,23 +77,24 @@ int main(int argc, char** argv)
 		});
 
 	render.camera.SetPosition({ render.camera .GetPosition().x, render.camera.GetPosition().y, CC.camera_zoom });
-	unsigned long long frame_count = 0;
-	auto count_start = std::chrono::steady_clock::now();
+
+	double delta = 0;
+	double total_time = 0;
+	unsigned long long frame = 0;
 	while (!glfwWindowShouldClose(pWindow))
 	{
 		glfwPollEvents();
-		render.Step();
-		frame_count++;
-		auto count_end = std::chrono::steady_clock::now();
+		render.Step(delta);
 
-		if (std::chrono::duration_cast<std::chrono::seconds>(count_end - count_start).count() >= 1L)
-		{
-			long long latency = std::chrono::duration_cast<std::chrono::seconds>(count_end - count_start).count() / frame_count;
-			glfwSetWindowTitle(pWindow, ("Vulkan PBR " + std::to_string(frame_count)).c_str());
+		double frame_time = glfwGetTime();
+		delta = frame_time - total_time;
+		total_time = frame_time;
+		frame++;
 
-			count_start = count_end;
-			frame_count = 0;
+		if (frame % 10 == 0) {
+			glfwSetWindowTitle(pWindow, ("Vulkan PBR " + std::to_string(int(1.0 / delta))).c_str());
 		}
+
 
 		glfwSwapBuffers(pWindow);
 	}

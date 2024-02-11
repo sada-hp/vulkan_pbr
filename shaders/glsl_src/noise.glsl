@@ -42,14 +42,19 @@ vec3 noise32(vec3 p)
 
 float remap(float orig, float old_min, float old_max, float new_min, float new_max)
 {
-    return new_min + ((orig - old_min) / (old_max - old_min)) * (new_max - new_min);
+    return new_min + (((orig - old_min) / (old_max - old_min)) * (new_max - new_min));
+}
+
+float saturate(float x)
+{
+    return clamp(x, 0.0, 1.0);
 }
 
 float worley(vec2 p0, float freq)
 {
     float min_d = 1.0;
-    const vec2 i = floor(p0);
-    const vec2 f = fract(p0);
+    const vec2 i = floor(p0 * freq);
+    const vec2 f = fract(p0 * freq);
 
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
@@ -65,8 +70,8 @@ float worley(vec2 p0, float freq)
 float worley(vec3 p0, float freq)
 {
     float min_d = 1.0;
-    const vec3 i = floor(p0);
-    const vec3 f = fract(p0);
+    const vec3 i = floor(p0 * freq);
+    const vec3 f = fract(p0 * freq);
 
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
@@ -83,8 +88,8 @@ float worley(vec3 p0, float freq)
 
 float perlin(vec2 x0, float freq) 
 {
-    vec2 i = floor(x0);
-    vec2 f = fract(x0);
+    vec2 i = floor(x0 * freq);
+    vec2 f = fract(x0 * freq);
 
 	float va = noise(i);
     float vb = noise(mod(i + vec2(1.0, 0.0), freq));
@@ -97,8 +102,8 @@ float perlin(vec2 x0, float freq)
 
 float perlin(vec3 x0, float freq) 
 {
-    vec3 i = floor(x0);
-    vec3 f = fract(x0);
+    vec3 i = floor(x0 * freq);
+    vec3 f = fract(x0 * freq);
     
     vec3 ga = noise32(i);
     vec3 gb = noise32(mod(i + vec3(1.0, 0.0, 0.0), freq));
@@ -133,50 +138,62 @@ float fbm_worley(vec2 x, float f, uint n)
 {
     float v = 0.0;
 	float a = 0.5;
+    float m = 0.0;
+
 	for (int i = 0; i < n; i++) {
-		v += a * worley(x * f, f);
+        m += a;
+		v += a * worley(x, f);
         f *= 2.0;
 		a *= 0.5;
 	}
     
-	return v;
+	return remap(v, 0.0, m, 0.0, 1.0);
 }
 
 float fbm_worley(vec3 x, float f, uint n) 
 {
     float v = 0.0;
 	float a = 0.5;
+    float m = 0.0;
+
 	for (int i = 0; i < n; i++) {
-		v += a * worley(x * f, f);
+        m += a;
+		v += a * worley(x, f);
         f *= 2.0;
 		a *= 0.5;
 	}
     
-	return v;
+	return remap(v, 0.0, m, 0.0, 1.0);
 }
 
 float fbm_perlin(vec2 x, float f, uint n) 
 {
 	float v = 0.0;
-	float a = 0.5;
+	float a = 1.0;
+    float m = 0.0;
+
 	for (int i = 0; i < n; i++) {
-		v += a * perlin(x * f, f);
+        m += a;
+		v += a * perlin(x, f);
         f *= 2.0;
 		a *= 0.5;
 	}
 
-	return v;
+	return remap(v, 0.0, m, 0.0, 1.0);
 }
 
 float fbm_perlin(vec3 x, float f, uint n) 
 {
 	float v = 0.0;
 	float a = 0.5;
+    float m = 0.0;
+
 	for (int i = 0; i < n; i++) {
-		v += a * perlin(x * f, f);
+        m += a;
+		v += a * perlin(x, f);
         f *= 2.0;
 		a *= 0.5;
 	}
 
-	return v;
+	return remap(v, 0.0, m, 0.0, 1.0);
 }

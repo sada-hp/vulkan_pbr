@@ -8,5 +8,5 @@ layout(binding = 1) uniform samplerCube skybox;
 
 void main() 
 {
-	outColor = vec4(texture( skybox, -inWorldPos ).xyz, 1.0);
+	outColor = vec4(texture( skybox,  inWorldPos ).rgb, 1.0);
 }
