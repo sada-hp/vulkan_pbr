@@ -19,19 +19,6 @@ struct ViewCameraStruct
 {
 	const TMat4& GetViewProjection() const
 	{
-		if (dirtyViewMatrix)
-		{
-			view = glm::translate(glm::mat4_cast(orientation), position);
-			dirtyViewProjectionMatrix = true;
-			dirtyViewMatrix = false;
-		}
-
-		if (dirtyViewProjectionMatrix)
-		{
-			VP = projection * view;
-			dirtyViewProjectionMatrix = false;
-		}
-
 		return VP;
 	}
 
@@ -42,19 +29,13 @@ struct ViewCameraStruct
 
 	const TMat4& GetViewMatrix() const
 	{
-		if (dirtyViewMatrix) {
-			view = glm::translate(glm::mat4_cast(orientation), -position);
-			dirtyViewMatrix = false;
-			dirtyViewProjectionMatrix = true;
-		}
-
 		return view;
 	}
 
 	const TVec3& Translate(const TVec3& offset)
 	{
-		position += offset;
-		dirtyViewMatrix = true;
+		position += offset * orientation;
+		recalculate();
 
 		return position;
 	}
@@ -62,7 +43,7 @@ struct ViewCameraStruct
 	const TVec3& SetPosition(const TVec3& new_position)
 	{
 		position = new_position;
-		dirtyViewMatrix = true;
+		recalculate();
 
 		return position;
 	}
@@ -75,7 +56,21 @@ struct ViewCameraStruct
 	const TQuat& Rotate(const TQuat& angle)
 	{
 		orientation = angle * orientation;
-		dirtyViewMatrix = true;
+		pitch_yaw_roll = glm::eulerAngles(orientation);
+		recalculate();
+
+		return orientation;
+	}
+
+	const TQuat& Rotate(const TVec3& pyr)
+	{
+		pitch_yaw_roll += pyr;
+
+		orientation = glm::quat_cast(glm::mat3(1.f));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.x), glm::vec3(1, 0, 0));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.y), glm::vec3(0, 1, 0));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.z), glm::vec3(0, 0, 1));
+		recalculate();
 
 		return orientation;
 	}
@@ -83,7 +78,21 @@ struct ViewCameraStruct
 	const TQuat& SetRotation(const TQuat& angle)
 	{
 		orientation = angle;
-		dirtyViewMatrix = true;
+		pitch_yaw_roll = glm::eulerAngles(orientation);
+		recalculate();
+
+		return orientation;
+	}
+
+	const TQuat& SetRotation(const TVec3& pyr)
+	{
+		pitch_yaw_roll = pyr;
+
+		orientation = glm::quat_cast(glm::mat3(1.f));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.x), glm::vec3(1, 0, 0));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.y), glm::vec3(0, 1, 0));
+		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.z), glm::vec3(0, 0, 1));
+		recalculate();
 
 		return orientation;
 	}
@@ -95,17 +104,22 @@ struct ViewCameraStruct
 
 private:
 	TVec3 position = TVec3(0.f);
-	TQuat orientation = glm::quat_cast(glm::mat4(1.f));
+	TVec3 pitch_yaw_roll = TVec3(0.f);
+	TQuat orientation = glm::quat_cast(glm::mat3(1.f));
 	mutable TMat4 projection = glm::mat4(1.f);
 	mutable TMat4 view = glm::mat4(1.f);
 	mutable TMat4 VP = glm::mat4(1.f);
-	mutable bool dirtyViewMatrix = true;
-	mutable bool dirtyViewProjectionMatrix = true;
 
 	void set_projection(const TMat4& proj = TMat4(1.f))
 	{
 		projection = proj;
-		dirtyViewProjectionMatrix = true;
+		recalculate();
+	}
+
+	void recalculate()
+	{
+		view = glm::translate(glm::mat4_cast(orientation), position);
+		VP = projection * view;
 	}
 
 	friend class VulkanBase;

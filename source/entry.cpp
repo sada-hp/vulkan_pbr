@@ -28,55 +28,47 @@ int main(int argc, char** argv)
 			rndr->HandleResize();
 		});
 
-	struct CameraCustomization
-	{
-		glm::vec3 camera_pyr = glm::vec3(0.f);
-		float camera_zoom = -200.f;
-	} CC;
-
-	render.userPointer1 = &CC;
-
 	glfwSetKeyCallback(pWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
 		{
 			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
-			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
+			TVec3 off = TVec3(0.0);
+			TVec3 rot = TVec3(0.0);
 
 			switch (key)
 			{
 			case GLFW_KEY_RIGHT:
-				cam_customs.camera_pyr.y -= 10.f;
+				rot.y += 10.f;
 				break;
 			case GLFW_KEY_LEFT:
-				cam_customs.camera_pyr.y += 10.f;
+				rot.y -= 10.f;
 				break;
 			case GLFW_KEY_UP:
-				cam_customs.camera_pyr.x += 10.f;
+				rot.x += 10.f;
 				break;
 			case GLFW_KEY_DOWN:
-				cam_customs.camera_pyr.x -= 10.f;
+				rot.x -= 10.f;
+				break;
+			case GLFW_KEY_W:
+				off.z += 10.f;
+				break;
+			case GLFW_KEY_S:
+				off.z -= 10.f;
+				break;
+			case GLFW_KEY_A:
+				off.x += 10.f;
+				break;
+			case GLFW_KEY_D:
+				off.x -= 10.f;
 				break;
 			default:
 				break;
 			}
 
-			glm::quat q = glm::quat_cast(glm::mat4(1.f));
-			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.x), glm::vec3(1, 0, 0));
-			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.y), glm::vec3(0, 1, 0));
-			q = q * glm::angleAxis(glm::radians(cam_customs.camera_pyr.z), glm::vec3(0, 0, 1));
-			rndr->camera.SetRotation(q);
-			rndr->camera.SetPosition(glm::vec3(0.f, 0.f, cam_customs.camera_zoom) * q);
+			rndr->camera.Rotate(rot);
+			rndr->camera.Translate(off);
 		});
 
-	glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset)
-		{
-			VulkanBase* rndr = static_cast<VulkanBase*>(glfwGetWindowUserPointer(window));
-			CameraCustomization& cam_customs = *static_cast<CameraCustomization*>(rndr->userPointer1);
-
-			cam_customs.camera_zoom += 7.5f * yoffset;
-			rndr->camera.SetPosition(glm::vec3(0.f, 0.f, cam_customs.camera_zoom)* rndr->camera.GetOrientation());
-		});
-
-	render.camera.SetPosition({ render.camera .GetPosition().x, render.camera.GetPosition().y, CC.camera_zoom });
+	render.camera.SetPosition({ render.camera .GetPosition().x, render.camera.GetPosition().y, -200.0 });
 
 	entt::entity sword = render.AddGraphicsObject("content\\sword.fbx", "");
 	WorldMatrix& wld = render.GetComponent<WorldMatrix>(sword);
