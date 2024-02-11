@@ -170,7 +170,7 @@ public:
 
 	GraphicsPipeline& BindPipeline(VkCommandBuffer cmd) override;
 
-	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages);
+	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, VkShaderStageFlagBits stages);
 
 	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
 

@@ -355,9 +355,9 @@ GraphicsPipeline& GraphicsPipeline::BindPipeline(VkCommandBuffer cmd)
 	return *this;
 }
 
-GraphicsPipeline& GraphicsPipeline::PushConstants(VkCommandBuffer cmd, const void* data, VkShaderStageFlagBits stages)
+GraphicsPipeline& GraphicsPipeline::PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, VkShaderStageFlagBits stages)
 {
-	vkCmdPushConstants(cmd, pipelineLayout, stages, 0, sizeof(data), data);
+	vkCmdPushConstants(cmd, pipelineLayout, stages, 0, dataSize, data);
 
 	return *this;
 }

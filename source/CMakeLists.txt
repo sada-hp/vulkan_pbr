@@ -18,6 +18,7 @@ set(
 	"vulkan_api.hpp"
 	"noise.cpp"
 	"noise.hpp"
+	"components.hpp"
 )
 set(
     VULKAN_SOURCES 

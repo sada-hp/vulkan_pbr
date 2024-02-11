@@ -89,7 +89,8 @@ VulkanBase::~VulkanBase() noexcept
 	CloudDetail.reset();
 	WeatherImage.reset();
 	Gradient.reset();
-	sword.reset();
+
+	registry.clear();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -189,16 +190,18 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
-		//skybox->pipeline.BindPipeline(cmd);
-		//vkCmdDraw(cmd, 36, 1, 0, 0);
+		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
+		skybox->pipeline.BindPipeline(cmd);
+		vkCmdDraw(cmd, 36, 1, 0, 0);
 
-		VkDeviceSize offsets[] = { 0 };
-		sword->descriptorSet.BindSet(cmd, sword->pipeline);
-		sword->pipeline.BindPipeline(cmd);
-		vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
-		vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-		vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
+		//VkDeviceSize offsets[] = { 0 };
+		//sword->descriptorSet.BindSet(cmd, sword->pipeline);
+		//sword->pipeline.BindPipeline(cmd);
+		//vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
+		//vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+		//vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
+		
+		render_objects(cmd);
 
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
 		volume->pipeline.BindPipeline(cmd);
@@ -269,6 +272,42 @@ void VulkanBase::HandleResize()
 
 	//it shouldn't change afaik, but better to keep it under control
 	assert(swapchainImages.size() == presentBuffers.size());
+}
+
+entt::entity VulkanBase::AddGraphicsObject(const std::string& mesh_path, const std::string& texture_path)
+{
+	entt::entity ent = registry.create();
+
+	VulkanGraphicsObject& gro = registry.emplace_or_replace<VulkanGraphicsObject>(ent, Scope);
+	EmplaceComponent<WorldMatrix>(ent);
+
+	if (mesh_path != "")
+	{
+		gro.mesh = GRFile::ImportMesh(Scope, mesh_path.c_str());
+	}
+
+	gro.descriptor_set.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *view)
+		.Allocate();
+
+	auto vertAttributes = Vertex::getAttributeDescriptions();
+	auto vertBindings = Vertex::getBindingDescription();
+
+	gro.pipeline.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetVertexInputBindings(1, &vertBindings)
+		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
+		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		.AddDescriptorLayout(gro.descriptor_set.GetLayout())
+		.AddPushConstant({VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)})
+		.Construct();
+
+	return ent;
+}
+
+template<typename T, typename... Args>
+T& VulkanBase::EmplaceComponent(entt::entity ent, Args&& ...args)
+{
+	return registry.emplace_or_replace<T>(ent, args...);
 }
 
 VkBool32 VulkanBase::create_instance()
@@ -455,20 +494,24 @@ VkBool32 VulkanBase::prepare_scene()
 		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
 		.Construct();
 
-	sword = std::make_unique<GraphicsObject>(Scope);
-
-	sword->mesh = GRFile::ImportMesh(Scope, "content\\sword.fbx");
-	sword->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *view)
-		.Allocate();
-
-	sword->pipeline.SetVertexInputBindings(1, &vertBindings)
-		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
-		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-		.AddDescriptorLayout(sword->descriptorSet.GetLayout())
-		.Construct();
-
 	return res;
+}
+
+void VulkanBase::render_objects(VkCommandBuffer cmd)
+{
+	auto view = registry.view<VulkanGraphicsObject, WorldMatrix>();
+
+	VkDeviceSize offsets[] = { 0 };
+	for (const auto& [ent, gro, world] : view.each())
+	{
+		glm::mat4 matrix = world.GetMatrix();
+		gro.descriptor_set.BindSet(cmd, gro.pipeline);
+		gro.pipeline.PushConstants(cmd, &matrix, sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
+		gro.pipeline.BindPipeline(cmd);
+		vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
+		vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
+	}
 }
 
 TVector<const char*> VulkanBase::getRequiredExtensions()

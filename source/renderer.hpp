@@ -1,4 +1,5 @@
 #pragma once
+#include "entt/entt.hpp"
 #include "object.hpp"
 #include "scope.hpp"
 #include "vulkan_objects/queue.hpp"
@@ -8,6 +9,7 @@
 #include "file_manager.hpp"
 #include "vulkan_api.hpp"
 #include "noise.hpp"
+#include "components.hpp"
 
 #if DEBUG == 1
 	#define VALIDATION
@@ -132,7 +134,7 @@ class VulkanBase
 
 	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
-	TAuto<GraphicsObject> sword;
+	//TAuto<GraphicsObject> sword;
 	TAuto<Image> CloudShape;
 	TAuto<Image> CloudDetail;
 	TAuto<Image> WeatherImage;
@@ -172,7 +174,19 @@ public:
 	*/
 	void HandleResize();
 
+	entt::entity AddGraphicsObject(const std::string& mesh_path, const std::string& texture_path);
+
+	template<typename T, typename... Args>
+	T& EmplaceComponent(entt::entity entity, Args&& ...args);
+
+	template<typename... Type>
+	decltype(auto) GetComponent(const entt::entity entt)
+	{
+		return registry.get<Type...>(entt);
+	}
+
 private:
+	entt::registry registry;
 	/*
 	* !@brief Create VkInstance object to use with glfw context
 	* 
@@ -195,6 +209,8 @@ private:
 	* !@brief Handles creation of an object and a skybox
 	*/
 	VkBool32 prepare_scene();
+
+	void render_objects(VkCommandBuffer cmd);
 
 	TVector<const char*> getRequiredExtensions();
 

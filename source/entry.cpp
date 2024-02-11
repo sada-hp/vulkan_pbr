@@ -78,6 +78,9 @@ int main(int argc, char** argv)
 
 	render.camera.SetPosition({ render.camera .GetPosition().x, render.camera.GetPosition().y, CC.camera_zoom });
 
+	entt::entity sword = render.AddGraphicsObject("content\\sword.fbx", "");
+	WorldMatrix& wld = render.GetComponent<WorldMatrix>(sword);
+
 	double delta = 0;
 	double total_time = 0;
 	unsigned long long frame = 0;
@@ -91,10 +94,11 @@ int main(int argc, char** argv)
 		total_time = frame_time;
 		frame++;
 
+		wld.SetOffset(glm::vec3(0.0, glm::sin(frame_time) * 5.0, 0.0));
+
 		if (frame % 10 == 0) {
 			glfwSetWindowTitle(pWindow, ("Vulkan PBR " + std::to_string(int(1.0 / delta))).c_str());
 		}
-
 
 		glfwSwapBuffers(pWindow);
 	}

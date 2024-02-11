@@ -7,13 +7,17 @@
 #include <array>
 #include <string>
 
-struct GraphicsObject
+class GraphicsObject
 {
+public:
 	GraphicsObject(const RenderScope& Scope)
 		: pipeline(Scope), descriptorSet(Scope)
 	{
 
 	}
+
+private:
+	friend class VulkanBase;
 
 	GraphicsPipeline pipeline;
 	DescriptorSet descriptorSet;
