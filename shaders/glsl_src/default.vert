@@ -13,5 +13,5 @@ layout(location=0) out vec3 fragColor;
 void main()
 {
     gl_Position = ubo.ProjectionMatrix * ubo.ViewMatrix * (PushConstants.WorldMatrix * vec4(vertPosition, 1.0));
-    fragColor = vec3(1, 0, 0);
+    fragColor = vec3(1, 1, 1);
 }

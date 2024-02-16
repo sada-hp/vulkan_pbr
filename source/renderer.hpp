@@ -1,4 +1,5 @@
 #pragma once
+#include "core.hpp"
 #include "entt/entt.hpp"
 #include "object.hpp"
 #include "scope.hpp"
@@ -15,114 +16,35 @@
 	#define VALIDATION
 #endif
 
-struct ViewCameraStruct
+namespace GR
 {
-	const TMat4& GetViewProjection() const
+	struct Camera
 	{
-		return VP;
+		TMat4 projection = glm::mat4(1.f);
+		GRComponents::Transform View;
+
+	private:
+		friend class VulkanBase;
+
+		TMat4 get_view_projection() const
+		{
+			return projection * View.matrix;
+		}
+	};
+};
+
+struct VulkanGraphicsObject
+{
+	VulkanGraphicsObject(RenderScope& Scope)
+		: descriptor_set(Scope), pipeline(Scope)
+	{
 	}
 
-	const TMat4& GetProjectionMatrix() const
-	{
-		return projection;
-	}
+	TAuto<Mesh> mesh;
+	TAuto<Image> texture;
 
-	const TMat4& GetViewMatrix() const
-	{
-		return view;
-	}
-
-	const TVec3& Translate(const TVec3& offset)
-	{
-		position += offset * orientation;
-		recalculate();
-
-		return position;
-	}
-
-	const TVec3& SetPosition(const TVec3& new_position)
-	{
-		position = new_position;
-		recalculate();
-
-		return position;
-	}
-
-	const TVec3& GetPosition()
-	{
-		return position;
-	}
-
-	const TQuat& Rotate(const TQuat& angle)
-	{
-		orientation = angle * orientation;
-		pitch_yaw_roll = glm::eulerAngles(orientation);
-		recalculate();
-
-		return orientation;
-	}
-
-	const TQuat& Rotate(const TVec3& pyr)
-	{
-		pitch_yaw_roll += pyr;
-
-		orientation = glm::quat_cast(glm::mat3(1.f));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.x), glm::vec3(1, 0, 0));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.y), glm::vec3(0, 1, 0));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.z), glm::vec3(0, 0, 1));
-		recalculate();
-
-		return orientation;
-	}
-
-	const TQuat& SetRotation(const TQuat& angle)
-	{
-		orientation = angle;
-		pitch_yaw_roll = glm::eulerAngles(orientation);
-		recalculate();
-
-		return orientation;
-	}
-
-	const TQuat& SetRotation(const TVec3& pyr)
-	{
-		pitch_yaw_roll = pyr;
-
-		orientation = glm::quat_cast(glm::mat3(1.f));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.x), glm::vec3(1, 0, 0));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.y), glm::vec3(0, 1, 0));
-		orientation = orientation * glm::angleAxis(glm::radians(pitch_yaw_roll.z), glm::vec3(0, 0, 1));
-		recalculate();
-
-		return orientation;
-	}
-
-	const TQuat& GetOrientation()
-	{
-		return orientation;
-	}
-
-private:
-	TVec3 position = TVec3(0.f);
-	TVec3 pitch_yaw_roll = TVec3(0.f);
-	TQuat orientation = glm::quat_cast(glm::mat3(1.f));
-	mutable TMat4 projection = glm::mat4(1.f);
-	mutable TMat4 view = glm::mat4(1.f);
-	mutable TMat4 VP = glm::mat4(1.f);
-
-	void set_projection(const TMat4& proj = TMat4(1.f))
-	{
-		projection = proj;
-		recalculate();
-	}
-
-	void recalculate()
-	{
-		view = glm::translate(glm::mat4_cast(orientation), position);
-		VP = projection * view;
-	}
-
-	friend class VulkanBase;
+	DescriptorSet descriptor_set;
+	GraphicsPipeline pipeline;
 };
 
 class VulkanBase
@@ -147,7 +69,7 @@ class VulkanBase
 	TAuto<Buffer> view = {};
 
 	TAuto<GraphicsObject> volume;
-	TAuto<GraphicsObject> skybox;
+	//TAuto<GraphicsObject> skybox;
 	//TAuto<GraphicsObject> sword;
 	TAuto<Image> CloudShape;
 	TAuto<Image> CloudDetail;
@@ -155,28 +77,8 @@ class VulkanBase
 	TAuto<Image> Gradient;
 
 public:
-	/*
-	* !@brief Should be modified to control the scene
-	*/
-	ViewCameraStruct camera;
-	/*
-	* !@brief User defined pointer, renderer itself does not reference it
-	*/
-	void* userPointer1 = nullptr;
-	/*
-	* !@brief User defined pointer, renderer itself does not reference it
-	*/
-	void* userPointer2 = nullptr;
-	/*
-	* !@brief User defined pointer, renderer itself does not reference it
-	*/
-	void* userPointer3 = nullptr;
-	/*
-	* !@brief User defined pointer, renderer itself does not reference it
-	*/
-	void* userPointer4 = nullptr;
 
-	VulkanBase(GLFWwindow* window);
+	VulkanBase(GLFWwindow* window, entt::registry& registry);
 
 	~VulkanBase() noexcept;
 	/*
@@ -189,18 +91,12 @@ public:
 	void HandleResize();
 
 	entt::entity AddGraphicsObject(const std::string& mesh_path, const std::string& texture_path);
-
-	template<typename T, typename... Args>
-	T& EmplaceComponent(entt::entity entity, Args&& ...args);
-
-	template<typename... Type>
-	decltype(auto) GetComponent(const entt::entity entt)
-	{
-		return registry.get<Type...>(entt);
-	}
-
+	/*
+	* !@brief Should be modified to control the scene
+	*/
+	GR::Camera camera;
 private:
-	entt::registry registry;
+	entt::registry& registry;
 	/*
 	* !@brief Create VkInstance object to use with glfw context
 	* 

@@ -7,6 +7,7 @@
 #define ATMOSPHERE_END 6700000
 #define ATMOSPHERE_DELTA ATMOSPHERE_END - ATMOSPHERE_END
 #define AMBIENT 0.25
+#define ABSORPTION 0.0005
 
 const vec3 SunDirection = normalize(vec3(1.0));
 vec3 sphereStart;
@@ -96,7 +97,7 @@ float MarchToLight(vec3 rs, vec3 re, vec3 rd, float stepsize)
             float density = SampleDensity(pos);
 
             if (density > 0.0) {
-                float transmittance_cloud = exp(-stepsize * density * 0.001);
+                float transmittance_cloud = exp(-stepsize * density * ABSORPTION);
                 transmittance *= transmittance_cloud;
             }
         }
@@ -138,7 +139,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 
         if (density > 0.0) {
             float transmittance_old = transmittance;
-            float transmittance_cloud = exp(-stepsize * density * 0.001);
+            float transmittance_cloud = exp(-stepsize * density * ABSORPTION);
             transmittance *= transmittance_cloud;
 
             float scatter_amount = MarchToLight(pos, re, SunDirection, stepsize);

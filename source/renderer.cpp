@@ -21,11 +21,9 @@ struct ViewBuffer
 	TVec2 Resolution;
 };
 
-VulkanBase::VulkanBase(GLFWwindow* window)
-	: glfwWindow(window)
+VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
+	: glfwWindow(window), registry(in_registry)
 {
-	assert(exec_path != "");
-
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	TVector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
@@ -52,9 +50,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
 
-	glm::mat4 projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
-	projection[1][1] *= -1;
-	camera.set_projection(projection);
+	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
+	camera.projection[1][1] *= -1;
 
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
@@ -80,8 +77,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
-
-	skybox.reset();
+	 
+	//skybox.reset();
 	volume.reset();
 	ubo.reset();
 	view.reset();
@@ -90,7 +87,7 @@ VulkanBase::~VulkanBase() noexcept
 	WeatherImage.reset();
 	Gradient.reset();
 
-	registry.clear();
+	registry.clear<VulkanGraphicsObject>();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -134,10 +131,11 @@ void VulkanBase::Step(float DeltaTime)
 	//UBO
 	{
 		float Time = glfwGetTime();
-		UniformBuffer Uniform{ 
-			TMat4(camera.GetViewProjection()), 
-			TMat4(camera.GetProjectionMatrix()),
-			TMat4(camera.GetViewMatrix()),
+		UniformBuffer Uniform
+		{ 
+			camera.get_view_projection(),
+			camera.projection,
+			camera.View.matrix,
 			Time
 		};
 
@@ -147,8 +145,10 @@ void VulkanBase::Step(float DeltaTime)
 	//View
 	{
 		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
-		ViewBuffer Uniform{
-			TVec4(camera.GetPosition(), 1.0),
+		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 0.0);
+		ViewBuffer Uniform
+		{
+			CameraPosition,
 			ScreenSize
 		};
 
@@ -190,9 +190,9 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
-		skybox->pipeline.BindPipeline(cmd);
-		vkCmdDraw(cmd, 36, 1, 0, 0);
+		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
+		//skybox->pipeline.BindPipeline(cmd);
+		//vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		//VkDeviceSize offsets[] = { 0 };
 		//sword->descriptorSet.BindSet(cmd, sword->pipeline);
@@ -266,9 +266,8 @@ void VulkanBase::HandleResize()
 	create_swapchain_images();
 	create_framebuffers();
 
-	glm::mat4 projection = glm::perspective(45.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
-	projection[1][1] *= -1;
-	camera.set_projection(projection);
+	camera.projection = glm::perspective(45.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
+	camera.projection[1][1] *= -1;
 
 	//it shouldn't change afaik, but better to keep it under control
 	assert(swapchainImages.size() == presentBuffers.size());
@@ -279,7 +278,8 @@ entt::entity VulkanBase::AddGraphicsObject(const std::string& mesh_path, const s
 	entt::entity ent = registry.create();
 
 	VulkanGraphicsObject& gro = registry.emplace_or_replace<VulkanGraphicsObject>(ent, Scope);
-	EmplaceComponent<WorldMatrix>(ent);
+	registry.emplace_or_replace<GRComponents::Transform>(ent);
+	registry.emplace_or_replace<GRComponents::Color>(ent);
 
 	if (mesh_path != "")
 	{
@@ -299,15 +299,10 @@ entt::entity VulkanBase::AddGraphicsObject(const std::string& mesh_path, const s
 		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.AddDescriptorLayout(gro.descriptor_set.GetLayout())
 		.AddPushConstant({VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)})
+		.AddPushConstant({VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3)})
 		.Construct();
 
 	return ent;
-}
-
-template<typename T, typename... Args>
-T& VulkanBase::EmplaceComponent(entt::entity ent, Args&& ...args)
-{
-	return registry.emplace_or_replace<T>(ent, args...);
 }
 
 VkBool32 VulkanBase::create_instance()
@@ -462,7 +457,6 @@ VkBool32 VulkanBase::prepare_scene()
 		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
 		.Allocate();
 
-
 	VkPipelineColorBlendAttachmentState blendState{};
 	blendState.blendEnable = true;
 	blendState.colorBlendOp = VK_BLEND_OP_ADD;
@@ -483,30 +477,30 @@ VkBool32 VulkanBase::prepare_scene()
 		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
 		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
 
-	skybox = std::make_unique<GraphicsObject>(Scope);
-	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
-		.Allocate();
+	//skybox = std::make_unique<GraphicsObject>(Scope);
+	//skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
+	//skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+	//	.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+	//	.Allocate();
 
-	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-		.SetCullMode(VK_CULL_MODE_NONE)
-		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
-		.Construct();
+	//skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+	//	.SetCullMode(VK_CULL_MODE_NONE)
+	//	.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
+	//	.Construct();
 
 	return res;
 }
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
 {
-	auto view = registry.view<VulkanGraphicsObject, WorldMatrix>();
+	auto view = registry.view<VulkanGraphicsObject, GRComponents::Transform>();
 
 	VkDeviceSize offsets[] = { 0 };
 	for (const auto& [ent, gro, world] : view.each())
 	{
-		glm::mat4 matrix = world.GetMatrix();
 		gro.descriptor_set.BindSet(cmd, gro.pipeline);
-		gro.pipeline.PushConstants(cmd, &matrix, sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
+		gro.pipeline.PushConstants(cmd, &world.matrix, sizeof(glm::mat4), 0u, VK_SHADER_STAGE_VERTEX_BIT);
+		gro.pipeline.PushConstants(cmd, &registry.get<GRComponents::Color>(ent).RGB, sizeof(glm::vec3), sizeof(glm::mat4), VK_SHADER_STAGE_FRAGMENT_BIT);
 		gro.pipeline.BindPipeline(cmd);
 		vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
 		vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
