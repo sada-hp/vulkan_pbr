@@ -62,13 +62,13 @@ namespace GRComponents
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
 			q = q * glm::angleAxis(yaw, GetUp());
 
-			matrix = glm::mat4_cast(glm::normalize(q)) * matrix;
-			SetOffset(glm::floor(GetOffset() * 100.f) / 100.f);
+			matrix = glm::mat4_cast(q) * matrix;
+			SetOffset(glm::floor(glm::vec3(matrix[3]) * 100.f) / 100.f);
 		}
 
 		GRAPI TVec3 GetOffset() const
 		{
-			return glm::vec3(matrix[3]);
+			return glm::vec3(glm::transpose(GetRotation()) * matrix[3]);
 		}
 
 		GRAPI TMat3 GetRotation() const
