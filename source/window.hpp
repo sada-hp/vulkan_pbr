@@ -31,6 +31,8 @@ namespace GR
 
 		GRAPI void SetCursorPos(double xpos, double ypos);
 
+		GRAPI void ShowCursor(bool bShow);
+
 		GRAPI void SetAttribute(int attrib, int value);
 	};
 }
