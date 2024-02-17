@@ -32,21 +32,21 @@ namespace GR
 		glfwIconifyWindow(glfwWindow);
 	}
 
-	GRAPI TIVec2 Window::GetWindowSize() const
+	TIVec2 Window::GetWindowSize() const
 	{
 		int width, int height;
 		glfwGetWindowSize(glfwWindow, &width, &height);
-		return { width, height };
+		return TIVec2{ width, height };
 	}
 
-	GRAPI TVec2 Window::GetCursorPos() const
+	TVec2 Window::GetCursorPos() const
 	{
 		double xpos, ypos;
 		glfwGetCursorPos(glfwWindow, &xpos, &ypos);
-		return { xpos, ypos };
+		return TVec2{ xpos, ypos };
 	}
 
-	GRAPI void Window::SetCursorPos(double xpos, double ypos)
+	void Window::SetCursorPos(double xpos, double ypos)
 	{
 		glfwSetCursorPos(glfwWindow, xpos, ypos);
 	}

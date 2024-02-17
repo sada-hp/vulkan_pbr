@@ -1,5 +1,6 @@
 #pragma once
 #include "core.hpp"
+#include "math.hpp"
 #include "renderer.hpp"
 
 class GrayEnigne;
