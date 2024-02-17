@@ -56,8 +56,8 @@ class VulkanBase
 	TVector<VkFramebuffer> framebuffers = {};
 	TVector<VkFence> presentFences = {};
 	TVector<VkSemaphore> presentSemaphores = {};
+	TVector<VkSemaphore> swapchainSemaphores = {};
 	TVector<VkCommandBuffer> presentBuffers = {};
-	VkSemaphore swapchainSemaphore = VK_NULL_HANDLE;
 
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;

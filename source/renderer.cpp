@@ -55,6 +55,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
+	swapchainSemaphores.resize(swapchainImages.size());
 	presentFences.resize(swapchainImages.size());
 	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.AllocateCommandBuffers(presentBuffers.size(), presentBuffers.data());
@@ -63,7 +64,9 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 			res = CreateSemaphore(Scope.GetDevice(),  &it) & res;
 	});
 
-	res = CreateSemaphore(Scope.GetDevice(),  &swapchainSemaphore) & res;
+	std::for_each(swapchainSemaphores.begin(), swapchainSemaphores.end(), [&, this](VkSemaphore& it) {
+		res = CreateSemaphore(Scope.GetDevice(), &it) & res;
+	});
 
 	std::for_each(presentFences.begin(), presentFences.end(), [&, this](VkFence& it) {
 			res = CreateFence(Scope.GetDevice(), &it) & res;
@@ -92,25 +95,28 @@ VulkanBase::~VulkanBase() noexcept
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
 			return true;
-		});
-	vkDestroySemaphore(Scope.GetDevice(), swapchainSemaphore, VK_NULL_HANDLE);
+	});
+	std::erase_if(swapchainSemaphores, [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
+		return true;
+	});
 	std::erase_if(presentSemaphores, [&, this](VkSemaphore& it) {
 			vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
 			return true;
-		});
+	});
 	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.FreeCommandBuffers(presentBuffers.size(), presentBuffers.data());
 	std::erase_if(framebuffers, [&, this](VkFramebuffer& fb) {
 			vkDestroyFramebuffer(Scope.GetDevice(), fb, VK_NULL_HANDLE);
 			return true;
-		});
+	});
 	std::erase_if(swapchainViews, [&, this](VkImageView& view) {
 			vkDestroyImageView(Scope.GetDevice(), view, VK_NULL_HANDLE);
 			return true;
-		});
+	});
 	std::erase_if(depthAttachments, [&, this](std::unique_ptr<Image>& img) {
 			return true;
-		});
+	});
 
 	Scope.Destroy();
 	vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
@@ -122,11 +128,13 @@ void VulkanBase::Step(float DeltaTime)
 	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
 		return;
 
-	uint32_t image_index = 0;
-	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphore, VK_NULL_HANDLE, &image_index);
+	static uint32_t image_index = -1;
+	image_index = (image_index + 1) % swapchainImages.size();
 
 	vkWaitForFences(Scope.GetDevice(), 1, &presentFences[image_index], VK_TRUE, UINT64_MAX);
 	vkResetFences(Scope.GetDevice(), 1, &presentFences[image_index]);
+
+	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphores[image_index], VK_NULL_HANDLE, &image_index);
 
 	//UBO
 	{
@@ -212,7 +220,7 @@ void VulkanBase::Step(float DeltaTime)
 	}
 
 	VkSubmitInfo submitInfo{};
-	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphore };
+	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[image_index]};
 	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[image_index] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -269,6 +277,16 @@ void VulkanBase::HandleResize()
 	camera.projection = glm::perspective(45.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
 	camera.projection[1][1] *= -1;
 
+	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
+		CreateSemaphore(Scope.GetDevice(), &it);
+	});
+
+	std::for_each(swapchainSemaphores.begin(), swapchainSemaphores.end(), [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
+		CreateSemaphore(Scope.GetDevice(), &it);
+	});
+
 	//it shouldn't change afaik, but better to keep it under control
 	assert(swapchainImages.size() == presentBuffers.size());
 }
@@ -317,7 +335,7 @@ VkBool32 VulkanBase::create_instance()
 	appInfo.applicationVersion = VK_MAKE_API_VERSION(1, 0, 0, 0);
 	appInfo.pEngineName = "AVR";
 	appInfo.engineVersion = VK_MAKE_API_VERSION(1, 0, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_2;
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 
 	VkInstanceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
