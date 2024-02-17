@@ -33,6 +33,8 @@ namespace GR
 
 		GRAPI void ShowCursor(bool bShow);
 
+		GRAPI void DisableCursor(bool bDisabled);
+
 		GRAPI void SetAttribute(int attrib, int value);
 	};
 }

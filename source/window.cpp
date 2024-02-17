@@ -56,6 +56,11 @@ namespace GR
 		glfwSetInputMode(glfwWindow, GLFW_CURSOR, bShow ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
 	}
 
+	void Window::DisableCursor(bool bDisabled)
+	{
+		glfwSetInputMode(glfwWindow, GLFW_CURSOR, bDisabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+	}
+
 	void Window::SetAttribute(int attrib, int value)
 	{
 		glfwSetWindowAttrib(glfwWindow, attrib, value);
