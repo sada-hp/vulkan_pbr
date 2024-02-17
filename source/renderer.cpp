@@ -50,7 +50,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
 
-	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.1f, 1000.f);
+	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
 	camera.projection[1][1] *= -1;
 
 	presentBuffers.resize(swapchainImages.size());
@@ -272,7 +272,7 @@ void VulkanBase::HandleResize()
 	create_swapchain_images();
 	create_framebuffers();
 
-	camera.projection = glm::perspective(45.f, static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
+	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
 	camera.projection[1][1] *= -1;
 
 	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {

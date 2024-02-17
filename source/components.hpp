@@ -58,11 +58,12 @@ namespace GRComponents
 
 		GRAPI void Rotate(float pitch, float yaw, float roll)
 		{
-			TQuat q = glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
-			q = q * glm::angleAxis(roll, glm::vec3(0, 0, 1));
+			TQuat q = glm::angleAxis(roll, glm::vec3(0, 0, 1));
+			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
 			q = q * glm::angleAxis(yaw, GetUp());
 
-			matrix = glm::mat4_cast(q) * matrix;
+			matrix = glm::mat4_cast(glm::normalize(q)) * matrix;
+			SetOffset(glm::floor(GetOffset() * 100.f) / 100.f);
 		}
 
 		GRAPI TVec3 GetOffset() const
