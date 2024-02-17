@@ -20,7 +20,7 @@ namespace GRComponents
 
 		GRAPI void SetOffset(const TVec3& V)
 		{
-			matrix[3] = glm::vec4(GetRotation() * V, 1.0);
+			matrix[3] = glm::vec4(V, 1.0);
 		}
 
 		GRAPI void Translate(const TVec3& V)

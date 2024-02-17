@@ -195,6 +195,8 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+		render_objects(cmd);
+
 		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
 		skybox->pipeline.BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);

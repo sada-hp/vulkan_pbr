@@ -7,7 +7,7 @@
 #define ATMOSPHERE_END 6700000
 #define ATMOSPHERE_DELTA ATMOSPHERE_END - ATMOSPHERE_END
 #define AMBIENT 0.25
-#define ABSORPTION 0.0005
+#define ABSORPTION 0.0004
 
 const vec3 SunDirection = normalize(vec3(1.0));
 vec3 sphereStart;
@@ -75,9 +75,9 @@ float SampleDensity(vec3 x0)
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, (uv * 20.0) + vec3(ubo.Time, 0.0, 0.0) / 10.0);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, clamp(height * 10.0, 0.0, 1.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, clamp(height * 20.0, 0.0, 1.0));
 
-    float cloud_final = remap(base, high_frequency_modifier * 0.2, 1.0, 0.0, 1.0);
+    float cloud_final = remap(base, high_frequency_modifier * 0.25, 1.0, 0.0, 1.0);
 
     return cloud_final;
 }
@@ -92,7 +92,7 @@ float MarchToLight(vec3 rs, vec3 re, vec3 rd, float stepsize)
     {
         pos += stepsize * rd;
 
-        if (pos.y <= sphereEnd.y)
+        if (GetHeightFraction(pos) < 1.0)
         {
             float density = SampleDensity(pos);
 
