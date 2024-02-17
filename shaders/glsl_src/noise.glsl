@@ -5,6 +5,8 @@
 #define UI3 uvec3(UI0, UI1, 2798796415U)
 #define UIF (1.0 / float(0xffffffffU))
 
+uint NOISE_SEED = 2798796415U;
+
 float noise(vec2 p)
 {
     return fract(abs(sin(dot(p, vec2(12.9898, 78.233)))) * 43758.5453);
@@ -32,13 +34,14 @@ vec3 noise3(vec3 p)
     return fract((p.xxy + p.yxx)*p.zyx);
 }
 
+//Dave_Hoskins
+//https://www.shadertoy.com/view/XdGfRR
 vec3 noise32(vec3 p)
 {
-	uvec3 q = uvec3(ivec3(p)) * UI3;
-	q = (q.x ^ q.y ^ q.z)*UI3;
-	return -1. + 2. * vec3(q) * UIF;
+    uvec3 q = uvec3(ivec3(p)) * uvec3(1597334673U, 3812015801U, NOISE_SEED);
+	q = (q.x ^ q.y ^ q.z)*uvec3(1597334673U, 3812015801U, NOISE_SEED);
+	return vec3(q) * UIF;
 }
-
 
 float remap(float orig, float old_min, float old_max, float new_min, float new_max)
 {
@@ -78,7 +81,7 @@ float worley(vec3 p0, float freq)
             for (int z = -1; z <= 1; z++) {
                 vec3 p1 = vec3(x, y, z);
                 vec3 neigbour_cell = mod(i + p1, freq);
-                min_d = min(min_d, distance(noise3(neigbour_cell), f - p1));
+                min_d = min(min_d, distance(noise32(neigbour_cell), f - p1));
             }
         }
     }

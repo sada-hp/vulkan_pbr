@@ -7,12 +7,15 @@ layout (constant_id = 0) const uint frequency_worley = 4;
 layout (constant_id = 1) const uint frequency_perlin = 4;
 layout (constant_id = 2) const uint worley_octaves = 4;
 layout (constant_id = 3) const uint perlin_octaves = 4;
+layout (constant_id = 4) const uint seed = 0;
 
 layout (binding = 0, rgba8) uniform writeonly image3D outImage;
 
 void main()
 {
-    const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
+    NOISE_SEED = seed;
+    
+    const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz) + uintBitsToFloat(1000000);
     float worley01 = worley(cell_loc, frequency_worley);
     float worley02 = worley(cell_loc, frequency_worley * 2.0);
     float worley03 = worley(cell_loc, frequency_worley * 4.0);

@@ -69,8 +69,7 @@ class VulkanBase
 	TAuto<Buffer> view = {};
 
 	TAuto<GraphicsObject> volume;
-	//TAuto<GraphicsObject> skybox;
-	//TAuto<GraphicsObject> sword;
+	TAuto<GraphicsObject> skybox;
 	TAuto<Image> CloudShape;
 	TAuto<Image> CloudDetail;
 	TAuto<Image> WeatherImage;

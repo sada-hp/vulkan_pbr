@@ -81,7 +81,7 @@ VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
 	 
-	//skybox.reset();
+	skybox.reset();
 	volume.reset();
 	ubo.reset();
 	view.reset();
@@ -195,18 +195,9 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
-		//skybox->pipeline.BindPipeline(cmd);
-		//vkCmdDraw(cmd, 36, 1, 0, 0);
-
-		//VkDeviceSize offsets[] = { 0 };
-		//sword->descriptorSet.BindSet(cmd, sword->pipeline);
-		//sword->pipeline.BindPipeline(cmd);
-		//vkCmdBindVertexBuffers(cmd, 0, 1, &sword->mesh->GetVertexBuffer()->GetBuffer(), offsets);
-		//vkCmdBindIndexBuffer(cmd, sword->mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-		//vkCmdDrawIndexed(cmd, sword->mesh->GetIndicesCount(), 1, 0, 0, 0);
-		
-		render_objects(cmd);
+		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
+		skybox->pipeline.BindPipeline(cmd);
+		vkCmdDraw(cmd, 36, 1, 0, 0);
 
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
 		volume->pipeline.BindPipeline(cmd);
@@ -495,16 +486,16 @@ VkBool32 VulkanBase::prepare_scene()
 		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
 		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
 
-	//skybox = std::make_unique<GraphicsObject>(Scope);
-	//skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	//skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-	//	.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
-	//	.Allocate();
+	skybox = std::make_unique<GraphicsObject>(Scope);
+	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
+	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+		.Allocate();
 
-	//skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-	//	.SetCullMode(VK_CULL_MODE_NONE)
-	//	.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
-	//	.Construct();
+	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		.SetCullMode(VK_CULL_MODE_NONE)
+		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
+		.Construct();
 
 	return res;
 }
