@@ -71,6 +71,5 @@ if (DEFINED COPY_PATH)
 	file(GLOB EXTENSIONS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../libraries/*.dll)
 	add_custom_command(TARGET source POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${EXTENSIONS_SRC} ${COPY_PATH}/)
 
-	file(GLOB ENGINE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../bin/*)
-	add_custom_command(TARGET source POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${ENGINE_SRC} ${COPY_PATH}/)
+	add_custom_command(TARGET source POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy $<TARGET_FILE:source> ${COPY_PATH})
 endif()
