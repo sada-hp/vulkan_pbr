@@ -63,7 +63,7 @@ namespace GRComponents
 			q = q * glm::angleAxis(yaw, GetUp());
 
 			matrix = glm::mat4_cast(q) * matrix;
-			SetOffset(glm::floor(glm::vec3(matrix[3]) * 100.f) / 100.f);
+			matrix[3] = glm::vec4(glm::floor(glm::vec3(matrix[3]) * 100.f) / 100.f, 1.0);
 		}
 
 		GRAPI TVec3 GetOffset() const
