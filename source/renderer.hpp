@@ -23,6 +23,11 @@ namespace GR
 		TMat4 projection = glm::mat4(1.f);
 		GRComponents::Transform View;
 
+		TVec3 GetPosition()
+		{
+			return glm::transpose(View.GetRotation()) * View.GetOffset();
+		}
+
 	private:
 		friend class VulkanBase;
 

@@ -33,17 +33,9 @@ namespace GRComponents
 
 		GRAPI void SetRotation(const TVec3& R, const TVec3& U, const TVec3& F)
 		{
-			glm::vec4 offset = glm::vec4(GetOffset(), 1.0);
-
-			matrix = glm::mat4(1.f);
 			matrix[0] = glm::vec4(R, 0.0);
 			matrix[1] = glm::vec4(U, 0.0);
 			matrix[2] = glm::vec4(F, 0.0);
-
-			matrix = glm::mat4(glm::vec4(1.0, 0.0, 0.0, 0.0),
-							glm::vec4(0.0, 1.0, 0.0, 0.0),
-							glm::vec4(0.0, 0.0, 1.0, 0.0),
-							offset) * matrix;
 		}
 
 		GRAPI void SetRotation(const TVec3& U, const TVec3& F)
@@ -53,17 +45,9 @@ namespace GRComponents
 
 		GRAPI void SetRotation(const TMat3& M)
 		{
-			glm::vec4 offset = glm::vec4(GetOffset(), 1.0);
-
-			matrix = glm::mat4(1.f);
 			matrix[0] = glm::vec4(M[0], 0.0);
 			matrix[1] = glm::vec4(M[1], 0.0);
 			matrix[2] = glm::vec4(M[2], 0.0);
-
-			matrix = glm::mat4(glm::vec4(1.0, 0.0, 0.0, 0.0),
-							glm::vec4(0.0, 1.0, 0.0, 0.0),
-							glm::vec4(0.0, 0.0, 1.0, 0.0),
-							offset) * matrix;
 		}
 
 		GRAPI void SetRotation(float pitch, float yaw, float roll)
