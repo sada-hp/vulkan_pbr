@@ -14,6 +14,12 @@ namespace GR
 		context->listener->Register(context->engine, (EMouse)button, (EAction)action);
 	}
 
+	void GrayEngine::glfw_mouse_move(GLFWwindow* window, double xpos, double ypos)
+	{
+		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));
+		context->listener->Register(context->engine, xpos, ypos);
+	}
+
 	void GrayEngine::glfw_resize(GLFWwindow* window, int width, int height)
 	{
 		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));

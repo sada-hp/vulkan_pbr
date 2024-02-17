@@ -45,6 +45,8 @@ namespace GR
 
 		static void glfw_mouse_press(GLFWwindow* window, int button, int action, int mods);
 
+		static void glfw_mouse_move(GLFWwindow* window, double xpos, double ypos);
+
 		static void glfw_resize(GLFWwindow* window, int width, int height);
 
 	public:

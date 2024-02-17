@@ -21,6 +21,7 @@ namespace GR
 		glfwSetWindowSizeCallback(window->glfwWindow, glfw_resize);
 		glfwSetKeyCallback(window->glfwWindow, glfw_key_press);
 		glfwSetMouseButtonCallback(window->glfwWindow, glfw_mouse_press);
+		glfwSetCursorPosCallback(window->glfwWindow, glfw_mouse_move);
 	}
 
 	GrayEngine::~GrayEngine()
