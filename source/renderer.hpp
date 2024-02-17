@@ -76,6 +76,8 @@ class VulkanBase
 	TAuto<Image> WeatherImage;
 	TAuto<Image> Gradient;
 
+	uint32_t swapchain_index = 0;
+
 public:
 
 	VulkanBase(GLFWwindow* window, entt::registry& registry);

@@ -1,6 +1,6 @@
 layout(binding = 0) uniform UnfiormBuffer
 {
-    mat4 ViewProj;
+    mat4 ViewProjectionMatrix;
     mat4 ProjectionMatrix;
     mat4 ViewMatrix;
     float Time;

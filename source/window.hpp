@@ -24,6 +24,12 @@ namespace GR
 
 		GRAPI void MinimizeWindow();
 
+		GRAPI TIVec2 GetWindowSize() const;
+
+		GRAPI TVec2 GetCursorPos() const;
+
+		GRAPI void SetCursorPos(double xpos, double ypos);
+
 		GRAPI void SetAttribute(int attrib, int value);
 	};
 }

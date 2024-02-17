@@ -128,13 +128,10 @@ void VulkanBase::Step(float DeltaTime)
 	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
 		return;
 
-	static uint32_t image_index = -1;
-	image_index = (image_index + 1) % swapchainImages.size();
+	vkWaitForFences(Scope.GetDevice(), 1, &presentFences[swapchain_index], VK_TRUE, UINT64_MAX);
+	vkResetFences(Scope.GetDevice(), 1, &presentFences[swapchain_index]);
 
-	vkWaitForFences(Scope.GetDevice(), 1, &presentFences[image_index], VK_TRUE, UINT64_MAX);
-	vkResetFences(Scope.GetDevice(), 1, &presentFences[image_index]);
-
-	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphores[image_index], VK_NULL_HANDLE, &image_index);
+	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphores[swapchain_index], VK_NULL_HANDLE, &swapchain_index);
 
 	//UBO
 	{
@@ -166,7 +163,7 @@ void VulkanBase::Step(float DeltaTime)
 	//Draw
 	{
 		VkResult res;
-		const VkCommandBuffer& cmd = presentBuffers[image_index];
+		const VkCommandBuffer& cmd = presentBuffers[swapchain_index];
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		res = vkBeginCommandBuffer(cmd, &beginInfo);
@@ -176,7 +173,7 @@ void VulkanBase::Step(float DeltaTime)
 		clearValues[1].depthStencil = { 1.0f, 0 };
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.framebuffer = framebuffers[image_index];
+		renderPassInfo.framebuffer = framebuffers[swapchain_index];
 		renderPassInfo.renderPass = Scope.GetRenderPass();
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = Scope.GetSwapchainExtent();
@@ -220,8 +217,8 @@ void VulkanBase::Step(float DeltaTime)
 	}
 
 	VkSubmitInfo submitInfo{};
-	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[image_index]};
-	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[image_index] };
+	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[swapchain_index]};
+	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[swapchain_index] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -229,11 +226,11 @@ void VulkanBase::Step(float DeltaTime)
 	submitInfo.pWaitSemaphores = waitSemaphores.data();
 	submitInfo.pWaitDstStageMask = waitStages;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &presentBuffers[image_index];
+	submitInfo.pCommandBuffers = &presentBuffers[swapchain_index];
 	submitInfo.signalSemaphoreCount = signalSemaphores.size();
 	submitInfo.pSignalSemaphores = signalSemaphores.data();
 
-	VkResult res = vkQueueSubmit(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, presentFences[image_index]);
+	VkResult res = vkQueueSubmit(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, presentFences[swapchain_index]);
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
@@ -243,10 +240,11 @@ void VulkanBase::Step(float DeltaTime)
 	presentInfo.pWaitSemaphores = signalSemaphores.data();
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &Scope.GetSwapchain();
-	presentInfo.pImageIndices = &image_index;
+	presentInfo.pImageIndices = &swapchain_index;
 	presentInfo.pResults = VK_NULL_HANDLE;
 
 	vkQueuePresentKHR(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), &presentInfo);
+	swapchain_index = (swapchain_index + 1) % swapchainImages.size();
 }
 
 void VulkanBase::HandleResize()
@@ -286,6 +284,8 @@ void VulkanBase::HandleResize()
 		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
 		CreateSemaphore(Scope.GetDevice(), &it);
 	});
+
+	swapchain_index = 0;
 
 	//it shouldn't change afaik, but better to keep it under control
 	assert(swapchainImages.size() == presentBuffers.size());

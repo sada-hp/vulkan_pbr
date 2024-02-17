@@ -27,5 +27,5 @@ void main()
 {
     vec3 pos = vertices[indices[gl_VertexIndex]];
 	outWorldPos = pos;
-    gl_Position = (ubo.ViewProj * vec4(pos, 0.0)).xyzz;
+    gl_Position = (ubo.ViewProjectionMatrix * vec4(pos, 0.0)).xyzz;
 }
