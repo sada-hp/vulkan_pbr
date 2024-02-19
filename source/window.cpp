@@ -46,6 +46,14 @@ namespace GR
 		return TVec2{ xpos, ypos };
 	}
 
+	GRAPI double Window::GetAspectRatio() const
+	{
+		int width = 0, height = 0;
+		glfwGetWindowSize(glfwWindow, &width, &height);
+
+		return double(width) / double(height);
+	}
+
 	void Window::SetCursorPos(double xpos, double ypos)
 	{
 		glfwSetCursorPos(glfwWindow, xpos, ypos);

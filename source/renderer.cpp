@@ -50,8 +50,8 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
 
-	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
-	camera.projection[1][1] *= -1;
+	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
+		.SetDepthRange(1e-2f, 1e3f);
 
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
@@ -139,7 +139,7 @@ void VulkanBase::Step(float DeltaTime)
 		UniformBuffer Uniform
 		{ 
 			camera.get_view_projection(),
-			camera.projection,
+			camera.Projection.matrix,
 			camera.View.matrix,
 			Time
 		};
@@ -265,8 +265,8 @@ void VulkanBase::HandleResize()
 	create_swapchain_images();
 	create_framebuffers();
 
-	camera.projection = glm::perspective(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height), 0.01f, 1000.f);
-	camera.projection[1][1] *= -1;
+	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
+		.SetDepthRange(1e-2f, 1e3f);
 
 	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {
 		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);

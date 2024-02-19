@@ -9,8 +9,6 @@ namespace GR
 	{
 		assert(ExecutablePath != "");
 
-		srand(time(NULL));
-
 		exec_path = ExecutablePath;
 
 		listener = new EventListener();

@@ -29,6 +29,8 @@ namespace GR
 
 		GRAPI TVec2 GetCursorPos() const;
 
+		GRAPI double GetAspectRatio() const;
+
 		GRAPI void SetCursorPos(double xpos, double ypos);
 
 		GRAPI void ShowCursor(bool bShow);

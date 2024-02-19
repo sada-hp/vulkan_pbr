@@ -14,59 +14,89 @@ namespace GRComponents
 		glm::vec3 RGB = glm::vec3(1.0);
 	};
 
+	struct Projection
+	{
+		glm::mat4 matrix = glm::mat4(glm::vec4(0.f), glm::vec4(0.f), glm::vec4(0.f, 0.f, 0.f, -1.f), glm::vec4(0.f));
+
+		GRAPI Projection& SetDepthRange(float Near, float Far)
+		{
+			matrix[2][2] = -(Far + Near) / (Far - Near);
+			matrix[3][2] = -2.f * (Far * Near) / (Far - Near);
+
+			return *this;
+		}
+
+		GRAPI Projection& SetFOV(float Fov, float Aspect)
+		{
+			const float tanHalfFovy = glm::tan(Fov / 2.f);
+
+			matrix[0][0] = 1.f / (Aspect * tanHalfFovy);
+			matrix[1][1] = -1.f / (tanHalfFovy);
+
+			return *this;
+		}
+	};
+
 	struct Transform
 	{
 		glm::mat4 matrix = glm::mat4(1.0);
 
-		GRAPI void SetOffset(const TVec3& V)
+		GRAPI Transform& SetOffset(const TVec3& V)
 		{
-			matrix = glm::mat4(glm::vec4(1.0, 0.0, 0.0, 0.0),
-							glm::vec4(0.0, 1.0, 0.0, 0.0),
-							glm::vec4(0.0, 0.0, 1.0, 0.0),
-							glm::vec4(V, 1.0)) * glm::mat4(glm::mat3(matrix));
+			matrix[3] = glm::vec4(V, 1.0);
+			
+			return *this;
 		}
 
-		GRAPI void Translate(const TVec3& V)
+		GRAPI Transform& Translate(const TVec3& V)
 		{
 			matrix[3] += glm::vec4(V, 1.0);
+		
+			return *this;
 		}
 
-		GRAPI void SetRotation(const TVec3& R, const TVec3& U, const TVec3& F)
+		GRAPI Transform& SetRotation(const TVec3& R, const TVec3& U, const TVec3& F)
 		{
 			matrix[0] = glm::vec4(R, 0.0);
 			matrix[1] = glm::vec4(U, 0.0);
 			matrix[2] = glm::vec4(F, 0.0);
+		
+			return *this;
 		}
 
-		GRAPI void SetRotation(const TVec3& U, const TVec3& F)
+		GRAPI Transform& SetRotation(const TVec3& U, const TVec3& F)
 		{
-			SetRotation(glm::normalize(glm::cross(U, F)), U, F);
+			return SetRotation(glm::normalize(glm::cross(U, F)), U, F);
 		}
 
-		GRAPI void SetRotation(const TMat3& M)
+		GRAPI Transform& SetRotation(const TMat3& M)
 		{
 			matrix[0] = glm::vec4(M[0], 0.0);
 			matrix[1] = glm::vec4(M[1], 0.0);
 			matrix[2] = glm::vec4(M[2], 0.0);
+		
+			return *this;
 		}
 
-		GRAPI void SetRotation(float pitch, float yaw, float roll)
+		GRAPI Transform& SetRotation(float pitch, float yaw, float roll)
 		{
 			TQuat q = glm::angleAxis(roll, glm::vec3(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
 			q = q * glm::angleAxis(yaw, glm::vec3(0, 1, 0));
 
-			SetRotation(glm::mat3(glm::mat4_cast(q)));
+			return SetRotation(glm::mat3_cast(q));
 		}
 
-		GRAPI void Rotate(float pitch, float yaw, float roll)
+		GRAPI Transform& Rotate(float pitch, float yaw, float roll)
 		{
 			TQuat q = glm::angleAxis(roll, glm::vec3(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
 			q = q * glm::angleAxis(yaw, GetUp());
 
 			matrix = glm::mat4_cast(q) * matrix;
-			matrix[3] = glm::vec4(glm::floor(glm::vec3(matrix[3]) * 100.f) / 100.f, 1.0);
+			matrix[3] = glm::vec4(glm::floor(glm::vec3(matrix[3]) * 1e3f) / 1e3f, 1.0);
+
+			return *this;
 		}
 
 		GRAPI TVec3 GetOffset() const

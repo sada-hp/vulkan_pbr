@@ -88,8 +88,7 @@ TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D 
 
 TAuto<Image> GRNoise::GenerateCloudNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
 {
-	int random = std::rand();
-	int random2 = std::rand();
-	uint32_t seed = *reinterpret_cast<char*>(&random) << 16 ^ *reinterpret_cast<char*>(&random2);
+	uint32_t seed = 0;
+	seed = (uint32_t)&seed;
 	return generate_noise("cloud_noise", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { worley_frequency, perlin_frequency, worley_octaves, perlin_octaves, seed });
 }

@@ -20,12 +20,17 @@ namespace GR
 {
 	struct Camera
 	{
-		TMat4 projection = glm::mat4(1.f);
+		GRComponents::Projection Projection;
 		GRComponents::Transform View;
 
-		TVec3 GetPosition()
+		GRAPI TVec3 GetWorldPosition()
 		{
 			return glm::transpose(View.GetRotation()) * View.GetOffset();
+		}
+
+		GRAPI void SetWorldPosition(TVec3 Offset)
+		{
+			View.SetOffset(View.GetRotation() * Offset);
 		}
 
 	private:
@@ -33,7 +38,7 @@ namespace GR
 
 		TMat4 get_view_projection() const
 		{
-			return projection * View.matrix;
+			return Projection.matrix * View.matrix;
 		}
 	};
 };
