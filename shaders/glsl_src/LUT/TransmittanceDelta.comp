@@ -1,0 +1,69 @@
+#include "LUT.glsl"
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgb8) uniform writeonly image2D outImage;
+
+//mapping
+vec2 GetUV(float r, float u)
+{
+    float h = sqrt(pow(ATMOSPHERE_END, 2.0) - pow(ATMOSPHERE_START, 2.0));
+    float rho = sqrt(max(r * r - pow(ATMOSPHERE_START, 2.0), 0.0));
+    float d = DistanceToAtmosphere(r, u, ATMOSPHERE_START);
+    float d_min = ATMOSPHERE_END - r;
+    float d_max = rho + h;
+    float x_u = (d - d_min) / (d_max - d_min);
+    float x_r = rho / h;
+
+    return vec2(UVFromUnitRange(x_u, TRANSMITTANCE_TEXTURE_WIDTH), UVFromUnitRange(x_r, TRANSMITTANCE_TEXTURE_HEIGHT));
+}
+
+//mapping
+void GetRMU(vec2 uv, out float r, out float u)
+{
+    float x_u = UnitRangeFromUV(uv.x, TRANSMITTANCE_TEXTURE_WIDTH);
+    float x_r = UnitRangeFromUV(uv.y, TRANSMITTANCE_TEXTURE_HEIGHT);
+    float h = sqrt(pow(ATMOSPHERE_END, 2.0) - pow(ATMOSPHERE_START, 2.0));
+    float rho = h * x_r;
+    r = sqrt(pow(rho, 2.0) + pow(ATMOSPHERE_START, 2.0));
+    float d_min = ATMOSPHERE_END - r;
+    float d_max = rho + h;
+    float d = d_min + x_u * (d_max - d_min);
+    u = d == 0.0 ? 1.0 : (pow(h, 2.0) - pow(rho, 2.0) - pow(d, 2.0)) / (2.0 * r * d);
+    u = clamp(u, -1.0, 1.0);
+}
+
+float ComputeOpticalDepth(float r, float u)
+{
+    int samples = 500;
+    float dx = DistanceToAtmosphere(r, u, ATMOSPHERE_END) / float(samples);
+
+    float res = 0.0;
+    for (int i = 0; i <= samples; i++)
+    {
+        float d_i = i * dx;
+        float r_i = sqrt(pow(d_i, 2.0) + 2.0 * r * u * d_i  + pow(r, 2.0));
+        float y_i = ;
+        float w_i = i == 0 || i == samples ? 0.5 : 1.0;
+
+        res += y_i * w_i * dx;
+    }
+
+    return res;
+}
+
+vec3 ComputeTransmittance(vec2 uv)
+{
+    float r = 0.0;
+    float u = 0.0;
+    GetRMU(uv, r, u)
+
+    return ComputeTransmittance(r, u);
+}
+
+void main()
+{
+    float Tr = 0.0
+
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(Tr));
+}

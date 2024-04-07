@@ -5,6 +5,12 @@
 #include "renderer.hpp"
 #include <stb/stb_image.h>
 
+#ifdef INCLUDE_GUI
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
+#endif
+
 extern std::string exec_path;
 
 struct UniformBuffer
@@ -12,6 +18,7 @@ struct UniformBuffer
 	TMat4 ViewProjection;
 	TMat4 ProjectionMatrixInverse;
 	TMat4 ViewMatrixInverse;
+	TVec3 SunDirection;
 	float Time;
 };
 
@@ -69,10 +76,43 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	});
 
 	std::for_each(presentFences.begin(), presentFences.end(), [&, this](VkFence& it) {
-			res = CreateFence(Scope.GetDevice(), &it) & res;
+		res = CreateFence(Scope.GetDevice(), &it) & res;
 	});
 
 	res = prepare_scene() & res;
+
+#ifdef INCLUDE_GUI
+	std::vector<VkDescriptorPoolSize> pool_sizes =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	::CreateDescriptorPool(Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 1000, &imguiPool);
+
+	//this initializes imgui for Vulkan
+	ImGui_ImplVulkan_InitInfo init_info = {};
+	init_info.Instance = instance;
+	init_info.PhysicalDevice = Scope.GetPhysicalDevice();
+	init_info.Device = Scope.GetDevice();
+	init_info.Queue = Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue();
+	init_info.DescriptorPool = imguiPool;
+	init_info.MinImageCount = 3;
+	init_info.ImageCount = 3;
+	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	init_info.RenderPass = Scope.GetRenderPass();
+
+	ImGui_ImplVulkan_Init(&init_info);
+#endif
 
 	assert(res != 0);
 }
@@ -80,14 +120,19 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 VulkanBase::~VulkanBase() noexcept
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
-	 
+
+#ifdef INCLUDE_GUI
+	ImGui_ImplVulkan_Shutdown();
+	::vkDestroyDescriptorPool(Scope.GetDevice(), imguiPool, VK_NULL_HANDLE);
+#endif
+
 	skybox.reset();
 	volume.reset();
 	ubo.reset();
 	view.reset();
+	cloud_layer.reset();
 	CloudShape.reset();
 	CloudDetail.reset();
-	WeatherImage.reset();
 	Gradient.reset();
 
 	registry.clear<VulkanGraphicsObject>();
@@ -141,6 +186,7 @@ void VulkanBase::Step(float DeltaTime)
 			camera.get_view_projection(),
 			camera.Projection.matrix,
 			camera.View.matrix,
+			SunDirection,
 			Time
 		};
 
@@ -150,7 +196,7 @@ void VulkanBase::Step(float DeltaTime)
 	//View
 	{
 		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
-		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 0.0);
+		TVec4 CameraPosition = TVec4(camera.GetWorldPosition(), 0.0);
 		ViewBuffer Uniform
 		{
 			CameraPosition,
@@ -158,6 +204,11 @@ void VulkanBase::Step(float DeltaTime)
 		};
 
 		view->Update((void*)&Uniform);
+	}
+
+	//Cloud layer
+	{
+		cloud_layer->Update(&CloudLayer, sizeof(SCloudLayer));
 	}
 
 	//Draw
@@ -175,7 +226,7 @@ void VulkanBase::Step(float DeltaTime)
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.framebuffer = framebuffers[swapchain_index];
 		renderPassInfo.renderPass = Scope.GetRenderPass();
-		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.offset = { 0, 0 }; 
 		renderPassInfo.renderArea.extent = Scope.GetSwapchainExtent();
 		renderPassInfo.clearValueCount = 2;
 		renderPassInfo.pClearValues = clearValues;
@@ -200,10 +251,14 @@ void VulkanBase::Step(float DeltaTime)
 		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
 		skybox->pipeline.BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
-
+		
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
 		volume->pipeline.BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+#endif
 
 		vkCmdEndRenderPass(cmd);
 		vkEndCommandBuffer(cmd);
@@ -451,21 +506,29 @@ VkBool32 VulkanBase::prepare_scene()
 	viewInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	view = std::make_unique<Buffer>(Scope, viewInfo, uboAllocCreateInfo);
 
-	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 8u, 4u, 4u);
-	CloudDetail = GRNoise::GenerateWorley(Scope, { 32u, 32u, 32u }, 4u, 1u);
+	VkBufferCreateInfo cloudInfo{};
+	cloudInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	cloudInfo.size = sizeof(CloudLayer);
+	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	cloud_layer = std::make_unique<Buffer>(Scope, cloudInfo, uboAllocCreateInfo);
+
+	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
+	CloudDetail = GRNoise::GenerateWorley(Scope, { 32u, 32u, 32u }, 8u, 3u);
 
 	//WeatherImage = GRFile::ImportImage(Scope, "Content\\weather_map.jpg");
 	//WeatherImage->CreateSampler(SamplerFlagBits::RepeatUVW);
 
 	Gradient = GRFile::ImportImage(Scope, "Content\\Gradient.jpg");
 	Gradient->CreateSampler(SamplerFlagBits::AnisatropyEnabled);
-	 
+	
 	volume = std::make_unique<GraphicsObject>(Scope);
 	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
 		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
+		.AddUniformBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT, *cloud_layer)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
+		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
 		.Allocate();
 
 	VkPipelineColorBlendAttachmentState blendState{};
@@ -473,10 +536,10 @@ VkBool32 VulkanBase::prepare_scene()
 	blendState.colorBlendOp = VK_BLEND_OP_ADD;
 	blendState.alphaBlendOp = VK_BLEND_OP_ADD;
 	blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 
 	volume->pipeline.SetShaderStages("volumetric", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
 		.SetBlendAttachments(1, &blendState)
@@ -490,8 +553,9 @@ VkBool32 VulkanBase::prepare_scene()
 
 	skybox = std::make_unique<GraphicsObject>(Scope);
 	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
 		.Allocate();
 
 	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
@@ -517,6 +581,16 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 		vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
 		vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
 	}
+}
+
+VkBool32 VulkanBase::setup_precompute()
+{
+	return 1;
+}
+
+void VulkanBase::run_precompute(VkCommandBuffer cmd)
+{
+
 }
 
 TVector<const char*> VulkanBase::getRequiredExtensions()

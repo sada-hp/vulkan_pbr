@@ -3,6 +3,7 @@ layout(binding = 0) uniform UnfiormBuffer
     mat4 ViewProjectionMatrix;
     mat4 ProjectionMatrix;
     mat4 ViewMatrix;
+    vec3 SunDirection;
     float Time;
 } ubo;
 

@@ -7,16 +7,14 @@
 
 uint NOISE_SEED = 2798796415U;
 
-float noise(vec2 p)
+float noise(float p)
 {
-    return fract(abs(sin(dot(p, vec2(12.9898, 78.233)))) * 43758.5453);
+    return fract(sin(p + 1.951) * 43758.5453);
 }
 
-float noise(vec3 p)
+float noise(vec2 p)
 {
-    p  = fract(p * .1031);
-    p += dot(p, p.yzx + 33.33);
-    return fract((p.x + p.y) * p.z);
+    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
 vec2 noise2(vec2 p)
@@ -27,30 +25,39 @@ vec2 noise2(vec2 p)
     return fract((p3.xx+p3.yz)*p3.zy);
 }
 
-vec3 noise3(vec3 p)
+vec2 pcg2d(vec2 p)
 {
-	p = fract(p * vec3(0.1031, 0.1030, 0.0973));
-    p += dot(p, p.yxz+33.33);
-    return fract((p.xxy + p.yxx)*p.zyx);
+    uvec2 v = uvec2(p) * 1664525u + NOISE_SEED;
+
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+
+    v = v ^ (v >> 16u);
+
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+
+    v = v ^ (v>>16u);
+
+    return vec2(v) / float(0xffffffffu);
 }
 
-//Dave_Hoskins
-//https://www.shadertoy.com/view/XdGfRR
-vec3 noise32(vec3 p)
+vec3 pcg3d(vec3 p)
 {
-    uvec3 q = uvec3(ivec3(p)) * uvec3(1597334673U, 3812015801U, NOISE_SEED);
-	q = (q.x ^ q.y ^ q.z)*uvec3(1597334673U, 3812015801U, NOISE_SEED);
-	return vec3(q) * UIF;
-}
+    uvec3 v = uvec3(p) * 1664525u + NOISE_SEED;
 
-float remap(float orig, float old_min, float old_max, float new_min, float new_max)
-{
-    return new_min + (((orig - old_min) / (old_max - old_min)) * (new_max - new_min));
-}
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
 
-float saturate(float x)
-{
-    return clamp(x, 0.0, 1.0);
+    v = ((v >> int((v >> 28u) + 4u)) ^ v) * 277803737u;
+	v = v ^ (v >> 16u);
+
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
+
+    return vec3(v) / float(0xffffffffu);
 }
 
 float worley(vec2 p0, float freq)
@@ -62,8 +69,8 @@ float worley(vec2 p0, float freq)
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             vec2 p1 = vec2(x, y);
-            vec2 neigbour_cell = mod(i + p1, freq);
-            min_d = min(min_d, distance(noise2(neigbour_cell), f - p1));
+            vec2 neighbour_cell = mod(i + p1, freq);
+            min_d = min(min_d, distance(pcg2d(neighbour_cell), f - p1));
         }
     }
 
@@ -80,8 +87,8 @@ float worley(vec3 p0, float freq)
         for (int y = -1; y <= 1; y++) {
             for (int z = -1; z <= 1; z++) {
                 vec3 p1 = vec3(x, y, z);
-                vec3 neigbour_cell = mod(i + p1, freq);
-                min_d = min(min_d, distance(noise32(neigbour_cell), f - p1));
+                vec3 neighbour_cell = mod(i + p1, freq);
+                min_d = min(min_d, distance(pcg3d(neighbour_cell), f - p1));
             }
         }
     }
@@ -94,13 +101,16 @@ float perlin(vec2 x0, float freq)
     vec2 i = floor(x0 * freq);
     vec2 f = fract(x0 * freq);
 
-	float va = noise(i);
-    float vb = noise(mod(i + vec2(1.0, 0.0), freq));
-    float vc = noise(mod(i + vec2(0.0, 1.0), freq));
-    float vd = noise(mod(i + vec2(1.0, 1.0), freq));
+    vec2 of = vec2(0.0, 1.0);
+
+	float va = pcg2d(mod(i + of.xx, freq)).x;
+    float vb = pcg2d(mod(i + of.yx, freq)).x;
+    float vc = pcg2d(mod(i + of.xy, freq)).x;
+    float vd = pcg2d(mod(i + of.yy, freq)).x;
 
     vec2 u = smoothstep(0.0, 1.0, f);
-    return mix(va, vb, u.x) + (vc - va) * u.y * (1.0 - u.x) + (vd - vb) * u.x * u.y;
+
+    return mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
 }
 
 float perlin(vec3 x0, float freq) 
@@ -108,14 +118,16 @@ float perlin(vec3 x0, float freq)
     vec3 i = floor(x0 * freq);
     vec3 f = fract(x0 * freq);
     
-    vec3 ga = noise32(i);
-    vec3 gb = noise32(mod(i + vec3(1.0, 0.0, 0.0), freq));
-    vec3 gc = noise32(mod(i + vec3(0.0, 1.0, 0.0), freq));
-    vec3 gd = noise32(mod(i + vec3(1.0, 1.0, 0.0), freq));
-    vec3 ge = noise32(mod(i + vec3(0.0, 0.0, 1.0), freq));
-    vec3 gf = noise32(mod(i + vec3(1.0, 0.0, 1.0), freq));
-    vec3 gg = noise32(mod(i + vec3(0.0, 1.0, 1.0), freq));
-    vec3 gh = noise32(mod(i + vec3(1.0, 1.0, 1.0), freq));
+    vec2 of = vec2(0.0, 1.0);
+
+    vec3 ga = pcg3d(mod(i + of.xxx, freq));
+    vec3 gb = pcg3d(mod(i + of.yxx, freq));
+    vec3 gc = pcg3d(mod(i + of.xyx, freq));
+    vec3 gd = pcg3d(mod(i + of.yyx, freq));
+    vec3 ge = pcg3d(mod(i + of.xxy, freq));
+    vec3 gf = pcg3d(mod(i + of.yxy, freq));
+    vec3 gg = pcg3d(mod(i + of.xyy, freq));
+    vec3 gh = pcg3d(mod(i + of.yyy, freq));
 
     float va = dot(ga, f);
     float vb = dot(gb, f - vec3(1.0, 0.0, 0.0));
@@ -126,7 +138,8 @@ float perlin(vec3 x0, float freq)
     float vg = dot(gg, f - vec3(0.0, 1.0, 1.0));
     float vh = dot(gh, f - vec3(1.0, 1.0, 1.0));
     
-    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    vec3 u = smoothstep(0.0, 1.0, f);
+    
     return va + 
            u.x * (vb - va) + 
            u.y * (vc - va) + 
@@ -141,62 +154,66 @@ float fbm_worley(vec2 x, float f, uint n)
 {
     float v = 0.0;
 	float a = 0.5;
-    float m = 0.0;
+    float as = 0.0;
 
 	for (int i = 0; i < n; i++) {
-        m += a;
 		v += a * worley(x, f);
         f *= 2.0;
-		a *= 0.5;
+
+        as += a;
+		a *= a;
 	}
     
-	return remap(v, 0.0, m, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }
 
 float fbm_worley(vec3 x, float f, uint n) 
 {
     float v = 0.0;
 	float a = 0.5;
-    float m = 0.0;
+    float as = 0.0;
 
 	for (int i = 0; i < n; i++) {
-        m += a;
 		v += a * worley(x, f);
         f *= 2.0;
-		a *= 0.5;
+
+        as += a;
+		a *= a;
 	}
     
-	return remap(v, 0.0, m, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }
 
 float fbm_perlin(vec2 x, float f, uint n) 
 {
 	float v = 0.0;
-	float a = 1.0;
-    float m = 0.0;
+	float a = 0.5;
+    float as = 0.0;
 
 	for (int i = 0; i < n; i++) {
-        m += a;
 		v += a * perlin(x, f);
         f *= 2.0;
-		a *= 0.5;
+
+        as += a;
+		a *= a;
 	}
 
-	return remap(v, 0.0, m, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }
 
 float fbm_perlin(vec3 x, float f, uint n) 
 {
 	float v = 0.0;
 	float a = 0.5;
-    float m = 0.0;
+    float as = 0.0;
 
 	for (int i = 0; i < n; i++) {
-        m += a;
 		v += a * perlin(x, f);
         f *= 2.0;
-		a *= 0.5;
+
+        as += a;
+		a *= a;
 	}
 
-	return remap(v, 0.0, m, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }

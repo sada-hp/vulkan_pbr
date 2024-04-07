@@ -1,6 +1,12 @@
 #include "pch.hpp"
 #include "window.hpp"
 
+#ifdef INCLUDE_GUI
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
+#endif
+
 namespace GR
 {
 	Window::Window(const char* title, int width, int height)
@@ -9,10 +15,18 @@ namespace GR
 		assert(glfwVulkanSupported());
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		glfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_InitForVulkan(glfwWindow, false);
+#endif
 	}
 
 	Window::~Window()
 	{
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_Shutdown();
+#endif
+
 		glfwTerminate();
 		glfwDestroyWindow(glfwWindow);
 	}

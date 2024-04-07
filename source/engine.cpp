@@ -11,11 +11,17 @@ namespace GR
 
 		exec_path = ExecutablePath;
 
+#ifdef INCLUDE_GUI
+		GuiContext = ImGui::CreateContext();
+		ImGui::SetCurrentContext(GuiContext);
+#endif
+
 		listener = new EventListener();
 		window = new Window(Settings.ApplicationName.c_str(), Settings.WindowExtents.x, Settings.WindowExtents.y);
-		renderer = new VulkanBase(window->glfwWindow, registry);
 
 		context = { listener , renderer, this };
+
+		renderer = new VulkanBase(window->glfwWindow, registry);
 
 		glfwSetWindowUserPointer(window->glfwWindow, &context);
 		glfwSetWindowSizeCallback(window->glfwWindow, glfw_resize);
@@ -42,10 +48,20 @@ namespace GR
 			delta = frame_time - total_time;
 			total_time = frame_time;
 
+#ifdef INCLUDE_GUI
+			ImGui_ImplVulkan_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+#endif
+
 			std::for_each(inputs.begin(), inputs.end(), [&](void(*func)(GrayEngine*, double))
 			{
 				func(this, delta);
 			});
+
+#ifdef INCLUDE_GUI
+			ImGui::Render();
+#endif
 
 			renderer->Step(delta);
 

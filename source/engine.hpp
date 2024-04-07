@@ -8,6 +8,12 @@
 #include "math.hpp"
 #include "renderer.hpp"
 
+#ifdef INCLUDE_GUI
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
+#endif
+
 namespace GR
 {
 	using Entity = entt::entity;
@@ -49,7 +55,16 @@ namespace GR
 
 		static void glfw_resize(GLFWwindow* window, int width, int height);
 
+#ifdef INCLUDE_GUI
+		ImGuiContext* GuiContext;
+#endif
 	public:
+#ifdef INCLUDE_GUI
+		GRAPI ImGuiContext* GetGUIContext()
+		{
+			return GuiContext;
+		}
+#endif
 		/*
 		* !@brief User defined pointer, renderer itself does not reference it
 		*/
@@ -98,6 +113,11 @@ namespace GR
 		GRAPI EventListener& GetEventListener()
 		{
 			return *listener;
+		}
+
+		GRAPI VulkanBase& GetRenderer()
+		{
+			return *renderer;
 		}
 
 		template<typename Type, typename... Args>

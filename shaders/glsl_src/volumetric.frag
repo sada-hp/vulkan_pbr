@@ -1,63 +1,51 @@
 #version 460
 #include "ubo.glsl"
+#include "lighting.glsl"
 #include "noise.glsl"
+#include "common.glsl"
 
-#define EARTH_RADIUS 6370000
-#define ATMOSPHERE_START 6420000
-#define ATMOSPHERE_END 6700000
-#define ATMOSPHERE_DELTA ATMOSPHERE_END - ATMOSPHERE_END
-#define AMBIENT 0.25
-#define ABSORPTION 0.0004
-
-const vec3 SunDirection = normalize(vec3(1.0));
 vec3 sphereStart;
 vec3 sphereEnd;
-float sphereDistance;
 
 layout(location=0) out vec4 outColor;
 
-layout(binding = 2) uniform sampler3D CloudLowFrequency;
-layout(binding = 3) uniform sampler3D CloudHighFrequency;
-layout(binding = 4) uniform sampler2D GradientTexture;
-
-bool raySphereintersection(vec3 ro, vec3 rd, float radius, out vec3 p1)
+layout(binding = 2) uniform CloudLayer
 {
-	vec3 sphereCenter = vec3(View.CameraPosition.x, -EARTH_RADIUS, View.CameraPosition.z);
+    float Coverage;
+    float Absorption;
+    float PhaseCoefficient;
+    float WindSpeed;
+} Clouds;
 
-	float radius2 = radius*radius;
-
-	vec3 L = ro - sphereCenter;
-	float a = dot(rd, rd);
-	float b = 2.0 * dot(rd, L);
-	float c = dot(L,L) - radius2;
-
-	float discr = b*b - 4.0 * a * c;
-	if(discr < 0.0) return false;
-	float t1 = max(0.0, (-b + sqrt(discr))/2);
-    //float t2 = max(0.0, (-b - sqrt(discr))/2);
-	if(t1 == 0.0){
-		return false;
-	}
-
-    p1 = ro + rd * t1;
-
-	return true;
-}
+layout(binding = 3) uniform sampler3D CloudLowFrequency;
+layout(binding = 4) uniform sampler3D CloudHighFrequency;
+layout(binding = 5) uniform sampler2D GradientTexture;
 
 float GetHeightFraction(vec3 p)
 {
-    return saturate((p.y - sphereStart.y) / (sphereEnd.y - sphereStart.y));
+    //return saturate((p.y - sphereStart.y) / (sphereEnd.y - sphereStart.y));
+    return 1.0 - saturate(dot(p, p) / dot(sphereEnd, sphereEnd));
+}
+
+vec3 GetUV(vec3 p, float scale)
+{
+    return scale * p / ATMOSPHERE_START + vec2(ubo.Time * Clouds.WindSpeed * 0.01, 0.0).xyx;
 }
 
 float SampleCloudShape(vec3 x0)
 {
     float height = GetHeightFraction(x0);
-    vec3 uv =  x0 / ATMOSPHERE_START * 5.0;
+    vec3 uv =  GetUV(x0, 4.0);
 
-    vec4 low_frequency_noise = texture(CloudLowFrequency, uv + vec3(ubo.Time, 0.0, 0.0) / 50.0);
+    vec4 low_frequency_noise = texture(CloudLowFrequency, uv);
     float low_frequency_fbm = low_frequency_noise.g * 0.625 + low_frequency_noise.b * 0.25 + low_frequency_noise.a * 0.125;
-    float base = remap(low_frequency_noise.r, (1.0 - low_frequency_fbm), 1.0, 0.0, 1.0);
+    float base = remap(low_frequency_noise.r, -(1.0 - low_frequency_fbm), 1.0, 0.0, 1.0);
+
+    //base *= remap(height, 0.0, 0.1, 0.0, 1.0) * remap(height, 0.2, 0.3, 1.0, 0.0);
+   
+    base = remap(base, 1.0 - Clouds.Coverage, 1.0, 0.0, 1.0);
     base *= texture(GradientTexture, vec2(0.0, height)).r;
+    base *= Clouds.Coverage;
 
     return base;
 }
@@ -66,89 +54,94 @@ float SampleCloudShape(vec3 x0)
 float SampleDensity(vec3 x0)
 {
     float height = GetHeightFraction(x0);
-    vec3 uv =  x0 / ATMOSPHERE_START * 5.0;
+    vec3 uv =  GetUV(x0, 60.0);
 
-    vec4 low_frequency_noise = texture(CloudLowFrequency, uv + vec3(ubo.Time, 0.0, 0.0) / 50.0);
-    float low_frequency_fbm = low_frequency_noise.g * 0.625 + low_frequency_noise.b * 0.25 + low_frequency_noise.a * 0.125;
-    float base = remap(low_frequency_noise.r, (1.0 - low_frequency_fbm), 1.0, 0.0, 1.0);
-    base *= texture(GradientTexture, vec2(0.0, height)).r;
+    float base = SampleCloudShape(x0);
 
-    vec4 high_frequency_noise = texture(CloudHighFrequency, (uv * 20.0) + vec3(ubo.Time, 0.0, 0.0) / 10.0);
+    //return base;
+
+    vec4 high_frequency_noise = texture(CloudHighFrequency, uv);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, clamp(height * 20.0, 0.0, 1.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    float cloud_final = remap(base, high_frequency_modifier * 0.25, 1.0, 0.0, 1.0);
-
-    return cloud_final;
+    return remap(base, high_frequency_modifier * 0.1, 1.0, 0.0, 1.0);
 }
 
-float MarchToLight(vec3 rs, vec3 re, vec3 rd, float stepsize)
+vec3 light_kernel[] =
 {
-    const int steps = 100;
+    vec3(0.5, 0.5, 0.5),
+    vec3(-0.628, 0.64, 0.234),
+    vec3(0.23, -0.123, 0.75),
+    vec3(0.98, 0.45, -0.32),
+    vec3(-0.1, -0.54, 0.945),
+    vec3(0.0, 0.6, -0.78),
+};
+
+float MarchToLight(vec3 rs, vec3 rd, float stepsize)
+{
+    vec3 pos = rs;
+    float density = 0.0;
+    float radius = 1.0;
     float transmittance = 1.0;
 
-    vec3 pos = rs;
-    for (int i = 0; i < steps && transmittance > AMBIENT; i++)
+    stepsize *= 6.f;
+    for (int i = 0; i <= 6; i++)
     {
-        pos += stepsize * rd;
+        pos = rs + float(i) * radius * light_kernel[i];
 
-        if (GetHeightFraction(pos) < 1.0)
+        float sampled_density = SampleDensity(pos);
+
+        if (sampled_density > 0.0)
         {
-            float density = SampleDensity(pos);
-
-            if (density > 0.0) {
-                float transmittance_cloud = exp(-stepsize * density * ABSORPTION);
-                transmittance *= transmittance_cloud;
-            }
+            float transmittance_light = BeerLambert(stepsize * sampled_density * Clouds.Absorption);
+            transmittance *= transmittance_light;
         }
-        else {
-            break;
-        }
+        
+        density += sampled_density;
+        rs += stepsize * rd;
+        radius += 1.f / 6.f;
     }
 
-    return max(transmittance, AMBIENT);
+    return transmittance;
 }
 
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
-    const int steps = 200;
+    const int steps = 512;
     const float len = distance(rs, re);
     const float stepsize = len / float(steps);
-    vec3 cloud_scatter = vec3(0.0);
-    float transmittance = 1.0;
 
+    vec4 scattering = vec4(0.0, 0.0, 0.0, 1.0);
     vec3 pos = rs;
-    float density = SampleCloudShape(pos);
+    float density = 0.0;
+    vec3 rl = normalize(ubo.SunDirection);
+    float phase = DualLobeFunction(dot(rl, rd), Clouds.PhaseCoefficient, -0.05, 0.25);
+    //float phase = HGDPhase(dot(rl, rd), mix(5.0, 50.0, Clouds.PhaseCoefficient));
 
-    int i = 1;
-    if (density == 0.0) {
-        int mult = 5;
-        while (density == 0.0 && i < steps) {
-            pos += stepsize * mult * rd;
-            density = SampleCloudShape(pos);
-            i += mult;
-        }
-
-        pos -= stepsize * mult * rd;
-        i -= mult;
-    }
-
-    for (; i < steps && transmittance > 1e-3; i++) {
-        pos += stepsize * rd;
+    for (int i = 0; i < steps; i++) 
+    {
         density = SampleDensity(pos);
 
-        if (density > 0.0) {
-            float transmittance_old = transmittance;
-            float transmittance_cloud = exp(-stepsize * density * ABSORPTION);
-            transmittance *= transmittance_cloud;
+        float extinction = max(density * Clouds.Absorption, 1e-8);
 
-            float scatter_amount = MarchToLight(pos, re, SunDirection, stepsize);
-            //cloud_scatter += transmittance * (1.0 - transmittance_cloud) * scatter_amount;
-            cloud_scatter += (transmittance_old - transmittance) * scatter_amount;
+        if (density > 0.0) 
+        {
+            float transmittance = BeerLambert(stepsize * extinction);
+
+            vec3 L = vec3(0.99, 0.9, 1.0) * density * 5.0;
+            vec3 energy = L * phase * Powder(stepsize, density, Clouds.Absorption) * MarchToLight(pos, rl, stepsize); //phase * Powder(stepsize * extinction) * MarchToLight(pos, rl, stepsize)
+            vec3 intScat = (energy - energy * transmittance) / density;
+
+            scattering.rgb += intScat * scattering.a;
+            scattering.a *= transmittance;
         }
+
+        pos += stepsize * rd;
     }
 
-    return clamp(vec4(cloud_scatter.rgb, 1.0 - transmittance), 0.0, 1.0);
+    //scattering.rgb = pow(scattering.rgb, vec3(1.0 / 2.2));
+
+    return scattering;
 }
 
 void main()
@@ -166,7 +159,6 @@ void main()
 
     if (raySphereintersection(View.CameraPosition.xyz, RayDirection, ATMOSPHERE_START, sphereStart)
     && raySphereintersection(View.CameraPosition.xyz, RayDirection, ATMOSPHERE_END, sphereEnd)) {
-        sphereDistance = distance(sphereStart, sphereEnd);
         outColor = MarchToCloud(sphereStart, sphereEnd, RayDirection);
     }
     else {

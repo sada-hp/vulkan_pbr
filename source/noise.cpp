@@ -1,4 +1,4 @@
-#include "pch.hpp"
+	#include "pch.hpp"
 #include "noise.hpp"
 #include "vulkan_objects/pipeline.hpp"
 #include "vulkan_objects/descriptor_set.hpp"
@@ -86,9 +86,9 @@ TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D 
 	return generate_noise("worley_perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
 }
 
-TAuto<Image> GRNoise::GenerateCloudNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
+TAuto<Image> GRNoise::GenerateCloudNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate_noise("cloud_noise", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { worley_frequency, perlin_frequency, worley_octaves, perlin_octaves, seed });
+	return generate_noise("cloud_noise", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
 }

@@ -2,56 +2,18 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../source)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../libraries)
 
-set(
-    ROOT_SOURCES 
-	"renderer.cpp"
-	"renderer.hpp"
-	"pch.hpp"
-	"object.cpp"
-	"object.hpp"
-	"file_manager.cpp"
-	"file_manager.hpp"
-	"scope.cpp"
-	"scope.hpp"
-	"vulkan_api.cpp"
-	"vulkan_api.hpp"
-	"noise.cpp"
-	"noise.hpp"
-	"components.hpp"
-	"engine.cpp"
-	"engine.hpp"
-	"window.cpp"
-	"window.hpp"
-	"event_listener.cpp"
-	"event_listener.hpp"
-	"core.hpp"
-	"enums.hpp"
-	"glfw_callbacks.cpp"
-	"math.cpp"
-	"math.hpp"
-)
-set(
-    VULKAN_SOURCES 
-	"vulkan_objects/buffer.cpp"
-	"vulkan_objects/buffer.hpp"
-	"vulkan_objects/image.cpp"
-	"vulkan_objects/image.hpp"
-	"vulkan_objects/mesh.cpp"
-	"vulkan_objects/mesh.hpp"
-	"vulkan_objects/vertex.hpp"
-	"vulkan_objects/queue.cpp"
-	"vulkan_objects/queue.hpp"
-	"vulkan_objects/pipeline.cpp"
-	"vulkan_objects/pipeline.hpp"
-	"vulkan_objects/descriptor_set.cpp"
-	"vulkan_objects/descriptor_set.hpp"
-)
-set(
-    DEBUG_SOURCES 
-	"debug_objects/debug_layers.cpp"
-)
+file(GLOB ROOT_SOURCES	"${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" 
+						"${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+file(GLOB VULKAN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_objects/*.cpp" 
+								 "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_objects/*.hpp")
+file(GLOB DEBUG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug_objects/*.cpp"
+								"${CMAKE_CURRENT_SOURCE_DIR}/debug_objects/*.hpp")
+if (INCLUDE_GUI)
+	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include/imgui)
+	file(GLOB IMGUI_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../include/imgui/*.cpp")
+endif()
 
-add_library(source SHARED ${ROOT_SOURCES} ${VULKAN_SOURCES} ${DEBUG_SOURCES})
+add_library(source SHARED ${ROOT_SOURCES} ${VULKAN_SOURCES} ${DEBUG_SOURCES} ${IMGUI_SOURCES})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VULKAN_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${DEBUG_SOURCES})

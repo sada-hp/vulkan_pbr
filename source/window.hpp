@@ -3,6 +3,7 @@
 #include "math.hpp"
 #include "renderer.hpp"
 
+
 class GrayEnigne;
 
 namespace GR

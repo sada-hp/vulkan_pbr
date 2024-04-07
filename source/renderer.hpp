@@ -11,6 +11,7 @@
 #include "vulkan_api.hpp"
 #include "noise.hpp"
 #include "components.hpp"
+#include "structs.hpp"
 
 #if DEBUG == 1
 	#define VALIDATION
@@ -77,17 +78,22 @@ class VulkanBase
 
 	TAuto<Buffer> ubo = {};		
 	TAuto<Buffer> view = {};
+	TAuto<Buffer> cloud_layer = {};
 
 	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
 	TAuto<Image> CloudShape;
 	TAuto<Image> CloudDetail;
-	TAuto<Image> WeatherImage;
 	TAuto<Image> Gradient;
+
+	TAuto<ComputePipeline> TransDeltaLUT;
 
 	uint32_t swapchain_index = 0;
 
+	VkDescriptorPool imguiPool;
+
 public:
+	SCloudLayer CloudLayer;
 
 	VulkanBase(GLFWwindow* window, entt::registry& registry);
 
@@ -106,6 +112,8 @@ public:
 	* !@brief Should be modified to control the scene
 	*/
 	GR::Camera camera;
+	TVec3 SunDirection = glm::normalize(TVec3(1.0));
+
 private:
 	entt::registry& registry;
 	/*
@@ -132,6 +140,10 @@ private:
 	VkBool32 prepare_scene();
 
 	void render_objects(VkCommandBuffer cmd);
+
+	VkBool32 setup_precompute();
+
+	void run_precompute(VkCommandBuffer cmd);
 
 	TVector<const char*> getRequiredExtensions();
 
