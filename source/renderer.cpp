@@ -76,7 +76,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	});
 
 	std::for_each(presentFences.begin(), presentFences.end(), [&, this](VkFence& it) {
-		res = CreateFence(Scope.GetDevice(), &it) & res;
+		res = CreateFence(Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
 	res = prepare_scene() & res;

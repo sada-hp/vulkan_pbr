@@ -13,7 +13,7 @@
 *
 * @return VK_TRUE if creation was successful, VK_FALSE otherwise
 */
-VkBool32 CreateFence(const VkDevice& device, VkFence* outFence);
+VkBool32 CreateFence(const VkDevice& device, VkFence* outFence, VkBool32 signaled = 0);
 /*
 * !@brief Creates synchronization semaphore
 *

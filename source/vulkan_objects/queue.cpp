@@ -32,7 +32,6 @@ const Queue& Queue::Wait() const
 
 const Queue& Queue::Submit(const VkCommandBuffer& cmd) const
 {
-	Wait();
 	vkResetFences(device, 1, &fence);
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

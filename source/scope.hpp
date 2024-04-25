@@ -95,6 +95,6 @@ private:
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 	const VkFormat depthFormat = VK_FORMAT_D16_UNORM;
-	VkFormat swapchainFormat = VK_FORMAT_R8G8B8A8_SRGB;
+	VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkExtent2D swapchainExtent = { 0, 0 };
 };

@@ -14,6 +14,7 @@ namespace GR
 		glfwInit();
 		assert(glfwVulkanSupported());
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 		glfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
 
 #ifdef INCLUDE_GUI

@@ -16,10 +16,11 @@ VkBool32 CopyBufferToImage(VkCommandBuffer& cmd, const VkImage& image, const VkB
 	return 1;
 }
 
-VkBool32 CreateFence(const VkDevice& device, VkFence* outFence)
+VkBool32 CreateFence(const VkDevice& device, VkFence* outFence, VkBool32 signaled)
 {
 	VkFenceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	createInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 	return vkCreateFence(device, &createInfo, VK_NULL_HANDLE, outFence) == VK_SUCCESS;
 }
 
@@ -56,27 +57,60 @@ VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize
 TVector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const TVector<VkQueueFlagBits>& flags)
 {
 	uint32_t familiesCount;
-	TVector<uint32_t> output(flags.size());
+	TVector<uint32_t> output(flags.size(), 0xffffu);
 	TVector<VkQueueFamilyProperties> queueFamilies;
 
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familiesCount, VK_NULL_HANDLE);
 	queueFamilies.resize(familiesCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familiesCount, queueFamilies.data());
 
-	//reverse to try to find a flag specific queue first and general queue if it doesn't exist
-	std::reverse(queueFamilies.begin(), queueFamilies.end());
-
-	int j = 0;
-	for (const auto& flag : flags) {
-		int i = queueFamilies.size() - 1;
-		for (const auto& family : queueFamilies) {
-			if ((flag & family.queueFlags) != 0) {
-				output[j++] = i;
-				break;
+	for (int j = 0; j < flags.size(); j++)
+	{
+		if (flags[j] & VK_QUEUE_COMPUTE_BIT)
+		{
+			for (int i = 0; i < queueFamilies.size(); i++)
+			{
+				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+				{
+					output[j] = i;
+					break;
+				}
 			}
-			i--;
 		}
-		assert(i >= 0);
+		else if (flags[j] & VK_QUEUE_GRAPHICS_BIT)
+		{
+			for (int i = 0; i < queueFamilies.size(); i++)
+			{
+				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0)
+				{
+					output[j] = i;
+					break;
+				}
+			}
+		}
+		else if (flags[j] & VK_QUEUE_TRANSFER_BIT)
+		{
+			for (int i = 0; i < queueFamilies.size(); i++)
+			{
+				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+				{
+					output[j] = i;
+					break;
+				}
+			}
+		}
+
+		if (output[j] == 0xffffu)
+		{
+			for (int i = 0; i < queueFamilies.size(); i++)
+			{
+				if (queueFamilies[i].queueFlags & flags[j])
+				{
+					output[j] = i;
+					break;
+				}
+			}
+		}
 	}
 
 	return output;
