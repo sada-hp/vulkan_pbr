@@ -34,6 +34,7 @@ class RenderScope
 {
 public:
 	RenderScope() {};
+
 	~RenderScope() { Destroy(); };
 
 	RenderScope& CreatePhysicalDevice(const VkInstance& instance, const TVector<const char*>& device_extensions);

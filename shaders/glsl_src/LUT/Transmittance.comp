@@ -1,0 +1,43 @@
+/*
+*Based off the works of Eric Bruneton
+*https://evasion.inrialpes.fr/~Eric.Bruneton/
+*/
+
+#version 460
+#include "LUT.glsl"
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform writeonly image2D outImage;
+
+float GetOpticalDepth(float H, float R, float Mu)
+{
+    if (Mu < -sqrt (1.0 - (Rg / R) * (Rg / R)))
+        return 1e9;
+
+    float Depth = 0.0;
+    float Dx = DistanceToAtmosphere(Rg, Rt, R, Mu) / float(TRANSMITTANCE_SAMPLES);
+    float Xi = 0.0;
+    float Yi = GetAirDensity(Rg, R, H);
+
+    for (int i = 1; i < TRANSMITTANCE_SAMPLES; i++)
+    {
+        float Xj = float(i) * Dx;
+        float Yj = exp(-(sqrt(R * R + Xj * Xj + 2.0 * Xj * R * Mu) - Rg) / H);
+        Depth += (Yi + Yj) / 2.0 * Dx;
+        Xi = Xj;
+        Yi = Yj;
+    }
+
+    return Depth;
+}
+
+void main()
+{
+    float R, Mu;
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+
+    GetTransmittanceRMu(UV, R, Mu);
+    vec3 Depth = BetaR * GetOpticalDepth(HR, R, Mu) + BetaMEx * GetOpticalDepth(HM, R, Mu);
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(exp(-Depth), 0.0));
+}

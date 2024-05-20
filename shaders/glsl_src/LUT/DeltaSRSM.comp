@@ -1,0 +1,74 @@
+/*
+*Based off the works of Eric Bruneton
+*https://evasion.inrialpes.fr/~Eric.Bruneton/
+*/
+
+#version 460
+#include "LUT.glsl"
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform writeonly image3D rScattering;
+layout (binding = 1, rgba16f) uniform writeonly image3D mScattering;
+layout (binding = 2) uniform sampler2D Transmittance;
+
+void RayMieIntegrand ( float Rg, float Rt, float R, float Mu, float MuS, float Nu, float t, out vec3 Ray, out vec3 Mie )
+{
+    Ray = vec3 ( 0.0 );
+    Mie = vec3 ( 0.0 );
+
+    float Ri = sqrt ( R * R + t * t + 2.0 * R * Mu * t );
+    float MuSi = ( Nu * t + MuS * R ) / Ri;
+    Ri = max ( Rg, Ri );
+
+    if ( MuSi >= -sqrt ( 1.0 - Rg * Rg / ( Ri * Ri ) ) )
+    {
+        vec3 T = GetTransmittance ( Transmittance, Rg, Rt, R, Mu, t )
+                * GetTransmittance ( Transmittance, Rg, Rt, Ri, MuSi );
+
+        Ray = GetAirDensity ( Rg, Ri, HR ) * T;
+        Mie = GetAirDensity ( Rg, Ri, HM ) * T;
+    }
+}
+
+void ComputeDeltaSRDeltaSM ( float Rg, float Rt, float R, float Mu, float MuS, float Nu, out vec3 Ray, out vec3 Mie )
+{
+    Ray = vec3 ( 0.0 );
+    Mie = vec3 ( 0.0 );
+
+    float Dx = DistanceToAtmosphere ( Rg, Rt, R, Mu ) / float ( INSCATTERING_SAMPLES );
+
+    vec3 Rayi, Miei;
+    RayMieIntegrand ( Rg, Rt, R, Mu, MuS, Nu, 0.0, Rayi, Miei );
+
+    for ( int i = 1; i <= INSCATTERING_SAMPLES; i++ )
+    {
+        float Xi = i * Dx;
+
+        vec3 Rayj, Miej;
+        RayMieIntegrand ( Rg, Rt, R, Mu, MuS, Nu, Xi, Rayj, Miej );
+
+        Ray += ( Rayi + Rayj ) * 0.5 * Dx;
+        Mie += ( Miei + Miej ) * 0.5 * Dx;
+
+        Rayi = Rayj;
+        Miei = Miej;
+    }
+
+    Ray *= BetaR;
+    Mie *= BetaMSca;
+}
+
+void main()
+{
+    float R, CosViewZenith, CosSunZenith, CosViewun;
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+    UVWToWorldInscatter(Rg, Rt, UV, float(gl_GlobalInvocationID.z), R, CosViewZenith, CosSunZenith, CosViewun);
+
+    vec3 DeltaSR;
+    vec3 DeltaSM;
+    ComputeDeltaSRDeltaSM ( Rg, Rt, R, CosViewZenith, CosSunZenith, CosViewun, DeltaSR, DeltaSM );
+    
+    imageStore(rScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSR, 0.0));
+    imageStore(mScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSM, 0.0));
+}

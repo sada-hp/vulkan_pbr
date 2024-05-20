@@ -1,4 +1,4 @@
-	#include "pch.hpp"
+#include "pch.hpp"
 #include "noise.hpp"
 #include "vulkan_objects/pipeline.hpp"
 #include "vulkan_objects/descriptor_set.hpp"
@@ -21,7 +21,7 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 	noiseInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 	noiseInfo.queueFamilyIndexCount = queueFamilyIndices.size();
 	noiseInfo.pQueueFamilyIndices = queueFamilyIndices.data();
-	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	noiseInfo.imageType = imageSize.depth == 1u ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -58,7 +58,6 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 		.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 	noise_set->BindSet(cmd, *noise_pipeline);
-	noise_pipeline->BindPipeline(cmd);
 	noise_pipeline->Dispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, noise->GetExtent().depth);
 	::EndCommandBuffer(cmd);
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
@@ -66,7 +65,7 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 		.Wait()
 		.FreeCommandBuffers(1, &cmd);
 
-	noise->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	noise->GenerateMipMaps();
 
 	return noise;
 }
@@ -78,7 +77,7 @@ TAuto<Image> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent3D imageS
 
 TAuto<Image> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate_noise("worley", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { frequency, octaves });
+	return generate_noise("worley", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
 }
 
 TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
@@ -86,9 +85,16 @@ TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D 
 	return generate_noise("worley_perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
 }
 
-TAuto<Image> GRNoise::GenerateCloudNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
+TAuto<Image> GRNoise::GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate_noise("cloud_noise", Scope, VK_FORMAT_R8G8B8A8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
+	return generate_noise("cloud_shape", Scope, VK_FORMAT_R8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
+}
+
+TAuto<Image> GRNoise::GenerateCloudDetailNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
+{
+	uint32_t seed = 0;
+	seed = (uint32_t)&seed;
+	return generate_noise("cloud_detail", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
 }

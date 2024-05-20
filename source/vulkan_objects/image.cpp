@@ -124,6 +124,24 @@ Image& Image::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
 	return *this;
 }
 
+Image& Image::GenerateMipMaps()
+{
+	VkCommandBuffer cmd;
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(1, &cmd);
+
+	::BeginOneTimeSubmitCmd(cmd);
+	GenerateMipMaps(cmd);
+	::EndCommandBuffer(cmd);
+
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
+	return *this;
+}
+
 Image& Image::GenerateMipMaps(VkCommandBuffer& cmd)
 {
 	if (subRange.levelCount == 1) {
@@ -145,6 +163,7 @@ Image& Image::GenerateMipMaps(VkCommandBuffer& cmd)
 
 		int32_t mipWidth = imageSize.width;
 		int32_t mipHeight = imageSize.height;
+		int32_t mipDepth = imageSize.depth;
 
 		for (uint32_t i = 1; i < subRange.levelCount; i++) {
 			barrier.subresourceRange.baseMipLevel = i;
@@ -161,13 +180,13 @@ Image& Image::GenerateMipMaps(VkCommandBuffer& cmd)
 
 			VkImageBlit blit{};
 			blit.srcOffsets[0] = { 0, 0, 0 };
-			blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+			blit.srcOffsets[1] = { mipWidth, mipHeight, mipDepth };
 			blit.srcSubresource.aspectMask = subRange.aspectMask;
 			blit.srcSubresource.mipLevel = i - 1;
 			blit.srcSubresource.baseArrayLayer = k;
 			blit.srcSubresource.layerCount = 1;
 			blit.dstOffsets[0] = { 0, 0, 0 };
-			blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+			blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, mipDepth > 1 ? mipDepth / 2 : 1 };
 			blit.dstSubresource.aspectMask = subRange.aspectMask;
 			blit.dstSubresource.mipLevel = i;
 			blit.dstSubresource.baseArrayLayer = k;
@@ -191,6 +210,7 @@ Image& Image::GenerateMipMaps(VkCommandBuffer& cmd)
 				1, &barrier);
 
 			if (mipWidth > 1) mipWidth /= 2;
+			if (mipDepth > 1) mipDepth /= 2;
 			if (mipHeight > 1) mipHeight /= 2;
 		}
 

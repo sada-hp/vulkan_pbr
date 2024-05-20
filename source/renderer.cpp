@@ -56,9 +56,10 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
+	res = create_hdr_pipeline() & res;
 
 	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
-		.SetDepthRange(1e-2f, 1e3f);
+		.SetDepthRange(1e-2f, 1e4f);
 
 	presentBuffers.resize(swapchainImages.size());
 	presentSemaphores.resize(swapchainImages.size());
@@ -79,6 +80,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 		res = CreateFence(Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
+	res = setup_precompute() & res;
 	res = prepare_scene() & res;
 
 #ifdef INCLUDE_GUI
@@ -110,6 +112,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	init_info.ImageCount = 3;
 	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	init_info.RenderPass = Scope.GetRenderPass();
+	init_info.Subpass = 1;
 
 	ImGui_ImplVulkan_Init(&init_info);
 #endif
@@ -135,6 +138,12 @@ VulkanBase::~VulkanBase() noexcept
 	CloudDetail.reset();
 	Gradient.reset();
 
+	Transmittance.reset();
+	ScatteringLUT.reset();
+	IrradianceLUT.reset();
+
+	//vkDestroyFramebuffer(Scope.GetDevice(), *HDRFB, nullptr);
+
 	registry.clear<VulkanGraphicsObject>();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
@@ -149,8 +158,7 @@ VulkanBase::~VulkanBase() noexcept
 			vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
 			return true;
 	});
-	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
-		.FreeCommandBuffers(presentBuffers.size(), presentBuffers.data());
+	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT) .FreeCommandBuffers(presentBuffers.size(), presentBuffers.data());
 	std::erase_if(framebuffers, [&, this](VkFramebuffer& fb) {
 			vkDestroyFramebuffer(Scope.GetDevice(), fb, VK_NULL_HANDLE);
 			return true;
@@ -159,9 +167,10 @@ VulkanBase::~VulkanBase() noexcept
 			vkDestroyImageView(Scope.GetDevice(), view, VK_NULL_HANDLE);
 			return true;
 	});
-	std::erase_if(depthAttachments, [&, this](std::unique_ptr<Image>& img) {
-			return true;
-	});
+	depthAttachments.clear();
+	hdrAttachments.clear();
+	HDRPipelines.resize(0);
+	HDRDescriptors.resize(0);
 
 	Scope.Destroy();
 	vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
@@ -180,13 +189,17 @@ void VulkanBase::Step(float DeltaTime)
 
 	//UBO
 	{
+		TMat4 view_matrix = camera.get_view_matrix();
+		TMat4 projection_matrix = camera.get_projection_matrix();
+		TMat4 view_proj_matrix = projection_matrix * view_matrix;
+
 		float Time = glfwGetTime();
 		UniformBuffer Uniform
 		{ 
-			camera.get_view_projection(),
-			camera.Projection.matrix,
-			camera.View.matrix,
-			SunDirection,
+			view_proj_matrix,
+			projection_matrix,
+			view_matrix,
+			glm::normalize(SunDirection),
 			Time
 		};
 
@@ -196,7 +209,7 @@ void VulkanBase::Step(float DeltaTime)
 	//View
 	{
 		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
-		TVec4 CameraPosition = TVec4(camera.GetWorldPosition(), 0.0);
+		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 1.0);
 		ViewBuffer Uniform
 		{
 			CameraPosition,
@@ -219,16 +232,18 @@ void VulkanBase::Step(float DeltaTime)
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		res = vkBeginCommandBuffer(cmd, &beginInfo);
 
-		VkClearValue clearValues[2];
+		VkClearValue clearValues[3];
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[1].depthStencil = { 1.0f, 0 };
+		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[2].depthStencil = { 1.0f, 0 };
+
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.framebuffer = framebuffers[swapchain_index];
 		renderPassInfo.renderPass = Scope.GetRenderPass();
 		renderPassInfo.renderArea.offset = { 0, 0 }; 
 		renderPassInfo.renderArea.extent = Scope.GetSwapchainExtent();
-		renderPassInfo.clearValueCount = 2;
+		renderPassInfo.clearValueCount = 3;
 		renderPassInfo.pClearValues = clearValues;
 
 		VkViewport viewport{};
@@ -246,14 +261,20 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		render_objects(cmd);
+		//render_objects(cmd);
 
-		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);	
+		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
 		skybox->pipeline.BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
-		
+
 		volume->descriptorSet.BindSet(cmd, volume->pipeline);
 		volume->pipeline.BindPipeline(cmd);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
+
+		HDRDescriptors[swapchain_index]->BindSet(cmd, *HDRPipelines[swapchain_index]);
+		HDRPipelines[swapchain_index]->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 #ifdef INCLUDE_GUI
@@ -265,7 +286,7 @@ void VulkanBase::Step(float DeltaTime)
 	}
 
 	VkSubmitInfo submitInfo{};
-	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[swapchain_index]};
+	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[swapchain_index] };
 	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[swapchain_index] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -303,14 +324,15 @@ void VulkanBase::HandleResize()
 		vkDestroyFramebuffer(Scope.GetDevice(), fb, VK_NULL_HANDLE);
 		return true;
 	});
-	std::erase_if(depthAttachments, [&, this](std::unique_ptr<Image>& img) {
-		return true;
-	});
 	std::erase_if(swapchainViews, [&, this](VkImageView& view) {
 		vkDestroyImageView(Scope.GetDevice(), view, VK_NULL_HANDLE);
 		return true;
 	});
+	depthAttachments.resize(0);
 	swapchainImages.resize(0);
+	hdrAttachments.resize(0);
+	HDRPipelines.resize(0);
+	HDRDescriptors.resize(0);
 
 	Scope.RecreateSwapchain(surface);
 
@@ -319,9 +341,10 @@ void VulkanBase::HandleResize()
 
 	create_swapchain_images();
 	create_framebuffers();
+	create_hdr_pipeline();
 
 	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
-		.SetDepthRange(1e-2f, 1e3f);
+		.SetDepthRange(1e-2f, 1e4f);
 
 	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {
 		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -414,13 +437,20 @@ VkBool32 VulkanBase::create_swapchain_images()
 	uint32_t imagesCount = Scope.GetMaxFramesInFlight();
 	swapchainImages.resize(imagesCount);
 	depthAttachments.resize(imagesCount);
+	hdrAttachments.resize(imagesCount);
 	VkBool32 res = vkGetSwapchainImagesKHR(Scope.GetDevice(), Scope.GetSwapchain(), &imagesCount, swapchainImages.data()) == VK_SUCCESS;
 
-	for (VkImage image : swapchainImages) {
+	const TArray<uint32_t, 2> queueIndices = { Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
+	VmaAllocationCreateInfo allocCreateInfo{};
+	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+	for (size_t i = 0; i < swapchainImages.size(); i++) 
+	{
 		VkImageView imageView;
+
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = image;
+		viewInfo.image = swapchainImages[i];
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
@@ -429,41 +459,50 @@ VkBool32 VulkanBase::create_swapchain_images()
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		viewInfo.format = Scope.GetColorFormat();
 
+		VkImageCreateInfo hdrInfo{};
+		hdrInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		hdrInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+		hdrInfo.arrayLayers = 1;
+		hdrInfo.extent = { Scope.GetSwapchainExtent().width, Scope.GetSwapchainExtent().height, 1 };
+		hdrInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		hdrInfo.imageType = VK_IMAGE_TYPE_2D;
+		hdrInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		hdrInfo.mipLevels = 1;
+		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+		hdrInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+		hdrInfo.queueFamilyIndexCount = queueIndices.size();
+		hdrInfo.pQueueFamilyIndices = queueIndices.data();
+
+		VkImageCreateInfo depthInfo{};
+		depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		depthInfo.format = Scope.GetDepthFormat();
+		depthInfo.arrayLayers = 1;
+		depthInfo.extent = { Scope.GetSwapchainExtent().width, Scope.GetSwapchainExtent().height, 1 };
+		depthInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		depthInfo.imageType = VK_IMAGE_TYPE_2D;
+		depthInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		depthInfo.mipLevels = 1;
+		depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		depthInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+		depthInfo.queueFamilyIndexCount = queueIndices.size();
+		depthInfo.pQueueFamilyIndices = queueIndices.data();
+
 		res = (vkCreateImageView(Scope.GetDevice(), &viewInfo, VK_NULL_HANDLE, &imageView) == VK_SUCCESS) & res;
 		swapchainViews.push_back(imageView);
-	}
 
-	const TArray<uint32_t, 2> queueIndices = { Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex()};
-	VmaAllocationCreateInfo allocCreateInfo{};
-	VkImageCreateInfo depthInfo{};
-	depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	depthInfo.format = Scope.GetDepthFormat();
-	depthInfo.arrayLayers = 1;
-	depthInfo.extent = { Scope.GetSwapchainExtent().width, Scope.GetSwapchainExtent().height, 1};
-	depthInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	depthInfo.imageType = VK_IMAGE_TYPE_2D;
-	depthInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	depthInfo.mipLevels = 1;
-	depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-	depthInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-	depthInfo.queueFamilyIndexCount = queueIndices.size();
-	depthInfo.pQueueFamilyIndices = queueIndices.data();
+		viewInfo.format = hdrInfo.format;
+		hdrAttachments[i] = std::make_unique<Image>(Scope);
+		hdrAttachments[i]->CreateImage(hdrInfo, allocCreateInfo)
+			.CreateImageView(viewInfo)
+			.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	viewInfo.format = Scope.GetDepthFormat();
-
-	for (auto& attachment : depthAttachments) {
-		attachment = std::make_unique<Image>(Scope);
-		attachment->CreateImage(depthInfo, allocCreateInfo)
-				  .CreateImageView(viewInfo);
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		viewInfo.format = Scope.GetDepthFormat();
+		depthAttachments[i] = std::make_unique<Image>(Scope);
+		depthAttachments[i]->CreateImage(depthInfo, allocCreateInfo)
+			.CreateImageView(viewInfo);
 	}
 
 	return res;
@@ -476,8 +515,31 @@ VkBool32 VulkanBase::create_framebuffers()
 	framebuffers.resize(swapchainImages.size());
 
 	VkBool32 res = 1;
-	for (size_t i = 0; i < framebuffers.size(); i++) {
-		res = CreateFramebuffer(Scope.GetDevice(), Scope.GetRenderPass(), Scope.GetSwapchainExtent(), { swapchainViews[i], depthAttachments[i]->GetImageView() }, &framebuffers[i]) & res;
+	for (size_t i = 0; i < framebuffers.size(); i++) 
+	{
+		res = CreateFramebuffer(Scope.GetDevice(), Scope.GetRenderPass(), Scope.GetSwapchainExtent(), { hdrAttachments[i]->GetImageView(), swapchainViews[i], depthAttachments[i]->GetImageView() }, &framebuffers[i]) & res;
+	}
+
+	return res;
+}
+
+VkBool32 VulkanBase::create_hdr_pipeline()
+{
+	VkBool32 res = 1;
+	HDRPipelines.resize(swapchainImages.size());
+	HDRDescriptors.resize(swapchainImages.size());
+
+	for (size_t i = 0; i < HDRDescriptors.size(); i++)
+	{
+		HDRDescriptors[i] = std::make_unique<DescriptorSet>(Scope);
+		HDRDescriptors[i]->AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, *hdrAttachments[i])
+			.Allocate();
+
+		HDRPipelines[i] = std::make_unique<GraphicsPipeline>(Scope);
+		HDRPipelines[i]->SetShaderStages("hdr", VkShaderStageFlagBits(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+			.AddDescriptorLayout(HDRDescriptors[i]->GetLayout())
+			.SetSubpass(1)
+			.Construct();
 	}
 
 	return res;
@@ -494,6 +556,7 @@ VkBool32 VulkanBase::prepare_scene()
 	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	uboInfo.size = sizeof(UniformBuffer);
 	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
@@ -513,22 +576,22 @@ VkBool32 VulkanBase::prepare_scene()
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	cloud_layer = std::make_unique<Buffer>(Scope, cloudInfo, uboAllocCreateInfo);
 
-	CloudShape = GRNoise::GenerateCloudNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
-	CloudDetail = GRNoise::GenerateWorley(Scope, { 32u, 32u, 32u }, 8u, 3u);
-
-	//WeatherImage = GRFile::ImportImage(Scope, "Content\\weather_map.jpg");
-	//WeatherImage->CreateSampler(SamplerFlagBits::RepeatUVW);
+	CloudShape = GRNoise::GenerateCloudShapeNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
+	CloudDetail = GRNoise::GenerateCloudDetailNoise(Scope, { 32u, 32u, 32u }, 8u, 3u);
 
 	Gradient = GRFile::ImportImage(Scope, "Content\\Gradient.jpg");
 	Gradient->CreateSampler(SamplerFlagBits::AnisatropyEnabled);
 	
 	volume = std::make_unique<GraphicsObject>(Scope);
-	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
+	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
 		.AddUniformBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT, *cloud_layer)
 		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
 		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
 		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
+		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
+		.AddImageSampler(8, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
 		.Allocate();
 
 	VkPipelineColorBlendAttachmentState blendState{};
@@ -546,16 +609,11 @@ VkBool32 VulkanBase::prepare_scene()
 		.AddDescriptorLayout(volume->descriptorSet.GetLayout())
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.Construct();
-
-	TArray<const char*, 6> sky_collection = { ("content\\Background_East.jpg"), ("content\\Background_West.jpg"),
-		("content\\Background_Top.jpg"), ("content\\Background_Bottom.jpg"),
-		("content\\Background_North.jpg"), ("content\\Background_South.jpg") };
-
+	
 	skybox = std::make_unique<GraphicsObject>(Scope);
-	skybox->textures.push_back(GRFile::ImportImages(Scope, sky_collection.data(), sky_collection.size(), VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT));
-	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *skybox->textures[0])
+	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
 		.Allocate();
 
 	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
@@ -585,12 +643,244 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 
 VkBool32 VulkanBase::setup_precompute()
 {
+	TAuto<Image> DeltaE;
+	TAuto<Image> DeltaSR;
+	TAuto<Image> DeltaSM;
+	TAuto<Image> DeltaJ;
+
+	TAuto<DescriptorSet> TrDSO;
+	TAuto<DescriptorSet> DeltaEDSO;
+	TAuto<DescriptorSet> DeltaSRSMDSO;
+	TAuto<DescriptorSet> SingleScatterDSO;
+
+	TAuto<DescriptorSet> DeltaJDSO;
+	TAuto<DescriptorSet> DeltaEnDSO;
+	TAuto<DescriptorSet> DeltaSDSO;
+	TAuto<DescriptorSet> AddEDSO;
+	TAuto<DescriptorSet> AddSDSO;
+
+	TAuto<ComputePipeline> GenTrLUT;
+	TAuto<ComputePipeline> GenDeltaELUT;
+	TAuto<ComputePipeline> GenDeltaSRSMLUT;
+	TAuto<ComputePipeline> GenSingleScatterLUT;
+
+	TAuto<ComputePipeline> GenDeltaJLUT;
+	TAuto<ComputePipeline> GenDeltaEnLUT;
+	TAuto<ComputePipeline> GenDeltaSLUT;
+	TAuto<ComputePipeline> AddE;
+	TAuto<ComputePipeline> AddS;
+
+	VkImageSubresourceRange subRes{};
+	subRes.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subRes.baseArrayLayer = 0;
+	subRes.baseMipLevel = 0;
+	subRes.layerCount = 1;
+	subRes.levelCount = 1;
+
+	VkImageCreateInfo imageCI{};
+	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCI.arrayLayers = 1;
+	imageCI.extent = { 256, 64, 1u };
+	imageCI.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageCI.mipLevels = 1;
+	imageCI.flags = 0;
+	imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCI.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCI.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageCI.imageType = VK_IMAGE_TYPE_2D;
+
+	VkImageViewCreateInfo imageViewCI{};
+	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	imageViewCI.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imageViewCI.subresourceRange = subRes;
+
+	VmaAllocationCreateInfo imageAlloc{};
+	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+	Transmittance = std::make_unique<Image>(Scope);
+	Transmittance->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	TrDSO = std::make_unique<DescriptorSet>(Scope);
+	TrDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.Allocate();
+
+	GenTrLUT = std::make_unique<ComputePipeline>(Scope);
+	GenTrLUT->SetShaderName("transmittance")
+		.AddDescriptorLayout(TrDSO->GetLayout())
+		.Construct();
+
+	imageCI.extent = { 64u, 16u, 1u };
+	DeltaE = std::make_unique<Image>(Scope);
+	DeltaE->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	DeltaEDSO = std::make_unique<DescriptorSet>(Scope);
+	DeltaEDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.Allocate();
+
+	GenDeltaELUT = std::make_unique<ComputePipeline>(Scope);
+	GenDeltaELUT->SetShaderName("deltaE")
+		.AddDescriptorLayout(DeltaEDSO->GetLayout())
+		.Construct();
+
+	IrradianceLUT = std::make_unique<Image>(Scope);
+	IrradianceLUT->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	imageCI.imageType = VK_IMAGE_TYPE_3D;
+	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_3D;
+	imageCI.extent = { 256u, 128u, 32u };
+	DeltaSR = std::make_unique<Image>(Scope);
+	DeltaSR->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	DeltaSM = std::make_unique<Image>(Scope);
+	DeltaSM->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	DeltaSRSMDSO = std::make_unique<DescriptorSet>(Scope);
+	DeltaSRSMDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.Allocate();
+
+	GenDeltaSRSMLUT = std::make_unique<ComputePipeline>(Scope);
+	GenDeltaSRSMLUT->SetShaderName("deltaSRSM")
+		.AddDescriptorLayout(DeltaSRSMDSO->GetLayout())
+		.Construct();
+
+	ScatteringLUT = std::make_unique<Image>(Scope);
+	ScatteringLUT->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	SingleScatterDSO = std::make_unique<DescriptorSet>(Scope);
+	SingleScatterDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.Allocate();
+
+	GenSingleScatterLUT = std::make_unique<ComputePipeline>(Scope);
+	GenSingleScatterLUT->SetShaderName("singleScattering")
+		.AddDescriptorLayout(SingleScatterDSO->GetLayout())
+		.Construct();
+
+	DeltaJ = std::make_unique<Image>(Scope);
+	DeltaJ->CreateImage(imageCI, imageAlloc)
+		.CreateImageView(imageViewCI)
+		.CreateSampler(SamplerFlagBits::None)
+		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+
+	DeltaJDSO = std::make_unique<DescriptorSet>(Scope);
+	DeltaJDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.Allocate();
+
+	GenDeltaJLUT = std::make_unique<ComputePipeline>(Scope);
+	GenDeltaJLUT->SetShaderName("deltaJ")
+		.AddDescriptorLayout(DeltaJDSO->GetLayout())
+		.Construct();
+
+	DeltaEnDSO = std::make_unique<DescriptorSet>(Scope);
+	DeltaEnDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.Allocate();
+
+	GenDeltaEnLUT = std::make_unique<ComputePipeline>(Scope);
+	GenDeltaEnLUT->SetShaderName("deltaEn")
+		.AddDescriptorLayout(DeltaEnDSO->GetLayout())
+		.Construct();
+
+	DeltaSDSO = std::make_unique<DescriptorSet>(Scope);
+	DeltaSDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
+		.Allocate();
+
+	GenDeltaSLUT = std::make_unique<ComputePipeline>(Scope);
+	GenDeltaSLUT->SetShaderName("deltaS")
+		.AddDescriptorLayout(DeltaSDSO->GetLayout())
+		.Construct();
+
+	AddEDSO = std::make_unique<DescriptorSet>(Scope);
+	AddEDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *IrradianceLUT)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+		.Allocate();
+
+	AddE = std::make_unique<ComputePipeline>(Scope);
+	AddE->SetShaderName("addE")
+		.AddDescriptorLayout(AddEDSO->GetLayout())
+		.Construct();
+
+	AddSDSO = std::make_unique<DescriptorSet>(Scope);
+	AddSDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.Allocate();
+
+	AddS = std::make_unique<ComputePipeline>(Scope);
+	AddS->SetShaderName("addS")
+		.AddDescriptorLayout(AddSDSO->GetLayout())
+		.Construct();
+
+	VkCommandBuffer cmd;
+	const Queue& Queue = Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
+
+	Queue.AllocateCommandBuffers(1, &cmd);
+	::BeginOneTimeSubmitCmd(cmd);
+
+	TrDSO->BindSet(cmd, *GenTrLUT);
+	GenTrLUT->Dispatch(cmd, Transmittance->GetExtent().width, Transmittance->GetExtent().height, Transmittance->GetExtent().depth);
+
+	DeltaEDSO->BindSet(cmd, *GenDeltaELUT);
+	GenDeltaELUT->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+
+	DeltaSRSMDSO->BindSet(cmd, *GenDeltaSRSMLUT);
+	GenDeltaSRSMLUT->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+
+	SingleScatterDSO->BindSet(cmd, *GenSingleScatterLUT);
+	GenSingleScatterLUT->Dispatch(cmd, ScatteringLUT->GetExtent().width, ScatteringLUT->GetExtent().height, ScatteringLUT->GetExtent().depth);
+
+	DeltaJDSO->BindSet(cmd, *GenDeltaJLUT);
+	GenDeltaJLUT->Dispatch(cmd, DeltaJ->GetExtent().width, DeltaJ->GetExtent().height, DeltaJ->GetExtent().depth);
+
+	DeltaEnDSO->BindSet(cmd, *GenDeltaEnLUT);
+	GenDeltaEnLUT->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+
+	DeltaSDSO->BindSet(cmd, *GenDeltaSLUT);
+	GenDeltaSLUT->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+
+	AddEDSO->BindSet(cmd, *AddE);
+	AddE->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+
+	AddSDSO->BindSet(cmd, *AddS);
+	AddS->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+
+	::EndCommandBuffer(cmd);
+	Queue.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
 	return 1;
-}
-
-void VulkanBase::run_precompute(VkCommandBuffer cmd)
-{
-
 }
 
 TVector<const char*> VulkanBase::getRequiredExtensions()

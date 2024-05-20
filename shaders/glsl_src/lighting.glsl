@@ -1,20 +1,26 @@
-#define PI 3.14159265359
-#define ONE_OVER_4PI 1.0 / (4.0 * PI)
-#define EARTH_RADIUS 6370e3
-#define ATMOSPHERE_START 6500e3
-#define ATMOSPHERE_END 6650e3
-#define ATMOSPHERE_DELTA ATMOSPHERE_END - ATMOSPHERE_START
-#define AMBIENT 0.06
+#include "constants.glsl"
 
-float DistanceToAtmosphere(float r, float u, float atmo_r)
-{
-    float d = sqrt(max(pow(r, 2.0) * (pow(u, 2.0) - 1.0) + pow(atmo_r, 2.0), 0.0));
-    return max(-r * u - d, 0.0);
+float DistanceToAtmosphere(float Rg, float Rt, float R, float Mu)
+{        
+    float Dout = -R * Mu + sqrt ( R * R * ( Mu * Mu - 1.0 ) + Rt * Rt );
+    float Delta2 = R * R * ( Mu * Mu - 1.0 ) + Rg * Rg;
+    
+    if ( Delta2 >= 0.0 )
+    {
+        float Din = -R * Mu - sqrt ( Delta2 );
+        
+        if ( Din >= 0.0 )
+        {
+            Dout = min ( Dout, Din );
+        }
+    }
+
+    return Dout;
 }
 
-bool raySphereintersection(vec3 ro, vec3 rd, float radius, out vec3 p1)
+bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius, out vec3 p1)
 {
-	vec3 sphereCenter = vec3(View.CameraPosition.x, -EARTH_RADIUS, View.CameraPosition.z);
+	vec3 sphereCenter = so;
 
 	float radius2 = radius*radius;
 
@@ -62,8 +68,10 @@ float DrainePhase(float a, float g, float k)
 }
 
 //https://research.nvidia.com/labs/rtr/approximate-mie/publications/approximate-mie.pdf
-float HGDPhase(float a, float d)
+float HGDPhase(float a, float g)
 {
+    float d = mix(5.0, 50.0, g);
+
     float ghg = exp(-0.0990567/(d - 1.67154));
     float gd = exp(-2.20679/(d + 3.91029) - 0.428934);
     float kd = exp(3.62489 - (8.29288/(d + 5.52825)));
@@ -72,7 +80,15 @@ float HGDPhase(float a, float d)
     float dp = DrainePhase(a, gd, kd);
     float hgp = HenyeyGreensteinPhase(a, ghg);
 
-    return (1.0 - w) * hgp + w * dp;
+    return mix(hgp, dp, w);
+}
+
+float HGDPhase(float a, float ghg, float gd, float kd, float w)
+{
+    float dp = DrainePhase(a, gd, kd);
+    float hgp = HenyeyGreensteinPhase(a, ghg);
+
+    return mix(hgp, dp, w);
 }
 
 float Powder(float s, float d, float a)

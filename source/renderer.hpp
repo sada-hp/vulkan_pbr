@@ -14,7 +14,7 @@
 #include "structs.hpp"
 
 #if DEBUG == 1
-	#define VALIDATION
+#define VALIDATION
 #endif
 
 namespace GR
@@ -24,18 +24,18 @@ namespace GR
 		GRComponents::Projection Projection;
 		GRComponents::Transform View;
 
-		GRAPI TVec3 GetWorldPosition()
-		{
-			return glm::transpose(View.GetRotation()) * View.GetOffset();
-		}
-
-		GRAPI void SetWorldPosition(TVec3 Offset)
-		{
-			View.SetOffset(View.GetRotation() * Offset);
-		}
-
 	private:
 		friend class VulkanBase;
+
+		TMat4 get_view_matrix() const
+		{
+			return glm::lookAt(View.GetOffset(), View.GetOffset() + View.GetForward(), View.GetUp());
+		}
+
+		TMat4 get_projection_matrix() const
+		{
+			return Projection.matrix;
+		}
 
 		TMat4 get_view_projection() const
 		{
@@ -49,6 +49,7 @@ struct VulkanGraphicsObject
 	VulkanGraphicsObject(RenderScope& Scope)
 		: descriptor_set(Scope), pipeline(Scope)
 	{
+
 	}
 
 	TAuto<Mesh> mesh;
@@ -64,17 +65,21 @@ class VulkanBase
 	TVector<VkImage> swapchainImages = {};
 	TVector<VkImageView> swapchainViews = {};
 	TVector<TAuto<Image>> depthAttachments = {};
+	TVector<TAuto<Image>> hdrAttachments = {};
 	TVector<VkFramebuffer> framebuffers = {};
 	TVector<VkFence> presentFences = {};
 	TVector<VkSemaphore> presentSemaphores = {};
 	TVector<VkSemaphore> swapchainSemaphores = {};
 	TVector<VkCommandBuffer> presentBuffers = {};
+	TVector<TAuto<GraphicsPipeline>> HDRPipelines;
+	TVector<TAuto<DescriptorSet>> HDRDescriptors;
 
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 	RenderScope Scope;
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
+	//TAuto<VkFramebuffer> HDRFB;
 
 	TAuto<Buffer> ubo = {};		
 	TAuto<Buffer> view = {};
@@ -86,11 +91,15 @@ class VulkanBase
 	TAuto<Image> CloudDetail;
 	TAuto<Image> Gradient;
 
-	TAuto<ComputePipeline> TransDeltaLUT;
+	TAuto<Image> ScatteringLUT;
+	TAuto<Image> IrradianceLUT;
+	TAuto<Image> Transmittance;
 
 	uint32_t swapchain_index = 0;
 
+#ifdef INCLUDE_GUI
 	VkDescriptorPool imguiPool;
+#endif
 
 public:
 	SCloudLayer CloudLayer;
@@ -134,6 +143,8 @@ private:
 	* @return VK_TRUE if all framebuffers were created successfuly, VK_FALSE otherwise
 	*/
 	VkBool32 create_framebuffers();
+
+	VkBool32 create_hdr_pipeline();
 	/*
 	* !@brief Handles creation of an object and a skybox
 	*/
@@ -142,8 +153,6 @@ private:
 	void render_objects(VkCommandBuffer cmd);
 
 	VkBool32 setup_precompute();
-
-	void run_precompute(VkCommandBuffer cmd);
 
 	TVector<const char*> getRequiredExtensions();
 

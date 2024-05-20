@@ -56,6 +56,8 @@ struct Image
 
 	Image& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout);
 
+	Image& GenerateMipMaps();
+
 	Image& GenerateMipMaps(VkCommandBuffer& cmd);
 
 	const VkImage& GetImage() const { return image; };

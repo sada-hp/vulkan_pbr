@@ -44,14 +44,14 @@ namespace GRComponents
 		GRAPI Transform& SetOffset(const TVec3& V)
 		{
 			matrix[3] = glm::vec4(V, 1.0);
-			
+
 			return *this;
 		}
 
 		GRAPI Transform& Translate(const TVec3& V)
 		{
-			matrix[3] += glm::vec4(V, 1.0);
-		
+			matrix[3] += glm::vec4(GetRotation() * V, 1.0);
+
 			return *this;
 		}
 
@@ -60,7 +60,7 @@ namespace GRComponents
 			matrix[0] = glm::vec4(R, 0.0);
 			matrix[1] = glm::vec4(U, 0.0);
 			matrix[2] = glm::vec4(F, 0.0);
-		
+
 			return *this;
 		}
 
@@ -74,29 +74,32 @@ namespace GRComponents
 			matrix[0] = glm::vec4(M[0], 0.0);
 			matrix[1] = glm::vec4(M[1], 0.0);
 			matrix[2] = glm::vec4(M[2], 0.0);
-		
+
 			return *this;
 		}
 
 		GRAPI Transform& SetRotation(float pitch, float yaw, float roll)
 		{
-			TQuat q = glm::angleAxis(roll, glm::vec3(0, 0, 1));
+			TQuat q = glm::angleAxis(yaw, glm::vec3(0, 1, 0));
+			q = q * glm::angleAxis(roll, glm::vec3(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
-			q = q * glm::angleAxis(yaw, glm::vec3(0, 1, 0));
 
-			return SetRotation(glm::mat3_cast(q));
+			glm::mat3 M = glm::mat3_cast(q);
+
+			matrix[0] = glm::vec4(glm::normalize(M[0]), 0.0);
+			matrix[1] = glm::vec4(glm::normalize(M[1]), 0.0);
+			matrix[2] = glm::vec4(glm::normalize(M[2]), 0.0);
+
+			return *this;
 		}
 
 		GRAPI Transform& Rotate(float pitch, float yaw, float roll)
 		{
-			TQuat q = glm::angleAxis(roll, glm::vec3(0, 0, 1));
+			TQuat q = glm::angleAxis(yaw, glm::vec3(0, 1, 0));
+			q = q * glm::angleAxis(roll, glm::vec3(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
-			q = q * glm::angleAxis(yaw, GetUp());
 
-			matrix = glm::mat4_cast(q) * matrix;
-			matrix[3] = glm::vec4(glm::floor(glm::vec3(matrix[3]) * 1e3f) / 1e3f, 1.0);
-
-			return *this;
+			return SetRotation(glm::mat3_cast(q) * GetRotation());
 		}
 
 		GRAPI TVec3 GetOffset() const
@@ -111,17 +114,17 @@ namespace GRComponents
 
 		GRAPI TVec3 GetForward() const
 		{
-			return glm::normalize(glm::vec3(matrix[2]));
+			return glm::vec3(matrix[2]);
 		}
 
 		GRAPI TVec3 GetRight() const
 		{
-			return glm::normalize(glm::vec3(matrix[0]));
+			return glm::vec3(matrix[0]);
 		}
 
 		GRAPI TVec3 GetUp() const
 		{
-			return glm::normalize(glm::vec3(matrix[1]));
+			return glm::vec3(matrix[1]);
 		}
 	};
 };

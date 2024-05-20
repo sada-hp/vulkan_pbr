@@ -35,6 +35,8 @@ public:
 
 	DescriptorSet& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const Image& image);
 
+	DescriptorSet& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const Image& image);
+
 	DescriptorSet& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const Image& image);
 
 	void Allocate();

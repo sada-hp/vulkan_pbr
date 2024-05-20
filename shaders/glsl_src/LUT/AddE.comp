@@ -1,0 +1,21 @@
+/*
+*Based off the works of Eric Bruneton
+*https://evasion.inrialpes.fr/~Eric.Bruneton/
+*/
+
+#version 460
+#include "LUT.glsl"
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform image2D outImage;
+layout (binding = 1) uniform sampler2D DeltaE;
+
+void main()
+{
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+
+    vec4 E = imageLoad(outImage, ivec2(gl_GlobalInvocationID.xy));
+    //imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(E.rgb + texture(DeltaE, UV).rgb, 0.0));
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(texture(DeltaE, UV).rgb, 0.0));
+}

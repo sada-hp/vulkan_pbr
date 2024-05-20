@@ -1,0 +1,49 @@
+/*
+*Based off the works of Eric Bruneton
+*https://evasion.inrialpes.fr/~Eric.Bruneton/
+*/
+
+#version 460
+#include "LUT.glsl"
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform writeonly image3D outImage;
+layout (binding = 1) uniform sampler2D Transmittance;
+layout (binding = 2) uniform sampler3D DeltaJ;
+
+vec3 InscatteringIntegrand ( float Rg, float Rt, float R, float Mu, float MuS, float Nu, float t )
+{
+    float Ri = sqrt ( R * R + t * t + 2.0 * R * Mu * t );
+    float Mui = ( R * Mu + t ) / Ri;
+    float MuSi = ( Nu * t + MuS * R ) / Ri;
+    return GetInscattering ( DeltaJ, Rg, Rt, Ri, Mui, MuSi, Nu ).rgb * GetTransmittance ( Transmittance, Rg, Rt, R, Mu, t );
+}
+
+vec3 ComputeDeltaS ( float Rg, float Rt, float R, float Mu, float MuS, float Nu )
+{
+    vec3 DeltaS = vec3 ( 0.0 );
+
+    float Dx = DistanceToAtmosphere ( Rg, Rt, R, Mu ) / float ( INSCATTERING_SAMPLES );
+
+    vec3 Si = InscatteringIntegrand ( Rg, Rt, R, Mu, MuS, Nu, 0.0 );
+
+    for ( int i = 1; i <= INSCATTERING_SAMPLES; i++ )
+    {
+        vec3 Sj = InscatteringIntegrand ( Rg, Rt, R, Mu, MuS, Nu, i * Dx );
+        DeltaS += ( Si + Sj ) * 0.5 * Dx;
+        Si = Sj;
+    }
+
+    return DeltaS;
+}
+
+void main()
+{
+    float R, CosViewZenith, CosSunZenith, CosViewun;
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+    UVWToWorldInscatter(Rg, Rt, UV, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
+
+    vec3 DeltaS = ComputeDeltaS ( Rg, Rt, R, CosViewZenith, CosSunZenith, CosViewun );
+    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaS, 0.0));
+}

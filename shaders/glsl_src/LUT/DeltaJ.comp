@@ -1,0 +1,98 @@
+/*
+*Based off the works of Eric Bruneton
+*https://evasion.inrialpes.fr/~Eric.Bruneton/
+*/
+
+#version 460
+#include "LUT.glsl"
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform writeonly image3D outImage;
+layout (binding = 1) uniform sampler2D Transmittance;
+layout (binding = 2) uniform sampler2D DeltaE;
+layout (binding = 3) uniform sampler3D DeltaSR;
+layout (binding = 4) uniform sampler3D DeltaSM;
+
+vec3 ComputeDeltaJ ( int Order, float Rg, float Rt, float R, float Mu, float MuS, float Nu )
+{
+    const float dPhi = PI / float(INSCATTERING_SPHERE_SAMPLES);
+    const float dTheta = PI / float(INSCATTERING_SPHERE_SAMPLES);
+    const float AverageGroundAlbedo = 0.1 / PI;
+
+    R = clamp ( R, Rg, Rt );
+    Mu = clamp ( Mu, -1.0, 1.0 );
+    MuS = clamp ( MuS, -1.0, 1.0 );
+
+    float Var = sqrt ( 1.0 - Mu * Mu ) * sqrt ( 1.0 - MuS * MuS );
+    Nu = clamp ( Nu, MuS * Mu - Var, MuS * Mu + Var );
+
+    float CosHorizon = -sqrt ( 1.0 - ( Rg / R ) * ( Rg / R ) );
+
+    vec3 View = vec3 ( sqrt ( 1.0 - Mu * Mu ), 0.0, Mu );
+    float Sx = View.x == 0.0 ? 0.0 : ( Nu - MuS * Mu ) / View.x;
+    vec3 Sun = vec3 ( Sx, sqrt ( max ( 0.0, 1.0 - Sx * Sx - MuS * MuS ) ), MuS );
+
+    vec3 DeltaJ = vec3 ( 0.0 );
+
+    // integral over 4.PI around x
+    for ( int iTheta = 0; iTheta < INSCATTERING_SPHERE_SAMPLES; iTheta++ )
+    {
+        float Theta = ( iTheta + 0.5 ) * dTheta;
+        float SinTheta = sin ( Theta );
+        float CosTheta = cos ( Theta );
+
+        float dGround = 0.0;
+        vec3 E = vec3 ( 0.0 );
+
+        // if ground visible in direction W then E = T(x,g) * albedo
+        if ( CosTheta < CosHorizon )
+        {
+            dGround = -R * CosTheta - sqrt ( R * R * ( CosTheta * CosTheta - 1.0 ) + Rg * Rg );
+            E = AverageGroundAlbedo * GetTransmittance ( Transmittance, Rg, Rt, -( R * CosTheta + dGround ) / Rg, dGround );
+        }
+
+        float dW = dTheta * dPhi * SinTheta;
+
+        for ( int iPhi = 0; iPhi < 2 * INSCATTERING_SPHERE_SAMPLES; iPhi++ )
+        {
+            float Phi = ( iPhi + 0.5 ) * dPhi;
+            vec3 W = vec3 ( cos ( Phi ) * SinTheta, sin ( Phi ) * SinTheta, CosTheta );
+
+            float nu1 = dot ( Sun, W );
+            float nu2 = dot ( View, W );
+
+            vec3 Normal = ( vec3 ( 0.0, 0.0, R ) + dGround * W ) / Rg;
+            E *= GetIrradiance ( DeltaE, Rg, Rt, Rg, dot ( Normal, Sun ) );
+
+            vec3 S = vec3 ( 0 );
+
+            if ( Order == 2 )
+            {
+                vec3 Ray = GetInscattering ( DeltaSR, Rg, Rt, R, W.z, MuS, nu1 ).rgb;
+                vec3 Mie = GetInscattering ( DeltaSM, Rg, Rt, R, W.z, MuS, nu1 ).rgb;
+
+                S += Ray * RayleighPhase ( nu1 ) + Mie * HGDPhase ( nu1, MieG );
+            }
+            else
+            {
+                S += GetInscattering ( DeltaSR, Rg, Rt, R, W.z, MuS, nu1 ).rgb;
+            }
+
+            DeltaJ += ( E + S ) * ( GetAirDensity ( Rg, R, HR ) * BetaR * RayleighPhase ( nu2 ) +
+                                    GetAirDensity ( Rg, R, HM ) * BetaMSca * HGDPhase ( nu2, MieG ) ) * dW;
+        }
+    }
+
+    return DeltaJ;
+}
+
+void main()
+{
+    float R, CosViewZenith, CosSunZenith, CosViewun;
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+    UVWToWorldInscatter(Rg, Rt, UV, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
+
+    vec3 DeltaJ = ComputeDeltaJ(2, Rg, Rt, R, CosViewZenith, CosSunZenith, CosViewun);
+    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaJ, 0.0));
+}
