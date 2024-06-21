@@ -20,14 +20,6 @@ namespace GR
 
 	class GrayEnigne;
 	/*
-	* !@brief Struct describing settings for initial application launch
-	*/
-	struct ApplicationSettings
-	{
-		std::string ApplicationName;
-		TIVec2 WindowExtents;
-	};
-	/*
 	* !@brief Main engine class
 	*/
 	class GrayEngine
@@ -47,13 +39,15 @@ namespace GR
 			GrayEngine* engine;
 		} context;
 
-		static void glfw_key_press(GLFWwindow* window, int key, int scancode, int action, int mods);
+		static void glfw_key_press(GLFWwindow* window, int, int, int, int);
 
-		static void glfw_mouse_press(GLFWwindow* window, int button, int action, int mods);
+		static void glfw_mouse_press(GLFWwindow* window, int, int, int);
 
-		static void glfw_mouse_move(GLFWwindow* window, double xpos, double ypos);
+		static void glfw_mouse_move(GLFWwindow* window, double, double);
 
-		static void glfw_resize(GLFWwindow* window, int width, int height);
+		static void glfw_resize(GLFWwindow* window, int, int);
+
+		static void glfw_scroll(GLFWwindow* window, double, double);
 
 #ifdef INCLUDE_GUI
 		ImGuiContext* GuiContext;
@@ -96,14 +90,16 @@ namespace GR
 		*/
 		GRAPI void AddInputFunction(void(*function)(GrayEngine*, double));
 
-		GRAPI Entity LoadModel(const std::string& MeshPath, const std::string* TextureCollection);
-
 		GRAPI double GetTime() const;
 
 		GRAPI Window& GetWindow() const
 		{
 			return *window;
 		}
+
+		GRAPI Entity AddMesh(const std::string& MeshPath) const;
+
+		GRAPI Entity AddShape(const GRShape::Shape& Descriptor) const;
 
 		GRAPI Camera& GetMainCamera() const
 		{
@@ -127,9 +123,11 @@ namespace GR
 		}
 
 		template<typename... Type>
-		GRAPI decltype(auto) GetComponent(const Entity entt)
+		GRAPI decltype(auto) GetComponent(const Entity ent)
 		{
-			return registry.get<Type...>(entt);
+			return registry.get<Type...>(ent);
 		}
+
+		GRAPI void BindImage(GRComponents::Resource<Image>& Resource, const std::string& path, EImageType type);
 	};
 };

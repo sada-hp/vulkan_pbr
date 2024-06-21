@@ -1,5 +1,6 @@
 #include "pch.hpp"
 #include "engine.hpp"
+#include "shapes.hpp"
 
 std::string exec_path = "";
 
@@ -27,6 +28,7 @@ namespace GR
 		glfwSetKeyCallback(window->glfwWindow, glfw_key_press);
 		glfwSetMouseButtonCallback(window->glfwWindow, glfw_mouse_press);
 		glfwSetCursorPosCallback(window->glfwWindow, glfw_mouse_move);
+		glfwSetScrollCallback(window->glfwWindow, glfw_scroll);
 	}
 
 	GrayEngine::~GrayEngine()
@@ -67,18 +69,43 @@ namespace GR
 		}
 	}
 
-	void GR::GrayEngine::AddInputFunction(void(*function)(GrayEngine*, double))
+	void GrayEngine::AddInputFunction(void(*function)(GrayEngine*, double))
 	{
 		inputs.push_back(function);
-	}
-
-	Entity GrayEngine::LoadModel(const std::string& MeshPath, const std::string* TextureCollection)
-	{
-		return renderer->AddGraphicsObject(MeshPath, "");
 	}
 
 	double GrayEngine::GetTime() const
 	{
 		return glfwGetTime();
+	}
+
+	Entity GrayEngine::AddMesh(const std::string& MeshPath) const
+	{
+		return renderer->AddMesh(MeshPath);
+	}
+
+	Entity GrayEngine::AddShape(const GRShape::Shape& Descriptor) const
+	{
+		return renderer->AddShape(Descriptor);
+	}
+
+	void GrayEngine::BindImage(GRComponents::Resource<Image>& Resource, const std::string& path, EImageType type)
+	{
+		VkFormat format;
+
+		switch (type)
+		{
+		case GR::EImageType::RGBA_UNORM:
+			format = VK_FORMAT_R8G8B8A8_UNORM;
+			break;
+		case GR::EImageType::RGBA_FLOAT:
+			format = VK_FORMAT_R32G32B32A32_SFLOAT;
+			break;
+		default:
+			format = VK_FORMAT_R8G8B8A8_SRGB;
+			break;
+		}
+
+		Resource.Set(renderer->LoadImage(path, format));
 	}
 };

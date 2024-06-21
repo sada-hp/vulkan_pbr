@@ -2,46 +2,45 @@
 *Based off the works of Eric Bruneton
 *https://evasion.inrialpes.fr/~Eric.Bruneton/
 */
-
 #version 460
 #include "LUT.glsl"
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout (binding = 0, rgba16f) uniform writeonly image2D outImage;
 layout (binding = 1) uniform sampler3D DeltaSR;
 layout (binding = 2) uniform sampler3D DeltaSM;
 
-vec3 ComputeDeltaEn ( int Order, float Rg, float Rt, float R, float CosSunZenith )
+vec3 ComputeDeltaEn(int Order, float R, float CosSunZenith)
 {
-    const float dPhi = PI / float ( IRRADIANCE_SAMPLES );
-    const float dTheta = PI / float ( IRRADIANCE_SAMPLES );
+    const float dPhi = PI / float(IRRADIANCE_SAMPLES);
+    const float dTheta = PI / float(IRRADIANCE_SAMPLES);
 
-    vec3 Sun = vec3 ( sqrt ( 1.0 - CosSunZenith * CosSunZenith ), 0.0, CosSunZenith );
+    vec3 Sun = vec3(sqrt(1.0 - CosSunZenith * CosSunZenith), 0.0, CosSunZenith);
 
-    vec3 DeltaE = vec3 ( 0.0 );
-    for ( int iPhi = 0; iPhi < 2 * IRRADIANCE_SAMPLES; iPhi++ )
+    vec3 DeltaE = vec3(0.0);
+    for (int iPhi = 0; iPhi < 2 * IRRADIANCE_SAMPLES; iPhi++)
     {
-        float Phi = ( iPhi + 0.5 ) * dPhi;
+        float Phi = (iPhi + 0.5) * dPhi;
 
-        for ( int iTheta = 0; iTheta < IRRADIANCE_SAMPLES / 2; iTheta++ )
+        for (int iTheta = 0; iTheta < IRRADIANCE_SAMPLES / 2; iTheta++)
         {
-            float Theta = ( iTheta + 0.5 ) * dTheta;
-            vec3 W = vec3 ( cos ( Phi ) * sin ( Theta ), sin ( Phi ) * sin ( Theta ), cos ( Theta ) );
-            float dW = dTheta * dPhi * sin ( Theta ) * W.z;
+            float Theta = (iTheta + 0.5) * dTheta;
+            vec3 W = vec3(cos(Phi) * sin(Theta), sin(Phi) * sin(Theta), cos(Theta));
+            float dW = dTheta * dPhi * sin(Theta) * W.z;
 
-            float CosViewun = dot ( Sun, W );
+            float CosViewun = dot(Sun, W);
 
-            if ( Order == 2 )
+            if (Order == 2)
             {
-                vec3 Ray = GetInscattering ( DeltaSR, Rg, Rt, R, W.z, CosSunZenith, CosViewun ).rgb;
-                vec3 Mie = GetInscattering ( DeltaSM, Rg, Rt, R, W.z, CosSunZenith, CosViewun ).rgb;
+                vec3 Ray = GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb;
+                vec3 Mie = GetInscattering(DeltaSM, R, W.z, CosSunZenith, CosViewun).rgb;
 
-                DeltaE += ( Ray * RayleighPhase ( CosViewun ) + Mie * HGDPhase ( CosViewun, MieG ) ) * dW;
+                DeltaE += (Ray * RayleighPhase(CosViewun) + Mie * HGDPhase(CosViewun, MieG)) * dW;
             }
             else
             {
-                DeltaE += GetInscattering ( DeltaSR, Rg, Rt, R, W.z, CosSunZenith, CosViewun ).rgb * dW;
+                DeltaE += GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb * dW;
             }
         }
     }
@@ -53,8 +52,9 @@ void main()
 {
     float R, Mu;
     vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-    GetIrradienceRMu(Rg, Rt, UV, R, Mu);
+    
+    GetIrradienceRMu(UV, R, Mu);
 
-    vec3 DeltaE = ComputeDeltaEn ( 2, Rg, Rt, R, Mu );
+    vec3 DeltaE = ComputeDeltaEn(2, R, Mu);
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(DeltaE, 0.0));
 }

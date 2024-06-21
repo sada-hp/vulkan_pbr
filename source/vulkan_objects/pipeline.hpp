@@ -9,176 +9,159 @@ enum class EPipelineType
 	Compute = 2
 };
 
-//Use some pattern to get rid of useless structs after construction?
 class Pipeline
 {
+	friend class ComputePipelineDescriptor;
+
+	friend class GraphicsPipelineDescriptor;
+
 public:
-	Pipeline(const RenderScope& Scope);
+	Pipeline(const RenderScope& Scope) : scope(Scope) {};
 
 	virtual ~Pipeline();
 
-	Pipeline(const Pipeline& other) = delete;
+	const VkPipelineBindPoint GetBindPoint() const { return bindPoint; };
 
-	void operator=(const Pipeline& other) = delete;
+	Pipeline& BindPipeline(VkCommandBuffer cmd);
 
-	Pipeline(Pipeline&& other) noexcept
-		: Scope(other.Scope), pipeline(std::move(other.pipeline)), pipelineLayout(std::move(other.pipelineLayout)),
-		specializationConstants(std::move(other.specializationConstants)), shaderName(std::move(other.shaderName)),
+	Pipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages);
+
+	EPipelineType GetPipelineType() const { return EPipelineType::None; };
+
+	const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
+
+private:
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+	const RenderScope& scope;
+
+	VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+	EPipelineType type = EPipelineType::None;
+};
+
+class PipelineDescriptor
+{
+public:
+	PipelineDescriptor();
+
+	virtual ~PipelineDescriptor() {};
+
+	PipelineDescriptor(const PipelineDescriptor& other) = delete;
+
+	void operator=(const PipelineDescriptor& other) = delete;
+
+	PipelineDescriptor(PipelineDescriptor&& other) noexcept
+		: specializationConstants(std::move(other.specializationConstants)),
 		pushConstants(std::move(other.pushConstants)), descriptorLayouts(std::move(other.descriptorLayouts))
 	{
-		other.shaderName = "";
 		other.pushConstants.clear();
 		other.descriptorLayouts.clear();
 		other.specializationConstants.clear();
-		other.pipeline = VK_NULL_HANDLE;
-		other.pipelineLayout = VK_NULL_HANDLE;
 	}
 
-	void operator=(Pipeline&& other) noexcept {
-		Scope = other.Scope;
-		pipeline = std::move(other.pipeline);
-		pipelineLayout = std::move(other.pipelineLayout);
-
+	void operator=(PipelineDescriptor&& other) noexcept {
 		pushConstants = std::move(other.pushConstants);
 		descriptorLayouts = std::move(other.descriptorLayouts);
 		specializationConstants = std::move(other.specializationConstants);
 
-		shaderName = std::move(other.shaderName);
-
-		other.shaderName = "";
 		other.pushConstants.clear();
 		other.descriptorLayouts.clear();
 		other.specializationConstants.clear();
-		other.pipeline = VK_NULL_HANDLE;
-		other.pipelineLayout = VK_NULL_HANDLE;
 	}
 
-	virtual Pipeline& BindPipeline(VkCommandBuffer cmd) = 0;
-
-	virtual const VkPipelineBindPoint GetBindPoint() const { return VK_PIPELINE_BIND_POINT_MAX_ENUM; };
-
-	virtual EPipelineType GetPipelineType() const { return EPipelineType::None; };
-
-	virtual const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
+	virtual TAuto<Pipeline> Construct(const RenderScope& Scope) = 0;
 
 protected:
-	std::string shaderName = "";
-	VkPipeline pipeline = VK_NULL_HANDLE;
-	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-	const RenderScope* Scope;
-
 	TVector<VkDescriptorSetLayout> descriptorLayouts{};
 	TVector<VkPushConstantRange> pushConstants{};
 	std::map<VkShaderStageFlagBits, std::map<uint32_t, std::any>> specializationConstants;
+	std::map<VkShaderStageFlagBits, std::string> shaderNames;
 };
 
-class ComputePipeline : public Pipeline
+class ComputePipelineDescriptor : public PipelineDescriptor
 {
 public:
-	ComputePipeline(const RenderScope& Scope);
+	ComputePipelineDescriptor();
 
-	ComputePipeline(const ComputePipeline& other) = delete;
+	ComputePipelineDescriptor(const ComputePipelineDescriptor& other) = delete;
 
-	void operator=(const ComputePipeline& other) = delete;
+	void operator=(const ComputePipelineDescriptor& other) = delete;
 
-	ComputePipeline(ComputePipeline&& other) noexcept
-		: Pipeline(std::move(other))
+	ComputePipelineDescriptor(ComputePipelineDescriptor&& other) noexcept
+		: PipelineDescriptor(std::move(other))
 	{
 	}
 
-	void operator=(ComputePipeline&& other) noexcept {
-		Pipeline::operator=(std::move(other));
+	void operator=(ComputePipelineDescriptor&& other) noexcept {
+		PipelineDescriptor::operator=(std::move(other));
 	}
 
-	~ComputePipeline();
+	~ComputePipelineDescriptor();
 
-	ComputePipeline& SetShaderName(const std::string& shaderName);
+	ComputePipelineDescriptor& SetShaderName(const std::string& shaderName);
 
-	ComputePipeline& AddDescriptorLayout(VkDescriptorSetLayout layout);
+	ComputePipelineDescriptor& AddDescriptorLayout(VkDescriptorSetLayout layout);
 
-	ComputePipeline& AddPushConstant(VkPushConstantRange constantRange);
+	ComputePipelineDescriptor& AddPushConstant(VkPushConstantRange constantRange);
 
-	ComputePipeline& AddSpecializationConstant(uint32_t id, std::any value);
+	ComputePipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value);
 
-	void Construct();
-
-	ComputePipeline& BindPipeline(VkCommandBuffer cmd) override;
-
-	ComputePipeline& PushConstants(VkCommandBuffer cmd, const void* data);
-
-	void Dispatch(VkCommandBuffer cmd, uint32_t size_x, uint32_t size_y, uint32_t size_z);
-
-	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_COMPUTE; };
-
-	virtual EPipelineType GetPipelineType() const override { return EPipelineType::Compute; };
-private:
-	uint32_t x_batch_size = 1;
-	uint32_t y_batch_size = 1;
-	uint32_t z_batch_size = 1;
+	TAuto<Pipeline> Construct(const RenderScope& Scope) override;
 };
 
-class GraphicsPipeline : public Pipeline
+class GraphicsPipelineDescriptor : public PipelineDescriptor
 {
 public:
-	GraphicsPipeline(const RenderScope& Scope);
+	GraphicsPipelineDescriptor();
 
-	GraphicsPipeline(const GraphicsPipeline& other) = delete;
+	GraphicsPipelineDescriptor(const GraphicsPipelineDescriptor& other) = delete;
 
-	void operator=(const GraphicsPipeline& other) = delete;
+	void operator=(const GraphicsPipelineDescriptor& other) = delete;
 
-	GraphicsPipeline(GraphicsPipeline&& other) noexcept
-		: Pipeline(std::move(other))
+	GraphicsPipelineDescriptor(GraphicsPipelineDescriptor&& other) noexcept
+		: PipelineDescriptor(std::move(other))
 	{
 	}
 
-	void operator=(GraphicsPipeline&& other) noexcept {
-		Pipeline::operator=(std::move(other));
+	void operator=(GraphicsPipelineDescriptor&& other) noexcept {
+		PipelineDescriptor::operator=(std::move(other));
 	}
 
-	~GraphicsPipeline();
+	~GraphicsPipelineDescriptor();
 
-	GraphicsPipeline& SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings);
+	GraphicsPipelineDescriptor& SetVertexInputBindings(uint32_t count, VkVertexInputBindingDescription* bindings);
 
-	GraphicsPipeline& SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes);
+	GraphicsPipelineDescriptor& SetVertexAttributeBindings(uint32_t count, VkVertexInputAttributeDescription* attributes);
 
-	GraphicsPipeline& SetPrimitiveTopology(VkPrimitiveTopology topology);
+	GraphicsPipelineDescriptor& SetPrimitiveTopology(VkPrimitiveTopology topology);
 
-	GraphicsPipeline& SetPolygonMode(VkPolygonMode mode);
+	GraphicsPipelineDescriptor& SetPolygonMode(VkPolygonMode mode);
 
-	GraphicsPipeline& SetCullMode(VkCullModeFlags mode, VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	GraphicsPipelineDescriptor& SetCullMode(VkCullModeFlags mode, VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
-	GraphicsPipeline& SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor);
+	GraphicsPipelineDescriptor& SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor);
 
-	GraphicsPipeline& SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments);
+	GraphicsPipelineDescriptor& SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments);
 
-	GraphicsPipeline& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL);
+	GraphicsPipelineDescriptor& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL);
 
-	GraphicsPipeline& SetSampling(VkSampleCountFlagBits samples);
+	GraphicsPipelineDescriptor& SetSampling(VkSampleCountFlagBits samples);
 	
-	GraphicsPipeline& SetShaderStages(const std::string& shaderName, VkShaderStageFlagBits stages);
+	GraphicsPipelineDescriptor& SetShaderStage(const std::string& shaderName, VkShaderStageFlagBits stage);
 
-	GraphicsPipeline& SetSubpass(uint32_t subpass);
+	GraphicsPipelineDescriptor& SetSubpass(uint32_t subpass);
 
-	GraphicsPipeline& AddDescriptorLayout(VkDescriptorSetLayout layout);
+	GraphicsPipelineDescriptor& AddDescriptorLayout(VkDescriptorSetLayout layout);
 
-	GraphicsPipeline& AddPushConstant(VkPushConstantRange constantRange);
+	GraphicsPipelineDescriptor& AddPushConstant(VkPushConstantRange constantRange);
 
-	GraphicsPipeline& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage);
+	GraphicsPipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage);
 
-	void Construct();
-
-	GraphicsPipeline& BindPipeline(VkCommandBuffer cmd) override;
-
-	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages);
-
-	const VkPipelineBindPoint GetBindPoint() const override { return VK_PIPELINE_BIND_POINT_GRAPHICS; };
-
-	virtual EPipelineType GetPipelineType() const override { return EPipelineType::Graphics; };
+	TAuto<Pipeline> Construct(const RenderScope& Scope) override;
 
 private:
 	uint32_t subpass = 0;
-	VkShaderStageFlagBits shaderStagesFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 
 	VkPipelineVertexInputStateCreateInfo vertexInput{
 		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

@@ -10,44 +10,39 @@ class DescriptorSet
 public:
 	DescriptorSet(const RenderScope& Scope);
 
-	DescriptorSet(const DescriptorSet& other) = delete;
-
-	void operator=(const DescriptorSet& other) = delete;
-
-	DescriptorSet(DescriptorSet&& other) noexcept
-		: Scope(other.Scope), descriptorSet(other.descriptorSet), descriptorSetLayout(other.descriptorSetLayout)
-	{
-		other.descriptorSet = VK_NULL_HANDLE;
-		other.descriptorSetLayout = VK_NULL_HANDLE;
-	}
-
-	void operator=(DescriptorSet&& other) noexcept
-	{
-		descriptorSet = other.descriptorSet;
-		descriptorSetLayout = other.descriptorSetLayout;
-		other.descriptorSet = VK_NULL_HANDLE;
-		other.descriptorSetLayout = VK_NULL_HANDLE;
-	}
-
 	~DescriptorSet();
-
-	DescriptorSet& AddUniformBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
-
-	DescriptorSet& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const Image& image);
-
-	DescriptorSet& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const Image& image);
-
-	DescriptorSet& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const Image& image);
-
-	void Allocate();
-
-	void BindSet(VkCommandBuffer cmd, const Pipeline& pipeline);
 
 	const VkDescriptorSetLayout& GetLayout() const { return descriptorSetLayout; };
 
+	void BindSet(VkCommandBuffer cmd, const Pipeline& pipeline);
+
 private:
+	friend class DescriptorSetDescriptor;
+
+	const RenderScope& Scope;
+
 	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+};
+
+class DescriptorSetDescriptor
+{
+public:
+	DescriptorSetDescriptor() {};
+
+	DescriptorSetDescriptor& AddUniformBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
+
+	DescriptorSetDescriptor& AddStorageBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
+
+	DescriptorSetDescriptor& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+
+	DescriptorSetDescriptor& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+
+	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+
+	TAuto<DescriptorSet> Allocate(const RenderScope& Scope);
+
+private:
 	TVector<VkDescriptorSetLayoutBinding> bindings;
 	TVector<VkWriteDescriptorSet> writes;
 

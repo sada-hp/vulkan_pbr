@@ -1,19 +1,19 @@
 #include "pch.hpp"
 #include "image.hpp"
 
-Image::Image(const RenderScope& InScope)
+VulkanImage::VulkanImage(const RenderScope& InScope)
 	: Scope(&InScope)
 {
 
 }
 
-Image::Image(const RenderScope& InScope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+VulkanImage::VulkanImage(const RenderScope& InScope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
 	: Scope(&InScope)
 {
 	CreateImage(imgInfo, allocCreateInfo);
 }
 
-Image::~Image()
+VulkanImage::~VulkanImage()
 {
 	if (view != VK_NULL_HANDLE)
 		vkDestroyImageView(Scope->GetDevice(), view, VK_NULL_HANDLE);
@@ -22,11 +22,11 @@ Image::~Image()
 
 	image = VK_NULL_HANDLE;
 	view = VK_NULL_HANDLE;
-	//sampler = VK_NULL_HANDLE;
+	sampler = VK_NULL_HANDLE;
 	memory = VK_NULL_HANDLE;
 }
 
-Image& Image::CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+VulkanImage& VulkanImage::CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
 {
 	if (image != VK_NULL_HANDLE)
 		vmaDestroyImage(Scope->GetAllocator(), image, memory);
@@ -41,7 +41,7 @@ Image& Image::CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationC
 	return *this;
 }
 
-Image& Image::CreateImageView(const VkImageViewCreateInfo& viewInfo)
+VulkanImage& VulkanImage::CreateImageView(const VkImageViewCreateInfo& viewInfo)
 {
 	if (view != VK_NULL_HANDLE)
 		vkDestroyImageView(Scope->GetDevice(), view, VK_NULL_HANDLE);
@@ -56,14 +56,14 @@ Image& Image::CreateImageView(const VkImageViewCreateInfo& viewInfo)
 	return *this;
 }
 
-Image& Image::CreateSampler(SamplerFlagBits flags)
+VulkanImage& VulkanImage::CreateSampler(ESamplerType Type)
 {
-	sampler = Scope->GetSampler(flags);
+	sampler = Scope->GetSampler(Type);
 	descriptorInfo.sampler = sampler;
 	return *this;
 }
 
-Image& Image::TransitionLayout(VkImageLayout newLayout)
+VulkanImage& VulkanImage::TransitionLayout(VkImageLayout newLayout)
 {
 	VkCommandBuffer cmd;
 	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
@@ -81,7 +81,7 @@ Image& Image::TransitionLayout(VkImageLayout newLayout)
 	return *this;
 }
 
-Image& Image::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
+VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
 {
 	const std::unordered_map<VkImageLayout, VkPipelineStageFlags> stageTable = {
 		{VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
@@ -124,7 +124,7 @@ Image& Image::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
 	return *this;
 }
 
-Image& Image::GenerateMipMaps()
+VulkanImage& VulkanImage::GenerateMipMaps()
 {
 	VkCommandBuffer cmd;
 	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
@@ -142,7 +142,7 @@ Image& Image::GenerateMipMaps()
 	return *this;
 }
 
-Image& Image::GenerateMipMaps(VkCommandBuffer& cmd)
+VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer& cmd)
 {
 	if (subRange.levelCount == 1) {
 		TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

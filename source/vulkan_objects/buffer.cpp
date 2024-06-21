@@ -53,7 +53,17 @@ Buffer& Buffer::Update(void* data, size_t data_size)
 	if (data_size == VK_WHOLE_SIZE)
 		data_size = allocInfo.size;
 
-	memcpy(mappedMemory, data, data_size);
+	if (!mappedMemory)
+	{
+		Map();
+		memcpy(mappedMemory, data, data_size);
+		UnMap();
+	}
+	else
+	{
+		memcpy(mappedMemory, data, data_size);
+	}
+
 	vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
 
 	return *this;

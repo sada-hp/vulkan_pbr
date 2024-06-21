@@ -4,11 +4,89 @@
 #include "glm/glm.hpp"
 #include "glm/common.hpp"
 #include "math.hpp"
+#include "file_manager.hpp"
 /*
 * List of engine-specific components
 */
 namespace GRComponents
 {
+	template<typename Type, typename... Args>
+	struct Resource
+	{
+		Resource(TShared<Type> resource, bool* flagptr = nullptr)
+			: res(resource), dirty_flag(flagptr)
+		{
+
+		}
+
+		GRAPI void Set(TShared<Type> r)
+		{
+			res = r;
+
+			if (dirty_flag)
+				*dirty_flag = true;
+		}
+
+		GRAPI TShared<Type> Get() const
+		{
+			return res;
+		}
+
+	private:
+		TShared<Type> res = nullptr;
+		bool* dirty_flag = nullptr;
+	};
+
+	struct AlbedoMap : Resource<Image>
+	{
+		AlbedoMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr)
+		{
+
+		}
+	};
+
+	struct NormalMap : Resource<Image>
+	{
+		NormalMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr)
+		{
+
+		}
+	};
+
+	struct RoughnessMap : Resource<Image>
+	{
+		RoughnessMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr)
+		{
+
+		}
+	};
+
+	struct MetallicMap : Resource<Image>
+	{
+		MetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr)
+		{
+
+		}
+	};
+
+	struct AmbientMap : Resource<Image>
+	{
+		AmbientMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr)
+		{
+
+		}
+	};
+
+	struct RoughnessMultiplier
+	{
+		float R = 1.0;
+	};
+
 	struct Color
 	{
 		glm::vec3 RGB = glm::vec3(1.0);
@@ -100,6 +178,20 @@ namespace GRComponents
 			q = q * glm::angleAxis(-pitch, glm::vec3(1, 0, 0));
 
 			return SetRotation(glm::mat3_cast(q) * GetRotation());
+		}
+
+		GRAPI Transform& SetScale(float x, float y, float z)
+		{
+			glm::mat3 mat = glm::mat3(matrix);
+			mat[0] = glm::normalize(mat[0]) * x;
+			mat[1] = glm::normalize(mat[1]) * y;
+			mat[2] = glm::normalize(mat[2]) * z;
+
+			matrix[0] = glm::vec4(mat[0], 0.0);
+			matrix[1] = glm::vec4(mat[1], 0.0);
+			matrix[2] = glm::vec4(mat[2], 0.0);
+
+			return *this;
 		}
 
 		GRAPI TVec3 GetOffset() const

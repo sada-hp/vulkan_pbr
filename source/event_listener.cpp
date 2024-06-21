@@ -27,11 +27,19 @@ namespace GR
 		});
 	}
 
-	void EventListener::Register(GrayEngine* e, double x, double y)
+	void EventListener::Register(GrayEngine* e, GREvent::MousePosition x)
 	{
-		std::for_each(mousemove.begin(), mousemove.end(), [=](void(*f)(GrayEngine*, double, double))
+		std::for_each(mousemove.begin(), mousemove.end(), [=](void(*f)(GrayEngine*, GREvent::MousePosition))
 			{
-				f(e, x, y);
+				f(e, x);
+			});
+	}
+
+	void EventListener::Register(GrayEngine* e, GREvent::ScrollDelta x)
+	{
+		std::for_each(scroll.begin(), scroll.end(), [=](void(*f)(GrayEngine*, GREvent::ScrollDelta))
+			{
+				f(e, x);
 			});
 	}
 
@@ -45,8 +53,13 @@ namespace GR
 		mousepress.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, double, double))
+	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::MousePosition))
 	{
 		mousemove.push_back(f);
+	}
+
+	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::ScrollDelta))
+	{
+		scroll.push_back(f);
 	}
 };

@@ -1,6 +1,6 @@
 #version 460
 
-layout(location = 0) out vec2 UV;
+layout(location=0) out vec2 UV;
 
 void main()
 {

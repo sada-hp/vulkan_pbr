@@ -4,18 +4,19 @@
 #include <vector>
 #include <array>
 #include "scope.hpp"
+#include "structs.hpp"
 
-struct Image
+struct VulkanImage : Image
 {
-	Image(const RenderScope& Scope);
+	VulkanImage(const RenderScope& Scope);
 
-	Image(const RenderScope& Scope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+	VulkanImage(const RenderScope& Scope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
 
-	Image(const Image& other) = delete;
+	VulkanImage(const VulkanImage& other) = delete;
 
-	void operator=(const Image& other) = delete;
+	void operator=(const VulkanImage& other) = delete;
 
-	Image(Image&& other) noexcept
+	VulkanImage(VulkanImage&& other) noexcept
 		: Scope(other.Scope), image(std::move(other.image)), view(std::move(other.view)), sampler(std::move(other.sampler)), memory(std::move(other.memory)),
 		allocInfo(std::move(other.allocInfo)), descriptorInfo(std::move(other.descriptorInfo))
 	{
@@ -27,7 +28,7 @@ struct Image
 		other.descriptorInfo = {};
 	}
 
-	void operator=(Image&& other) noexcept {
+	void operator=(VulkanImage&& other) noexcept {
 		Scope = other.Scope;
 		image = std::move(other.image);
 		view = std::move(other.view);
@@ -44,21 +45,21 @@ struct Image
 		other.descriptorInfo = {};
 	}
 
-	~Image();
+	~VulkanImage();
 
-	Image& CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
+	VulkanImage& CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo);
 
-	Image& CreateImageView(const VkImageViewCreateInfo& viewInfo);
+	VulkanImage& CreateImageView(const VkImageViewCreateInfo& viewInfo);
 
-	Image& CreateSampler(SamplerFlagBits flags);
+	VulkanImage& CreateSampler(ESamplerType Type);
 
-	Image& TransitionLayout(VkImageLayout newLayout);
+	VulkanImage& TransitionLayout(VkImageLayout newLayout);
 
-	Image& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout);
+	VulkanImage& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout);
 
-	Image& GenerateMipMaps();
+	VulkanImage& GenerateMipMaps();
 
-	Image& GenerateMipMaps(VkCommandBuffer& cmd);
+	VulkanImage& GenerateMipMaps(VkCommandBuffer& cmd);
 
 	const VkImage& GetImage() const { return image; };
 

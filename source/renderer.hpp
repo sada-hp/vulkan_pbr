@@ -1,7 +1,8 @@
 #pragma once
 #include "core.hpp"
 #include "entt/entt.hpp"
-#include "object.hpp"
+#include "shader_objects/general_object.hpp"
+#include "shader_objects/pbr_object.hpp"
 #include "scope.hpp"
 #include "vulkan_objects/queue.hpp"
 #include "vulkan_objects/buffer.hpp"
@@ -12,6 +13,7 @@
 #include "noise.hpp"
 #include "components.hpp"
 #include "structs.hpp"
+#include "shapes.hpp"
 
 #if DEBUG == 1
 #define VALIDATION
@@ -44,34 +46,19 @@ namespace GR
 	};
 };
 
-struct VulkanGraphicsObject
-{
-	VulkanGraphicsObject(RenderScope& Scope)
-		: descriptor_set(Scope), pipeline(Scope)
-	{
-
-	}
-
-	TAuto<Mesh> mesh;
-	TAuto<Image> texture;
-
-	DescriptorSet descriptor_set;
-	GraphicsPipeline pipeline;
-};
-
 class VulkanBase
 {
 	TVector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	TVector<VkImage> swapchainImages = {};
 	TVector<VkImageView> swapchainViews = {};
-	TVector<TAuto<Image>> depthAttachments = {};
-	TVector<TAuto<Image>> hdrAttachments = {};
+	TVector<TAuto<VulkanImage>> depthAttachments = {};
+	TVector<TAuto<VulkanImage>> hdrAttachments = {};
 	TVector<VkFramebuffer> framebuffers = {};
 	TVector<VkFence> presentFences = {};
 	TVector<VkSemaphore> presentSemaphores = {};
 	TVector<VkSemaphore> swapchainSemaphores = {};
 	TVector<VkCommandBuffer> presentBuffers = {};
-	TVector<TAuto<GraphicsPipeline>> HDRPipelines;
+	TVector<TAuto<Pipeline>> HDRPipelines;
 	TVector<TAuto<DescriptorSet>> HDRDescriptors;
 
 	VkInstance instance = VK_NULL_HANDLE;
@@ -79,7 +66,6 @@ class VulkanBase
 
 	RenderScope Scope;
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
-	//TAuto<VkFramebuffer> HDRFB;
 
 	TAuto<Buffer> ubo = {};		
 	TAuto<Buffer> view = {};
@@ -87,13 +73,13 @@ class VulkanBase
 
 	TAuto<GraphicsObject> volume;
 	TAuto<GraphicsObject> skybox;
-	TAuto<Image> CloudShape;
-	TAuto<Image> CloudDetail;
-	TAuto<Image> Gradient;
 
-	TAuto<Image> ScatteringLUT;
-	TAuto<Image> IrradianceLUT;
-	TAuto<Image> Transmittance;
+	TAuto<VulkanImage> CloudShape;
+	TAuto<VulkanImage> CloudDetail;
+
+	TAuto<VulkanImage> ScatteringLUT;
+	TAuto<VulkanImage> IrradianceLUT;
+	TAuto<VulkanImage> Transmittance;
 
 	uint32_t swapchain_index = 0;
 
@@ -102,7 +88,7 @@ class VulkanBase
 #endif
 
 public:
-	SCloudLayer CloudLayer;
+	CloudProfileLayer CloudLayer;
 
 	VulkanBase(GLFWwindow* window, entt::registry& registry);
 
@@ -116,7 +102,13 @@ public:
 	*/
 	void HandleResize();
 
-	entt::entity AddGraphicsObject(const std::string& mesh_path, const std::string& texture_path);
+	entt::entity AddMesh(const std::string& mesh_path);
+
+	entt::entity AddShape(const GRShape::Shape& descriptor);
+
+	TAuto<VulkanImage> LoadImage(const std::string& path, VkFormat format);
+
+	void RegisterEntityUpdate(entt::entity ent);
 	/*
 	* !@brief Should be modified to control the scene
 	*/
@@ -125,6 +117,13 @@ public:
 
 private:
 	entt::registry& registry;
+
+	TShared<VulkanImage> defaultAlbedo = VK_NULL_HANDLE;
+	TShared<VulkanImage> defaultNormal = VK_NULL_HANDLE;
+	TShared<VulkanImage> defaultRoughness = VK_NULL_HANDLE;
+	TShared<VulkanImage> defaultMetallic = VK_NULL_HANDLE;
+	TShared<VulkanImage> defaultAO = VK_NULL_HANDLE;
+
 	/*
 	* !@brief Create VkInstance object to use with glfw context
 	* 
@@ -155,6 +154,11 @@ private:
 	VkBool32 setup_precompute();
 
 	TVector<const char*> getRequiredExtensions();
+
+	TAuto<DescriptorSet> create_pbr_set(const RenderScope& Scope, const VulkanImage& albedo, const VulkanImage& normal, const VulkanImage& roughness, const VulkanImage& metallic, const VulkanImage& ao);
+
+	TAuto<Pipeline> create_pbr_pipeline(const RenderScope& Scope, const DescriptorSet& set);
+
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT debugMessenger;

@@ -6,7 +6,7 @@
 #version 460
 #include "LUT.glsl"
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout (binding = 0, rgba16f) uniform image3D outImage;
 layout (binding = 1) uniform sampler3D DeltaS;
@@ -14,11 +14,11 @@ layout (binding = 1) uniform sampler3D DeltaS;
 void main()
 {
     vec3 UVW = vec3(0.0);
-    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-    UVW.z = float(gl_GlobalInvocationID.z + 0.5) / float (DIM_R);
+    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
+    UVW.z = float(gl_GlobalInvocationID.z + 0.5) / float(imageSize(outImage).z);
 
     float R, CosViewZenith, CosSunZenith, CosViewun;
-    UVWToWorldInscatter(Rg, Rt, UVW.xy, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
+    UVWToWorldInscatter(UVW.xy, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
 
     vec4 S = imageLoad(outImage, ivec3(gl_GlobalInvocationID.xyz));
     imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), S + vec4(texture(DeltaS, UVW).rgb / RayleighPhase(CosViewun), 0.0));

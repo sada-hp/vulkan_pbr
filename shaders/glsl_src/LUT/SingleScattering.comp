@@ -6,7 +6,7 @@
 #version 460
 #include "LUT.glsl"
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout (binding = 0, rgba16f) uniform writeonly image3D outImage;
 
@@ -16,8 +16,8 @@ layout (binding = 2) uniform sampler3D DeltaSM;
 void main()
 {
     vec3 UVW = vec3(0.0);
-    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-    UVW.z = float(gl_GlobalInvocationID.z + 0.5) / float (DIM_R);
+    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
+    UVW.z = float(gl_GlobalInvocationID.z) / float(imageSize(outImage).z);
 
     vec4 Ray = texture(DeltaSR, UVW);
     vec4 Mie = texture(DeltaSM, UVW);

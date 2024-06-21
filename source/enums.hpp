@@ -105,4 +105,11 @@ namespace GR
 		Press = GLFW_PRESS,
 		Repeat = GLFW_REPEAT
 	};
+
+	enum class EImageType
+	{
+		RGBA_SRGB,
+		RGBA_UNORM,
+		RGBA_FLOAT
+	};
 };

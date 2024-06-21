@@ -2,33 +2,18 @@
 #include "vulkan_objects/queue.hpp"
 #include "vulkan_api.hpp"
 
-enum class SamplerFlagBits : uint32_t
+enum class ESamplerType
 {
-	None = 0u,
-	RepeatU = 1u,
-	RepeatV = 2u,
-	RepeatW = 4u,
-	RepeatUVW = 1u | 2u | 4u,
-	AnisatropyEnabled = 8u,
-	NearestMagFilter = 16u,
-	NearestMipFilter = 32u,
-	Unnormalized = 64u,
-	MirrorU = 128u,
-	MirrorV = 256u,
-	MirrorW = 512u,
-	MirrorUVW = 128u | 256u | 512u,
-	MaxEnum = 0x7fffffffu
+	PointClamp,
+	PointRepeat,
+	PointMirror,
+	LinearClamp,
+	LinearRepeat,
+	LinearMirror,
+	BillinearClamp,
+	BillinearRepeat,
+	BillinearMirror
 };
-
-inline SamplerFlagBits operator|(SamplerFlagBits a, SamplerFlagBits b)
-{
-	return static_cast<SamplerFlagBits>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-
-inline SamplerFlagBits operator&(SamplerFlagBits a, SamplerFlagBits b)
-{
-	return static_cast<SamplerFlagBits>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
-}
 
 class RenderScope
 {
@@ -75,16 +60,17 @@ public:
 
 	inline const uint32_t& GetMaxFramesInFlight() const { return framesInFlight; };
 
-	const VkSampler& GetSampler(SamplerFlagBits flags) const;
+	const VkSampler& GetSampler(ESamplerType Type) const;
 
-	inline const Queue& GetQueue(VkQueueFlagBits Type) const {
+	inline const Queue& GetQueue(VkQueueFlagBits Type) const 
+	{
 		assert(available_queues.contains(Type));
 		return available_queues.at(Type);
 	}
 
 private:
 	std::unordered_map<VkQueueFlagBits, Queue> available_queues;
-	mutable std::unordered_map<SamplerFlagBits, VkSampler> samplers;
+	mutable std::unordered_map<ESamplerType, VkSampler> samplers;
 
 	uint32_t framesInFlight = 1u;
 

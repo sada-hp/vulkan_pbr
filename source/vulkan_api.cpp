@@ -227,7 +227,7 @@ VkBool32 CreateAllocator(const VkInstance& instance, const VkPhysicalDevice& phy
 	createInfo.device = device;
 	createInfo.instance = instance;
 	createInfo.physicalDevice = physicalDevice;
-	createInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+	createInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
 	return vmaCreateAllocator(&createInfo, outAllocator) == VK_SUCCESS;
 }

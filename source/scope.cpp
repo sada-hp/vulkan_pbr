@@ -105,13 +105,13 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	dependencies[1].srcSubpass = 0;
 	dependencies[1].dstSubpass = 1;
 	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependencies[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
@@ -192,26 +192,25 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& descriptorPool != VK_NULL_HANDLE;
 }
 
-const VkSampler& RenderScope::GetSampler(SamplerFlagBits flags) const
+const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 {
-	if (samplers.count(flags)) {
-		return samplers[flags];
-	}
-	else {
+	if (samplers.count(Type) == 0)
+	{
+		const bool Point = Type == ESamplerType::PointClamp || Type == ESamplerType::PointMirror || Type == ESamplerType::PointRepeat;
+		const bool Repeat = Type == ESamplerType::PointRepeat || Type == ESamplerType::LinearRepeat || Type == ESamplerType::BillinearRepeat;
+		const bool Mirror = Type == ESamplerType::PointMirror || Type == ESamplerType::LinearMirror || Type == ESamplerType::BillinearMirror;
+		const bool Anisotropy = Type == ESamplerType::BillinearClamp || Type == ESamplerType::BillinearRepeat || Type == ESamplerType::BillinearMirror;
+
 		VkSamplerCreateInfo samplerInfo{};
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = uint32_t(flags & SamplerFlagBits::NearestMagFilter) > 0u ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
-		samplerInfo.minFilter = uint32_t(flags & SamplerFlagBits::NearestMagFilter) > 0u ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = uint32_t(flags & SamplerFlagBits::RepeatU) > 0u ?
-			uint32_t(flags & SamplerFlagBits::MirrorU) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
-			: uint32_t(flags & SamplerFlagBits::MirrorU) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeV = uint32_t(flags & SamplerFlagBits::RepeatV) > 0u ?
-			uint32_t(flags & SamplerFlagBits::MirrorV) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
-			: uint32_t(flags & SamplerFlagBits::MirrorV) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeW = uint32_t(flags & SamplerFlagBits::RepeatW) > 0u ?
-			uint32_t(flags & SamplerFlagBits::MirrorW) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT
-			: uint32_t(flags & SamplerFlagBits::MirrorW) > 0u ? VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		if (uint32_t(flags & SamplerFlagBits::AnisatropyEnabled) > 0u){
+		samplerInfo.magFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+		samplerInfo.minFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeV = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeW = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+		if (Anisotropy)
+		{
 			VkPhysicalDeviceProperties properties{};
 			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
@@ -220,15 +219,15 @@ const VkSampler& RenderScope::GetSampler(SamplerFlagBits flags) const
 		}
 
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerInfo.unnormalizedCoordinates = uint32_t(flags & SamplerFlagBits::Unnormalized) > 0u;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
 		samplerInfo.compareEnable = VK_FALSE;
 		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		samplerInfo.mipmapMode = uint32_t(flags & SamplerFlagBits::NearestMipFilter) > 0u ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 1;
-		vkCreateSampler(logicalDevice, &samplerInfo, VK_NULL_HANDLE, &samplers[flags]);
-
-		return samplers[flags];
+		samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0;
+		samplerInfo.minLod = 0.0;
+		samplerInfo.maxLod = 1.0;
+		vkCreateSampler(logicalDevice, &samplerInfo, VK_NULL_HANDLE, &samplers[Type]);
 	}
+
+	return samplers[Type];
 }

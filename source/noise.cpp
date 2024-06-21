@@ -3,7 +3,9 @@
 #include "vulkan_objects/pipeline.hpp"
 #include "vulkan_objects/descriptor_set.hpp"
 
-TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, TVector<uint32_t> constants)
+extern TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkFormat& format, const VkImageCreateFlags& flags);
+
+TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, TVector<uint32_t> constants)
 {
 	TVector<uint32_t> queueFamilyIndices;
 	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
@@ -35,30 +37,31 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 	noiseImageView.subresourceRange.layerCount = 1u;
 	noiseImageView.subresourceRange.levelCount = 1u;
 
-	TAuto<Image> noise = std::make_unique<Image>(Scope);
+	TAuto<VulkanImage> noise = std::make_unique<VulkanImage>(Scope);
 	noise->CreateImage(noiseInfo, noiseAllocCreateInfo)
 		.CreateImageView(noiseImageView)
-		.CreateSampler(SamplerFlagBits::RepeatUVW)
+		.CreateSampler(ESamplerType::LinearRepeat)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	TAuto<ComputePipeline> noise_pipeline = std::make_unique<ComputePipeline>(Scope);
-	TAuto<DescriptorSet> noise_set = std::make_unique<DescriptorSet>(Scope);
-	noise_set->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *noise)
-		.Allocate();
-	noise_pipeline->SetShaderName(shader) 
+	ComputePipelineDescriptor noise_pipeline{};
+	TAuto<DescriptorSet> noise_set = DescriptorSetDescriptor().AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *noise)
+		.Allocate(Scope);
+	noise_pipeline.SetShaderName(shader) 
 		.AddDescriptorLayout(noise_set->GetLayout());
 
 	for (size_t i = 0; i < constants.size(); i++) {
-		noise_pipeline->AddSpecializationConstant(i, constants[i]);
+		noise_pipeline.AddSpecializationConstant(i, constants[i]);
 	}
-	noise_pipeline->Construct();
+
+	TAuto<Pipeline> pipeline = noise_pipeline.Construct(Scope);
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
 		.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
-	noise_set->BindSet(cmd, *noise_pipeline);
-	noise_pipeline->Dispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, noise->GetExtent().depth);
+	pipeline->BindPipeline(cmd);
+	noise_set->BindSet(cmd, *pipeline);
+	vkCmdDispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, noise->GetExtent().depth);
 	::EndCommandBuffer(cmd);
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
 		.Submit(cmd)
@@ -70,31 +73,57 @@ TAuto<Image> generate_noise(const char* shader, const RenderScope& Scope, VkForm
 	return noise;
 }
 
-TAuto<Image> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
+TAuto<VulkanImage> GRNoise::GenerateSolidColor(const RenderScope& Scope, VkExtent2D imageSize, VkFormat Format, std::byte r, std::byte g, std::byte b, std::byte a)
 {
-	return generate_noise("perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
+	std::byte* pixels = new std::byte[imageSize.width * imageSize.height * 4];
+
+	assert(pixels != nullptr);
+
+	for (uint32_t i = 0u; i < imageSize.width * imageSize.height * 4; i += 4)
+	{
+		pixels[i] = r;
+		pixels[i + 1] = g;
+		pixels[i + 2] = b;
+		pixels[i + 3] = a;
+	}
+
+	TAuto<VulkanImage> target = create_image(Scope, pixels, 1, imageSize.width, imageSize.height, Format, 0);
+	
+	delete[] pixels;
+
+	return target;
 }
 
-TAuto<Image> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
+TAuto<VulkanImage> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate_noise("worley", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
+	return generate("perlin_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
 }
 
-TAuto<Image> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
+TAuto<VulkanImage> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate_noise("worley_perlin", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
+	return generate("worley_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
 }
 
-TAuto<Image> GRNoise::GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
+TAuto<VulkanImage> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
+{
+	return generate("worley_perlin_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
+}
+
+TAuto<VulkanImage> GRNoise::GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate_noise("cloud_shape", Scope, VK_FORMAT_R8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
+	return generate("cloud_shape_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
 }
 
-TAuto<Image> GRNoise::GenerateCloudDetailNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
+TAuto<VulkanImage> GRNoise::GenerateCloudDetailNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate_noise("cloud_detail", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
+	return generate("cloud_detail_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
+}
+
+TAuto<VulkanImage> GRNoise::GenerateCheckerBoard(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency)
+{
+	return generate("checkerboard", Scope, VK_FORMAT_R8_UNORM, { imageSize.width, imageSize.height, 1u }, { frequency });
 }

@@ -8,7 +8,11 @@
 
 extern std::string exec_path;
 
-TAuto<Image> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkImageCreateFlags& flags)
+extern void calculate_normals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+
+extern void calculate_tangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale);
+
+TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkFormat& format, const VkImageCreateFlags& flags)
 {
 	assert(pixels != nullptr && count > 0 && w > 0 && h > 0);
 
@@ -38,7 +42,7 @@ TAuto<Image> create_image(const RenderScope& Scope, void* pixels, int count, int
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageCI.arrayLayers = count;
 	imageCI.extent = { (uint32_t)w, (uint32_t)h, 1u };
-	imageCI.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageCI.format = format;
 	imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCI.mipLevels = mipLevels;
 	imageCI.flags = flags;
@@ -50,7 +54,7 @@ TAuto<Image> create_image(const RenderScope& Scope, void* pixels, int count, int
 
 	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	imageViewCI.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageViewCI.format = imageCI.format;
 	imageViewCI.viewType = (flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
 	imageViewCI.subresourceRange = subRes;
 
@@ -58,10 +62,10 @@ TAuto<Image> create_image(const RenderScope& Scope, void* pixels, int count, int
 	skyAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 	VkPhysicalDeviceProperties properties{};
 	vkGetPhysicalDeviceProperties(Scope.GetPhysicalDevice(), &properties);
-	std::unique_ptr<Image> target = std::make_unique<Image>(Scope);
+	std::unique_ptr<VulkanImage> target = std::make_unique<VulkanImage>(Scope);
 	target->CreateImage(imageCI, skyAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::RepeatUVW | SamplerFlagBits::AnisatropyEnabled);
+		.CreateSampler(ESamplerType::BillinearRepeat);
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
@@ -92,39 +96,13 @@ TAuto<Image> create_image(const RenderScope& Scope, void* pixels, int count, int
 	return target;
 }
 
-TAuto<Image> GRFile::ImportImage(const RenderScope& Scope, const char* path, const VkImageCreateFlags& flags)
+TAuto<VulkanImage> GRFile::ImportImage(const RenderScope& Scope, const char* path, const VkFormat& format, const VkImageCreateFlags& flags)
 {
 	assert(path != nullptr);
 
 	int w, h, c;
 	unsigned char* pixels = stbi_load((exec_path + path).c_str(), &w, &h, &c, 4);
-	std::unique_ptr<Image> target = create_image(Scope, pixels, 1, w, h, flags);
-	free(pixels);
-
-	return target;
-}
-
-TAuto<Image> GRFile::ImportImages(const RenderScope& Scope, const char** path, size_t numPaths, const VkImageCreateFlags& flags)
-{
-	assert(numPaths > 0 && path != nullptr);
-
-	int w, h, c;
-	stbi_info((exec_path + path[0]).c_str(), &w, &h, &c);
-	int resolution = w * h * 4;
-	unsigned char* pixels = (unsigned char*)malloc(resolution * numPaths);
-	TVector<std::future<void>> loaders(numPaths);
-
-	for (int i = 0; i < numPaths; i++) {
-		loaders[i] = std::async(std::launch::async, [=]() {
-				int x, y, c;
-				void* target = stbi_load((exec_path + path[i]).c_str(), &x, &y, &c, 4);
-				memcpy(pixels + resolution * i, target, resolution);
-				free(target);
-			});
-	}
-	std::for_each(loaders.begin(), loaders.end(), [](const auto& it) {it.wait(); });
-
-	std::unique_ptr<Image> target = create_image(Scope, pixels, numPaths, w, h, flags);
+	TAuto<VulkanImage> target = create_image(Scope, pixels, 1, w, h, format, flags);
 	free(pixels);
 
 	return target;
@@ -137,31 +115,41 @@ TAuto<Mesh> GRFile::ImportMesh(const RenderScope& Scope, const char* path)
 	TVector<Vertex> vertices;
 	Assimp::Importer importer;
 	std::string file = exec_path + path;
-	const aiScene* model = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs);
+	const aiScene* model = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_CalcTangentSpace | aiProcess_FixInfacingNormals);
 	auto err = importer.GetErrorString();
 
 	assert(model != VK_NULL_HANDLE);
 
-	for (uint32_t mesh_ind = 0; mesh_ind < model->mNumMeshes; mesh_ind++) {
-		auto num_vert = model->mMeshes[mesh_ind]->mNumVertices;
-		auto cur_mesh = model->mMeshes[mesh_ind];
-		auto name3 = model->mMeshes[mesh_ind]->mName;
-		auto uv_ind = mesh_ind;
+	for (uint32_t submesh_ind = 0; submesh_ind < model->mNumMeshes; submesh_ind++) 
+	{
+		auto num_vert = model->mMeshes[submesh_ind]->mNumVertices;
+		auto cur_mesh = model->mMeshes[submesh_ind];
+		auto name3 = model->mMeshes[submesh_ind]->mName;
+		auto uv_ind = submesh_ind;
 
-		for (int vert_ind = 0; vert_ind < num_vert; vert_ind++) {
-			Vertex vertex{
-				mesh_ind,
-				{cur_mesh->mVertices[vert_ind].x, -cur_mesh->mVertices[vert_ind].y, cur_mesh->mVertices[vert_ind].z}
-			};
+		for (int vert_ind = 0; vert_ind < num_vert; vert_ind++) 
+		{
+			Vertex vertex{};
+			vertex.position = { cur_mesh->mVertices[vert_ind].x, cur_mesh->mVertices[vert_ind].y, cur_mesh->mVertices[vert_ind].z };
+			vertex.uv = { cur_mesh->mTextureCoords[uv_ind][vert_ind].x, cur_mesh->mTextureCoords[uv_ind][vert_ind].y };
+			vertex.submesh = submesh_ind;
 
-			if (uniqueVertices.count(vertex) == 0) {
+			if (cur_mesh->HasNormals())
+				vertex.normal = { cur_mesh->mNormals[vert_ind].x, cur_mesh->mNormals[vert_ind].y, cur_mesh->mNormals[vert_ind].z };
+			
+			if (cur_mesh->HasTangentsAndBitangents())
+				vertex.tangent = { cur_mesh->mTangents[vert_ind].x, cur_mesh->mTangents[vert_ind].y, cur_mesh->mTangents[vert_ind].z };
+
+			if (uniqueVertices.count(vertex) == 0) 
+			{
 				int index = uniqueVertices.size();
 				uniqueVertices[vertex] = index;
 
 				indices.push_back(index);
 				vertices.push_back(std::move(vertex));
 			}
-			else {
+			else 
+			{
 				indices.push_back(uniqueVertices[vertex]);
 			}
 		}

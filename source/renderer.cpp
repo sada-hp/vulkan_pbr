@@ -13,21 +13,6 @@
 
 extern std::string exec_path;
 
-struct UniformBuffer
-{
-	TMat4 ViewProjection;
-	TMat4 ProjectionMatrixInverse;
-	TMat4 ViewMatrixInverse;
-	TVec3 SunDirection;
-	float Time;
-};
-
-struct ViewBuffer
-{
-	TVec4 CameraPosition;
-	TVec2 Resolution;
-};
-
 VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	: glfwWindow(window), registry(in_registry)
 {
@@ -82,24 +67,24 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 
 	res = setup_precompute() & res;
 	res = prepare_scene() & res;
-
+	
 #ifdef INCLUDE_GUI
 	std::vector<VkDescriptorPoolSize> pool_sizes =
 	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 100 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 100 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 100 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 100 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 100 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 100 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 100 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 100 }
 	};
 
-	::CreateDescriptorPool(Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 1000, &imguiPool);
+	::CreateDescriptorPool(Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 100, &imguiPool);
 
 	//this initializes imgui for Vulkan
 	ImGui_ImplVulkan_InitInfo init_info = {};
@@ -136,15 +121,23 @@ VulkanBase::~VulkanBase() noexcept
 	cloud_layer.reset();
 	CloudShape.reset();
 	CloudDetail.reset();
-	Gradient.reset();
 
 	Transmittance.reset();
 	ScatteringLUT.reset();
 	IrradianceLUT.reset();
 
-	//vkDestroyFramebuffer(Scope.GetDevice(), *HDRFB, nullptr);
+	defaultAlbedo.reset();
+	defaultNormal.reset();
+	defaultMetallic.reset();
+	defaultRoughness.reset();
+	defaultAO.reset();
 
-	registry.clear<VulkanGraphicsObject>();
+	registry.clear<PBRObject,
+		GRComponents::AlbedoMap,
+		GRComponents::NormalMap,
+		GRComponents::RoughnessMap,
+		GRComponents::MetallicMap,
+		GRComponents::AmbientMap>();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -173,6 +166,7 @@ VulkanBase::~VulkanBase() noexcept
 	HDRDescriptors.resize(0);
 
 	Scope.Destroy();
+
 	vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
 	vkDestroyInstance(instance, VK_NULL_HANDLE);
 }
@@ -203,7 +197,7 @@ void VulkanBase::Step(float DeltaTime)
 			Time
 		};
 
-		ubo->Update((void*)&Uniform, sizeof(Uniform));
+		ubo->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
 	//View
@@ -216,12 +210,12 @@ void VulkanBase::Step(float DeltaTime)
 			ScreenSize
 		};
 
-		view->Update((void*)&Uniform);
+		view->Update(static_cast<void*>(&Uniform));
 	}
 
 	//Cloud layer
 	{
-		cloud_layer->Update(&CloudLayer, sizeof(SCloudLayer));
+		cloud_layer->Update(&CloudLayer, sizeof(CloudProfileLayer));
 	}
 
 	//Draw
@@ -254,6 +248,7 @@ void VulkanBase::Step(float DeltaTime)
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
+
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = Scope.GetSwapchainExtent();
@@ -261,15 +256,15 @@ void VulkanBase::Step(float DeltaTime)
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		//render_objects(cmd);
+		render_objects(cmd);
 
-		skybox->descriptorSet.BindSet(cmd, skybox->pipeline);
-		skybox->pipeline.BindPipeline(cmd);
+		skybox->descriptorSet->BindSet(cmd, *skybox->pipeline);
+		skybox->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
-		volume->descriptorSet.BindSet(cmd, volume->pipeline);
-		volume->pipeline.BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		//volume->descriptorSet->BindSet(cmd, *volume->pipeline);
+		//volume->pipeline->BindPipeline(cmd);
+		//vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -286,7 +281,7 @@ void VulkanBase::Step(float DeltaTime)
 	}
 
 	VkSubmitInfo submitInfo{};
-	TArray<VkSemaphore, 1> waitSemaphores = { swapchainSemaphores[swapchain_index] };
+	TArray<VkSemaphore, 1> waitSemaphores   = { swapchainSemaphores[swapchain_index] };
 	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[swapchain_index] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -362,37 +357,107 @@ void VulkanBase::HandleResize()
 	assert(swapchainImages.size() == presentBuffers.size());
 }
 
-entt::entity VulkanBase::AddGraphicsObject(const std::string& mesh_path, const std::string& texture_path)
+TAuto<VulkanImage> VulkanBase::LoadImage(const std::string& path, VkFormat format)
+{
+	return GRFile::ImportImage(Scope, path.c_str(), format, 0);
+}
+
+entt::entity VulkanBase::AddMesh(const std::string& mesh_path)
 {
 	entt::entity ent = registry.create();
 
-	VulkanGraphicsObject& gro = registry.emplace_or_replace<VulkanGraphicsObject>(ent, Scope);
+	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
 	registry.emplace_or_replace<GRComponents::Transform>(ent);
 	registry.emplace_or_replace<GRComponents::Color>(ent);
+	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
 
-	if (mesh_path != "")
-	{
-		gro.mesh = GRFile::ImportMesh(Scope, mesh_path.c_str());
-	}
+	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultAlbedo, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultRoughness, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultMetallic, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultAO, &gro.dirty);
 
-	gro.descriptor_set.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *view)
-		.Allocate();
+	gro.mesh = mesh_path != "" ? GRFile::ImportMesh(Scope, mesh_path.c_str()) 
+							   : GRShape::Cube().Generate(Scope);
 
-	auto vertAttributes = Vertex::getAttributeDescriptions();
-	auto vertBindings = Vertex::getBindingDescription();
-
-	gro.pipeline.SetCullMode(VK_CULL_MODE_BACK_BIT)
-		.SetVertexInputBindings(1, &vertBindings)
-		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
-		.SetShaderStages("default", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
-		.AddDescriptorLayout(gro.descriptor_set.GetLayout())
-		.AddPushConstant({VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)})
-		.AddPushConstant({VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3)})
-		.Construct();
+	gro.descriptorSet = create_pbr_set(Scope, *defaultAlbedo, *defaultNormal, *defaultRoughness, *defaultMetallic, *defaultAO);
+	gro.pipeline = create_pbr_pipeline(Scope, *gro.descriptorSet);
 
 	return ent;
 }
+
+entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
+{
+	entt::entity ent = registry.create();
+	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
+	registry.emplace_or_replace<GRComponents::Transform>(ent);
+	registry.emplace_or_replace<GRComponents::Color>(ent);
+	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
+
+	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultAlbedo, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultRoughness, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultMetallic, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultAO, &gro.dirty);
+
+	gro.mesh = descriptor.Generate(Scope);
+	gro.descriptorSet = create_pbr_set(Scope, *defaultAlbedo, *defaultNormal, *defaultRoughness, *defaultMetallic, *defaultAO);
+	gro.pipeline = create_pbr_pipeline(Scope, *gro.descriptorSet);
+
+	return ent;
+}
+
+void VulkanBase::RegisterEntityUpdate(entt::entity ent)
+{
+	VulkanImage* albedo = static_cast<VulkanImage*>(registry.get<GRComponents::AlbedoMap>(ent).Get().get());
+	VulkanImage* normal = static_cast<VulkanImage*>(registry.get<GRComponents::NormalMap>(ent).Get().get());
+	VulkanImage* roughness = static_cast<VulkanImage*>(registry.get<GRComponents::RoughnessMap>(ent).Get().get());
+	VulkanImage* metallic = static_cast<VulkanImage*>(registry.get<GRComponents::MetallicMap>(ent).Get().get());
+	VulkanImage* ambient = static_cast<VulkanImage*>(registry.get<GRComponents::AmbientMap>(ent).Get().get());
+
+	PBRObject& gro = registry.get<PBRObject>(ent);
+	gro.descriptorSet = create_pbr_set(Scope, *albedo, *normal, *roughness, *metallic, *ambient);
+	gro.pipeline = create_pbr_pipeline(Scope, *gro.descriptorSet);
+	gro.dirty = false;
+}
+
+TAuto<DescriptorSet> VulkanBase::create_pbr_set(const RenderScope& Scope
+	, const VulkanImage& albedo
+	, const VulkanImage& normal
+	, const VulkanImage& roughness
+	, const VulkanImage& metallic
+	, const VulkanImage& ao)
+{
+	return DescriptorSetDescriptor()
+		.AddUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *view)
+		.AddImageSampler(2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
+		.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
+		.AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, albedo)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, normal)
+		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, roughness)
+		.AddImageSampler(8, VK_SHADER_STAGE_FRAGMENT_BIT, metallic)
+		.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, ao)
+		.Allocate(Scope);
+}
+
+TAuto<Pipeline> VulkanBase::create_pbr_pipeline(const RenderScope& Scope, const DescriptorSet& set)
+{
+	auto vertAttributes = Vertex::getAttributeDescriptions();
+	auto vertBindings = Vertex::getBindingDescription();
+
+	return GraphicsPipelineDescriptor()
+		.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetVertexInputBindings(1, &vertBindings)
+		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
+		.SetShaderStage("default_vert", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("default_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddDescriptorLayout(set.GetLayout())
+		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PBRConstants::World) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PBRConstants::World),  sizeof(PBRConstants) - sizeof(PBRConstants::World) })
+		.Construct(Scope);
+};
 
 VkBool32 VulkanBase::create_instance()
 {
@@ -493,14 +558,14 @@ VkBool32 VulkanBase::create_swapchain_images()
 		swapchainViews.push_back(imageView);
 
 		viewInfo.format = hdrInfo.format;
-		hdrAttachments[i] = std::make_unique<Image>(Scope);
+		hdrAttachments[i] = std::make_unique<VulkanImage>(Scope);
 		hdrAttachments[i]->CreateImage(hdrInfo, allocCreateInfo)
 			.CreateImageView(viewInfo)
 			.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		viewInfo.format = Scope.GetDepthFormat();
-		depthAttachments[i] = std::make_unique<Image>(Scope);
+		depthAttachments[i] = std::make_unique<VulkanImage>(Scope);
 		depthAttachments[i]->CreateImage(depthInfo, allocCreateInfo)
 			.CreateImageView(viewInfo);
 	}
@@ -531,15 +596,16 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 
 	for (size_t i = 0; i < HDRDescriptors.size(); i++)
 	{
-		HDRDescriptors[i] = std::make_unique<DescriptorSet>(Scope);
-		HDRDescriptors[i]->AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, *hdrAttachments[i])
-			.Allocate();
+		HDRDescriptors[i] = DescriptorSetDescriptor()
+			.AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, *hdrAttachments[i])
+			.Allocate(Scope);
 
-		HDRPipelines[i] = std::make_unique<GraphicsPipeline>(Scope);
-		HDRPipelines[i]->SetShaderStages("hdr", VkShaderStageFlagBits(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+		HDRPipelines[i] = GraphicsPipelineDescriptor()
+			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
+			.SetShaderStage("hdr_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.AddDescriptorLayout(HDRDescriptors[i]->GetLayout())
 			.SetSubpass(1)
-			.Construct();
+			.Construct(Scope);
 	}
 
 	return res;
@@ -579,20 +645,17 @@ VkBool32 VulkanBase::prepare_scene()
 	CloudShape = GRNoise::GenerateCloudShapeNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
 	CloudDetail = GRNoise::GenerateCloudDetailNoise(Scope, { 32u, 32u, 32u }, 8u, 3u);
 
-	Gradient = GRFile::ImportImage(Scope, "Content\\Gradient.jpg");
-	Gradient->CreateSampler(SamplerFlagBits::AnisatropyEnabled);
-	
-	volume = std::make_unique<GraphicsObject>(Scope);
-	volume->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+	volume = std::make_unique<GraphicsObject>();
+	volume->descriptorSet = DescriptorSetDescriptor()
+		.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
 		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
 		.AddUniformBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT, *cloud_layer)
 		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
 		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *Gradient)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
-		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
-		.AddImageSampler(8, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
-		.Allocate();
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
+		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
+		.Allocate(Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};
 	blendState.blendEnable = true;
@@ -604,37 +667,59 @@ VkBool32 VulkanBase::prepare_scene()
 	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 
-	volume->pipeline.SetShaderStages("volumetric", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+	volume->pipeline = GraphicsPipelineDescriptor()
+		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("volumetric_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetBlendAttachments(1, &blendState)
-		.AddDescriptorLayout(volume->descriptorSet.GetLayout())
+		.AddDescriptorLayout(volume->descriptorSet->GetLayout())
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
-		.Construct();
+		.Construct(Scope);
 	
-	skybox = std::make_unique<GraphicsObject>(Scope);
-	skybox->descriptorSet.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
+	skybox = std::make_unique<GraphicsObject>();
+	skybox->descriptorSet = DescriptorSetDescriptor()
+		.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
 		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
 		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
-		.Allocate();
+		.Allocate(Scope);
 
-	skybox->pipeline.SetShaderStages("background", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT))
+	skybox->pipeline = GraphicsPipelineDescriptor()
+		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("background_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_NONE)
-		.AddDescriptorLayout(skybox->descriptorSet.GetLayout())
-		.Construct();
+		.AddDescriptorLayout(skybox->descriptorSet->GetLayout())
+		.Construct(Scope);
+
+	defaultAlbedo = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u)));
+	defaultNormal = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u)));
+	defaultRoughness = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(255u)));
+	defaultMetallic = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(0u)));
+	defaultAO = defaultAlbedo;
 
 	return res;
 }
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
 {
-	auto view = registry.view<VulkanGraphicsObject, GRComponents::Transform>();
+	auto view = registry.view<PBRObject, GRComponents::Transform>();
 
 	VkDeviceSize offsets[] = { 0 };
 	for (const auto& [ent, gro, world] : view.each())
 	{
-		gro.descriptor_set.BindSet(cmd, gro.pipeline);
-		gro.pipeline.PushConstants(cmd, &world.matrix, sizeof(glm::mat4), 0u, VK_SHADER_STAGE_VERTEX_BIT);
-		gro.pipeline.PushConstants(cmd, &registry.get<GRComponents::Color>(ent).RGB, sizeof(glm::vec3), sizeof(glm::mat4), VK_SHADER_STAGE_FRAGMENT_BIT);
-		gro.pipeline.BindPipeline(cmd);
+		if (gro.dirty)
+		{
+			RegisterEntityUpdate(ent);
+		}
+
+		PBRConstants C{};
+		C.World = world.matrix;
+		C.Color = glm::vec4(registry.get<GRComponents::Color>(ent).RGB, 1.0);
+		C.RoughnessMultiplier = registry.get<GRComponents::RoughnessMultiplier>(ent).R;
+
+		gro.descriptorSet->BindSet(cmd, *gro.pipeline);
+		gro.pipeline->PushConstants(cmd, &C.World, sizeof(PBRConstants::World), 0u, VK_SHADER_STAGE_VERTEX_BIT);
+		gro.pipeline->PushConstants(cmd, &C.Color, sizeof(PBRConstants) - sizeof(PBRConstants::World), offsetof(PBRConstants, Color), VK_SHADER_STAGE_FRAGMENT_BIT);
+		gro.pipeline->BindPipeline(cmd);
+
 		vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
 		vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
 		vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
@@ -643,10 +728,10 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 
 VkBool32 VulkanBase::setup_precompute()
 {
-	TAuto<Image> DeltaE;
-	TAuto<Image> DeltaSR;
-	TAuto<Image> DeltaSM;
-	TAuto<Image> DeltaJ;
+	TAuto<VulkanImage> DeltaE;
+	TAuto<VulkanImage> DeltaSR;
+	TAuto<VulkanImage> DeltaSM;
+	TAuto<VulkanImage> DeltaJ;
 
 	TAuto<DescriptorSet> TrDSO;
 	TAuto<DescriptorSet> DeltaEDSO;
@@ -659,16 +744,15 @@ VkBool32 VulkanBase::setup_precompute()
 	TAuto<DescriptorSet> AddEDSO;
 	TAuto<DescriptorSet> AddSDSO;
 
-	TAuto<ComputePipeline> GenTrLUT;
-	TAuto<ComputePipeline> GenDeltaELUT;
-	TAuto<ComputePipeline> GenDeltaSRSMLUT;
-	TAuto<ComputePipeline> GenSingleScatterLUT;
-
-	TAuto<ComputePipeline> GenDeltaJLUT;
-	TAuto<ComputePipeline> GenDeltaEnLUT;
-	TAuto<ComputePipeline> GenDeltaSLUT;
-	TAuto<ComputePipeline> AddE;
-	TAuto<ComputePipeline> AddS;
+	TAuto<Pipeline> GenTrLUT;
+	TAuto<Pipeline> GenDeltaELUT;
+	TAuto<Pipeline> GenDeltaSRSMLUT;
+	TAuto<Pipeline> GenSingleScatterLUT;
+	TAuto<Pipeline> GenDeltaJLUT;
+	TAuto<Pipeline> GenDeltaEnLUT;
+	TAuto<Pipeline> GenDeltaSLUT;
+	TAuto<Pipeline> AddE;
+	TAuto<Pipeline> AddS;
 
 	VkImageSubresourceRange subRes{};
 	subRes.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -681,7 +765,7 @@ VkBool32 VulkanBase::setup_precompute()
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageCI.arrayLayers = 1;
 	imageCI.extent = { 256, 64, 1u };
-	imageCI.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	imageCI.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCI.mipLevels = 1;
 	imageCI.flags = 0;
@@ -693,187 +777,237 @@ VkBool32 VulkanBase::setup_precompute()
 
 	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	imageViewCI.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	imageViewCI.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	imageViewCI.subresourceRange = subRes;
 
 	VmaAllocationCreateInfo imageAlloc{};
 	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	Transmittance = std::make_unique<Image>(Scope);
+	Transmittance = std::make_unique<VulkanImage>(Scope);
 	Transmittance->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	TrDSO = std::make_unique<DescriptorSet>(Scope);
-	TrDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
-		.Allocate();
+	TrDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
+		.Allocate(Scope);
 
-	GenTrLUT = std::make_unique<ComputePipeline>(Scope);
-	GenTrLUT->SetShaderName("transmittance")
+	GenTrLUT = ComputePipelineDescriptor()
+		.SetShaderName("transmittance_comp")
 		.AddDescriptorLayout(TrDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
 	imageCI.extent = { 64u, 16u, 1u };
-	DeltaE = std::make_unique<Image>(Scope);
+	DeltaE = std::make_unique<VulkanImage>(Scope);
 	DeltaE->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	DeltaEDSO = std::make_unique<DescriptorSet>(Scope);
-	DeltaEDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+	DeltaEDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenDeltaELUT = std::make_unique<ComputePipeline>(Scope);
-	GenDeltaELUT->SetShaderName("deltaE")
+	GenDeltaELUT = ComputePipelineDescriptor()
+		.SetShaderName("deltaE_comp")
 		.AddDescriptorLayout(DeltaEDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	IrradianceLUT = std::make_unique<Image>(Scope);
+	IrradianceLUT = std::make_unique<VulkanImage>(Scope);
 	IrradianceLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	imageCI.imageType = VK_IMAGE_TYPE_3D;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_3D;
 	imageCI.extent = { 256u, 128u, 32u };
-	DeltaSR = std::make_unique<Image>(Scope);
+	DeltaSR = std::make_unique<VulkanImage>(Scope);
 	DeltaSR->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	DeltaSM = std::make_unique<Image>(Scope);
+	DeltaSM = std::make_unique<VulkanImage>(Scope);
 	DeltaSM->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	DeltaSRSMDSO = std::make_unique<DescriptorSet>(Scope);
-	DeltaSRSMDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+	DeltaSRSMDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
 		.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
 		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenDeltaSRSMLUT = std::make_unique<ComputePipeline>(Scope);
-	GenDeltaSRSMLUT->SetShaderName("deltaSRSM")
+	GenDeltaSRSMLUT = ComputePipelineDescriptor()
+		.SetShaderName("deltaSRSM_comp")
 		.AddDescriptorLayout(DeltaSRSMDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	ScatteringLUT = std::make_unique<Image>(Scope);
+	ScatteringLUT = std::make_unique<VulkanImage>(Scope);
 	ScatteringLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	SingleScatterDSO = std::make_unique<DescriptorSet>(Scope);
-	SingleScatterDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
+	SingleScatterDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
 		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenSingleScatterLUT = std::make_unique<ComputePipeline>(Scope);
-	GenSingleScatterLUT->SetShaderName("singleScattering")
+	GenSingleScatterLUT = ComputePipelineDescriptor()
+		.SetShaderName("singleScattering_comp")
 		.AddDescriptorLayout(SingleScatterDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	DeltaJ = std::make_unique<Image>(Scope);
+	DeltaJ = std::make_unique<VulkanImage>(Scope);
 	DeltaJ->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(SamplerFlagBits::None)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-	DeltaJDSO = std::make_unique<DescriptorSet>(Scope);
-	DeltaJDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
+	DeltaJDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
 		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
 		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
 		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenDeltaJLUT = std::make_unique<ComputePipeline>(Scope);
-	GenDeltaJLUT->SetShaderName("deltaJ")
+	GenDeltaJLUT = ComputePipelineDescriptor()
+		.SetShaderName("deltaJ_comp")
 		.AddDescriptorLayout(DeltaJDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	DeltaEnDSO = std::make_unique<DescriptorSet>(Scope);
-	DeltaEnDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+	DeltaEnDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
 		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenDeltaEnLUT = std::make_unique<ComputePipeline>(Scope);
-	GenDeltaEnLUT->SetShaderName("deltaEn")
+	GenDeltaEnLUT = ComputePipelineDescriptor()
+		.SetShaderName("deltaEn_comp")
 		.AddDescriptorLayout(DeltaEnDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	DeltaSDSO = std::make_unique<DescriptorSet>(Scope);
-	DeltaSDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+	DeltaSDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *Transmittance)
 		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
-		.Allocate();
+		.Allocate(Scope);
 
-	GenDeltaSLUT = std::make_unique<ComputePipeline>(Scope);
-	GenDeltaSLUT->SetShaderName("deltaS")
+	GenDeltaSLUT = ComputePipelineDescriptor()
+		.SetShaderName("deltaS_comp")
 		.AddDescriptorLayout(DeltaSDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	AddEDSO = std::make_unique<DescriptorSet>(Scope);
-	AddEDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *IrradianceLUT)
+	AddEDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *IrradianceLUT)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
-		.Allocate();
+		.Allocate(Scope);
 
-	AddE = std::make_unique<ComputePipeline>(Scope);
-	AddE->SetShaderName("addE")
+	AddE = ComputePipelineDescriptor()
+		.SetShaderName("addE_comp")
 		.AddDescriptorLayout(AddEDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
-	AddSDSO = std::make_unique<DescriptorSet>(Scope);
-	AddSDSO->AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
+	AddSDSO = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *ScatteringLUT)
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.Allocate();
+		.Allocate(Scope);
 
-	AddS = std::make_unique<ComputePipeline>(Scope);
-	AddS->SetShaderName("addS")
+	AddS = ComputePipelineDescriptor()
+		.SetShaderName("addS_comp")
 		.AddDescriptorLayout(AddSDSO->GetLayout())
-		.Construct();
+		.Construct(Scope);
 
 	VkCommandBuffer cmd;
 	const Queue& Queue = Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
 
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_COMPUTE_BIT;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_COMPUTE_BIT;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+	barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
 	Queue.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 
+	GenTrLUT->BindPipeline(cmd);
 	TrDSO->BindSet(cmd, *GenTrLUT);
-	GenTrLUT->Dispatch(cmd, Transmittance->GetExtent().width, Transmittance->GetExtent().height, Transmittance->GetExtent().depth);
+	vkCmdDispatch(cmd, Transmittance->GetExtent().width / 8u + uint32_t(Transmittance->GetExtent().width % 8u > 0)
+		, Transmittance->GetExtent().height / 8u + uint32_t(Transmittance->GetExtent().height % 8u > 0)
+		, 1u);
 
+	barrier.image = Transmittance->GetImage();
+	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+	GenDeltaELUT->BindPipeline(cmd);
 	DeltaEDSO->BindSet(cmd, *GenDeltaELUT);
-	GenDeltaELUT->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		1u);
 
+	barrier.image = DeltaE->GetImage();
+	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+	GenDeltaSRSMLUT->BindPipeline(cmd);
 	DeltaSRSMDSO->BindSet(cmd, *GenDeltaSRSMLUT);
-	GenDeltaSRSMLUT->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
+		DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
+		DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
 
+	barrier.image = DeltaSM->GetImage();
+	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+	GenSingleScatterLUT->BindPipeline(cmd);
 	SingleScatterDSO->BindSet(cmd, *GenSingleScatterLUT);
-	GenSingleScatterLUT->Dispatch(cmd, ScatteringLUT->GetExtent().width, ScatteringLUT->GetExtent().height, ScatteringLUT->GetExtent().depth);
+	vkCmdDispatch(cmd, ScatteringLUT->GetExtent().width / 4u + uint32_t(ScatteringLUT->GetExtent().width % 4u > 0),
+		ScatteringLUT->GetExtent().height / 4u + uint32_t(ScatteringLUT->GetExtent().height % 4u > 0),
+		ScatteringLUT->GetExtent().depth / 4u + uint32_t(ScatteringLUT->GetExtent().depth % 4u > 0));
 
+	GenDeltaJLUT->BindPipeline(cmd);
 	DeltaJDSO->BindSet(cmd, *GenDeltaJLUT);
-	GenDeltaJLUT->Dispatch(cmd, DeltaJ->GetExtent().width, DeltaJ->GetExtent().height, DeltaJ->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaJ->GetExtent().width / 4u + uint32_t(DeltaJ->GetExtent().width % 4u > 0),
+		DeltaJ->GetExtent().height / 4u + uint32_t(DeltaJ->GetExtent().height % 4u > 0),
+		DeltaJ->GetExtent().depth / 4u + uint32_t(DeltaJ->GetExtent().depth % 4u > 0));
 
+	GenDeltaEnLUT->BindPipeline(cmd);
 	DeltaEnDSO->BindSet(cmd, *GenDeltaEnLUT);
-	GenDeltaEnLUT->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		1u);
 
+	GenDeltaSLUT->BindPipeline(cmd);
 	DeltaSDSO->BindSet(cmd, *GenDeltaSLUT);
-	GenDeltaSLUT->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
+		DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
+		DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
 
+	AddE->BindPipeline(cmd);
 	AddEDSO->BindSet(cmd, *AddE);
-	AddE->Dispatch(cmd, DeltaE->GetExtent().width, DeltaE->GetExtent().height, DeltaE->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		1u);
 
+	AddS->BindPipeline(cmd);
 	AddSDSO->BindSet(cmd, *AddS);
-	AddS->Dispatch(cmd, DeltaSR->GetExtent().width, DeltaSR->GetExtent().height, DeltaSR->GetExtent().depth);
+	vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
+		DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
+		DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
 
 	::EndCommandBuffer(cmd);
 	Queue.Submit(cmd)

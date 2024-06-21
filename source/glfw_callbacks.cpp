@@ -25,7 +25,7 @@ namespace GR
 	void GrayEngine::glfw_mouse_move(GLFWwindow* window, double xpos, double ypos)
 	{
 		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));
-		context->listener->Register(context->engine, xpos, ypos);
+		context->listener->Register(context->engine, GREvent::MousePosition(xpos, ypos));
 
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
@@ -36,5 +36,15 @@ namespace GR
 	{
 		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));
 		context->renderer->HandleResize();
+	}
+
+	void GrayEngine::glfw_scroll(GLFWwindow* window, double dx, double dy)
+	{
+		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));
+		context->listener->Register(context->engine, GREvent::ScrollDelta(dx, dy));
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_ScrollCallback(window, dx, dy);
+#endif
 	}
 };
