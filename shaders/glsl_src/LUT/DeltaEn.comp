@@ -5,6 +5,12 @@
 #version 460
 #include "LUT.glsl"
 
+layout(push_constant) uniform constants
+{
+    int Sample;
+} 
+PushConstants;
+
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout (binding = 0, rgba16f) uniform writeonly image2D outImage;
@@ -51,10 +57,10 @@ vec3 ComputeDeltaEn(int Order, float R, float CosSunZenith)
 void main()
 {
     float R, Mu;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
+    vec2 UV = vec2(gl_GlobalInvocationID.xy)  / vec2(imageSize(outImage).xy);
     
     GetIrradienceRMu(UV, R, Mu);
 
-    vec3 DeltaE = ComputeDeltaEn(2, R, Mu);
+    vec3 DeltaE = ComputeDeltaEn(PushConstants.Sample, R, Mu);
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(DeltaE, 0.0));
 }

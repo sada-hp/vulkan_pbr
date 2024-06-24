@@ -15,6 +15,7 @@ layout(push_constant) uniform constants
 {
     layout(offset = 64) vec4 ColorMask;
     layout(offset = 80) float RoughnessMultiplier;
+    layout(offset = 84) float Metallic;
 } 
 PushConstants;
 
@@ -31,9 +32,11 @@ layout(binding = 6) uniform sampler2D NormalMap;
 layout(binding = 7) uniform sampler2D RoughnessMap;
 layout(binding = 8) uniform sampler2D MetallnessMap;
 layout(binding = 9) uniform sampler2D AOMap;
+layout(binding = 10) uniform sampler2D HeightMap;
 
 layout(location = 0) out vec4 outColor;
 
+// very simplified version which skips aerial perspective and scattering
 vec3 PointRadiance(vec3 Sun, vec3 Eye, vec3 Point)
 {
     vec3 View = normalize(Point - Eye);
@@ -57,6 +60,7 @@ vec3 GetDiffuseTerm(vec3 Albedo, float NdotL, float NdotV, float LdotH, float Ro
     return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
 }
 
+// get specular and ambient part from sunlight
 vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial Material)
 {
     vec3 H = normalize(V + L);
@@ -72,11 +76,11 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
     float G = GeometrySmith(NdotV, NdotL, Material.Roughness);
     float D = DistributionGGX(NdotH, Material.Roughness);
 
-    vec3 kD = vec3(1.0 - Material.Metallic) * vec3(1.0 - F);
+    vec3 kD = vec3(1.0 - Material.Metallic);
     vec3 specular = vec3(max((D * G * F) / (4.0 * NdotV * NdotL), 0.001));
     vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     //vec3 diffuse = kD * Material.Albedo.rgb;
-    vec3 ambient = Material.AO * vec3(0.03) * vec3(1.0 - Material.Metallic) * Material.Albedo.rgb;
+    vec3 ambient = Material.AO * vec3(0.03) * Material.Albedo.rgb;
     vec3 radiance = PointRadiance(L, Eye, Point);
 
     return (ambient + (specular + diffuse) * NdotL) * radiance;
@@ -84,26 +88,31 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
 
 void main()
 {
+    // these are used to sample atmosphere, so we offset them to ground level
     vec3 Point = WorldPosition.xyz + vec3(0.0, Rg, 0.0);
     vec3 Eye = View.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
-    vec3 NormalMap = normalize(texture(NormalMap, UV).xyz * 2.0 - 1.0);
-
+    
+    // getting default lighting vectors
+    vec3 V = normalize(View.CameraPosition.xyz - WorldPosition.xyz);
+    vec3 L = normalize(ubo.SunDirection.xyz);
     vec3 N = normalize(Normal);
     vec3 T = normalize(Tangent);
     vec3 B = normalize(cross(N, T));
     mat3 TBN = mat3(T, B, N);
 
+    // reading the normal map
+    vec3 NormalMap = normalize(texture(NormalMap, UV).xyz * 2.0 - 1.0);
     N = normalize(TBN * NormalMap);
-    vec3 V = normalize(View.CameraPosition.xyz - WorldPosition.xyz);
-    vec3 L = normalize(ubo.SunDirection.xyz);
-    
+
+    // material descriptor    
     SMaterial Material;
     Material.Roughness = max(PushConstants.RoughnessMultiplier * texture(RoughnessMap, UV).r, 0.01);
-    Material.Metallic = texture(MetallnessMap, UV).r;
+    Material.Metallic = (PushConstants.Metallic == 0.0 ? texture(MetallnessMap, UV).r : PushConstants.Metallic);
     Material.AO = texture(AOMap, UV).r;
     Material.Albedo = texture(AlbedoMap, UV);
     Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
 
+    // getting the color
     vec3 Lo = DirectSunlight(Eye, Point, V, L, N, Material);
     outColor = vec4(Lo, PushConstants.ColorMask.a * Material.Albedo.a);
 }

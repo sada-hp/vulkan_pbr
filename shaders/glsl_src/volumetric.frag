@@ -2,7 +2,6 @@
 #include "ubo.glsl"
 #include "lighting.glsl"
 #include "noise.glsl"
-#include "common.glsl"
 
 vec3 sphereStart;
 vec3 sphereEnd;
@@ -128,8 +127,8 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     }
 
     //super hacky, but somehow it works, gonna be changed
-    vec3 L, T, S, E;
-    PointRadiance(TransmittanceLUT, IrradianceLUT, InscatteringLUT, rl, rd, vec3(0, Rg, 0) + View.CameraPosition.xyz, vec3(0, Rg, 0) + View.CameraPosition.xyz, L, T, E, S);
+    //vec3 L, T, S, E;
+    //PointRadiance(TransmittanceLUT, IrradianceLUT, InscatteringLUT, rl, rd, vec3(0, Rg, 0) + View.CameraPosition.xyz, vec3(0, Rg, 0) + View.CameraPosition.xyz, L, T, E, S);
 
     for (; i < steps; i++)
     {
@@ -140,7 +139,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
             float extinction = max(density * Clouds.Absorption, 1e-8);
             float transmittance = BeerLambert(stepsize * extinction);
 
-            vec3 energy = L * density * phase * (MarchToLight(pos, rl, stepsize) + E) * Powder(stepsize, density, Clouds.Absorption) + S;
+            vec3 energy = vec3(density * phase * (MarchToLight(pos, rl, stepsize)) * Powder(stepsize, density, Clouds.Absorption));
             vec3 intScat = (energy - energy * transmittance) / density;
 
             scattering.rgb += intScat * scattering.a;

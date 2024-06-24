@@ -40,51 +40,47 @@ namespace GRComponents
 	struct AlbedoMap : Resource<Image>
 	{
 		AlbedoMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr)
-		{
-
-		}
+			: Resource(resource, flagptr) { }
 	};
 
 	struct NormalMap : Resource<Image>
 	{
 		NormalMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr)
-		{
-
-		}
+			: Resource(resource, flagptr) { }
 	};
 
 	struct RoughnessMap : Resource<Image>
 	{
 		RoughnessMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr)
-		{
-
-		}
+			: Resource(resource, flagptr) { }
 	};
 
 	struct MetallicMap : Resource<Image>
 	{
 		MetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr)
-		{
-
-		}
+			: Resource(resource, flagptr) { }
 	};
 
 	struct AmbientMap : Resource<Image>
 	{
 		AmbientMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr)
-		{
+			: Resource(resource, flagptr) { }
+	};
 
-		}
+	struct DisplacementMap : Resource<Image>
+	{
+		DisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
+			: Resource(resource, flagptr) { }
 	};
 
 	struct RoughnessMultiplier
 	{
 		float R = 1.0;
+	};
+
+	struct MetallicOverride
+	{
+		float M = 0.0;
 	};
 
 	struct Color

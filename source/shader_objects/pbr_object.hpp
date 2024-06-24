@@ -8,6 +8,7 @@ struct PBRConstants
 	glm::mat4 World;
 	glm::vec4 Color;
 	float RoughnessMultiplier;
+	float Metallic;
 };
 
 struct PBRObject : public GraphicsObject

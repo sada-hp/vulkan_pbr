@@ -8,6 +8,10 @@ namespace GREvent
 	struct MousePosition { double x; double y; };
 
 	struct ScrollDelta { double x; double y; };
+
+	struct MousePress { GR::EMouse key; GR::EAction action; };
+
+	struct KeyPress { GR::EKey key; GR::EAction action; };
 }
 
 namespace GR
@@ -22,26 +26,30 @@ namespace GR
 
 		~EventListener();
 
-		std::vector<void(*)(GrayEngine*, EKey, EAction)> keypress;
-		std::vector<void(*)(GrayEngine*, EMouse, EAction)> mousepress;
+		std::vector<void(*)(GrayEngine*, GREvent::KeyPress)> keypress;
+		std::vector<void(*)(GrayEngine*, GREvent::MousePress)> mousepress;
 		std::vector<void(*)(GrayEngine*, GREvent::MousePosition)> mousemove;
 		std::vector<void(*)(GrayEngine*, GREvent::ScrollDelta)> scroll;
 
-		void Register(GrayEngine*, EKey, EAction);
+		void Register(GrayEngine*, GREvent::KeyPress);
 
-		void Register(GrayEngine*, EMouse, EAction);
+		void Register(GrayEngine*, GREvent::MousePress);
 
 		void Register(GrayEngine*, GREvent::MousePosition);
 
 		void Register(GrayEngine*, GREvent::ScrollDelta);
 
 	public:
-		GRAPI void Subscribe(void(*key_press_callback_func)(GrayEngine*, EKey, EAction));
+		// !@brief Subscribe to keyboard key press events
+		GRAPI void Subscribe(void(*key_press_callback_func)(GrayEngine*, GREvent::KeyPress));
 
-		GRAPI void Subscribe(void(*mouse_press_callback_func)(GrayEngine*, EMouse, EAction));
+		// !@brief Subscribe to mouse button press events
+		GRAPI void Subscribe(void(*mouse_press_callback_func)(GrayEngine*, GREvent::MousePress));
 
+		// !@brief Subscribe to mouse pointer move events
 		GRAPI void Subscribe(void(*mouse_move_callback_func)(GrayEngine*, GREvent::MousePosition));
 
+		// !@brief Subscribe to mouse scroll events
 		GRAPI void Subscribe(void(*scroll_callback_fun)(GrayEngine*, GREvent::ScrollDelta));
 	};
 };

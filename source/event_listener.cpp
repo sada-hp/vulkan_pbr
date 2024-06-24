@@ -11,19 +11,19 @@ namespace GR
 	{
 	}
 
-	void EventListener::Register(GrayEngine* e, EKey c, EAction a)
+	void EventListener::Register(GrayEngine* c, GREvent::KeyPress e)
 	{
-		std::for_each(keypress.begin(), keypress.end(), [=](void(*f)(GrayEngine*, EKey, EAction))
+		std::for_each(keypress.begin(), keypress.end(), [=](void(*f)(GrayEngine*, GREvent::KeyPress))
 		{
-			f(e, c, a);
+			f(c, e);
 		});
 	}
 
-	void EventListener::Register(GrayEngine* e, EMouse m, EAction a)
+	void EventListener::Register(GrayEngine* c, GREvent::MousePress e)
 	{
-		std::for_each(mousepress.begin(), mousepress.end(), [=](void(*f)(GrayEngine*, EMouse, EAction))
+		std::for_each(mousepress.begin(), mousepress.end(), [=](void(*f)(GrayEngine*, GREvent::MousePress))
 		{
-			f(e, m, a);
+			f(c, e);
 		});
 	}
 
@@ -43,12 +43,12 @@ namespace GR
 			});
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, EKey, EAction))
+	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::KeyPress))
 	{
 		keypress.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, EMouse, EAction))
+	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::MousePress))
 	{
 		mousepress.push_back(f);
 	}

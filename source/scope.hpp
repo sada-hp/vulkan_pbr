@@ -81,7 +81,7 @@ private:
 	VkRenderPass renderPass = VK_NULL_HANDLE;
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
-	const VkFormat depthFormat = VK_FORMAT_D16_UNORM;
+	const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 	VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkExtent2D swapchainExtent = { 0, 0 };
 };

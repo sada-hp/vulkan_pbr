@@ -54,14 +54,15 @@ float DrainePhase(float a, float g, float k)
 }
 
 //https://research.nvidia.com/labs/rtr/approximate-mie/publications/approximate-mie.pdf
-float HGDPhase(float a, float g)
+float HGDPhase(float a, float w)
 {
-    float d = mix(5.0, 50.0, g);
+    //float d = mix(5.0, 50.0, g);
+    float d = 25.0;
 
     float ghg = exp(-0.0990567/(d - 1.67154));
     float gd = exp(-2.20679/(d + 3.91029) - 0.428934);
     float kd = exp(3.62489 - (8.29288/(d + 5.52825)));
-    float w = exp(-0.599085/(d - 0.641583) - 0.665888);
+    //float w = exp(-0.599085/(d - 0.641583) - 0.665888);
 
     float dp = DrainePhase(a, gd, kd);
     float hgp = HenyeyGreensteinPhase(a, ghg);

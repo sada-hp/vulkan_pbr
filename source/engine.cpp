@@ -108,4 +108,30 @@ namespace GR
 
 		Resource.Set(renderer->LoadImage(path, format));
 	}
+
+	Window& GrayEngine::GetWindow() const
+	{
+		return *window;
+	}
+
+	Camera& GrayEngine::GetMainCamera() const
+	{
+		return renderer->camera;
+	}
+
+	EventListener& GrayEngine::GetEventListener()
+	{
+		return *listener;
+	}
+
+	VulkanBase& GrayEngine::GetRenderer()
+	{
+		return *renderer;
+	}
+
+	void GrayEngine::ClearEntities()
+	{
+		renderer->Wait();
+		registry.clear();
+	}
 };

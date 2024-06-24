@@ -70,10 +70,11 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 	int row_span = 2 + edge_splits;
 
 	//face 1
-	uint32_t base_index = vertices.size();
+	uint32_t k1 = vertices.size();
+	uint32_t k2 = k1 + row_span;
 	for (float x = -h; x <= h; x += dt)
 	{
-		for (float z = -h; z <= h; z += dt)
+		for (float z = -h; z <= h; z += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { float(x), h, float(z) };
@@ -83,24 +84,19 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (x < h && z < h)
 			{
 				indices.insert(indices.end(), { 
-					base_index, 
-					base_index + 1,
-					base_index + row_span,
-					base_index + 1,
-					base_index + row_span + 1,
-					base_index + row_span
+					k1, k1 + 1, k2,
+					k1 + 1, k2 + 1, k2
 				});
 			}
-
-			base_index++;
 		}
 	}
 
 	//face 2
-	base_index = vertices.size();
+	k1 = vertices.size();
+	k2 = k1 + row_span;
 	for (float x = -h; x <= h; x += dt)
 	{
-		for (float z = -h; z <= h; z += dt)
+		for (float z = -h; z <= h; z += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { float(x), -h, float(z) };
@@ -110,24 +106,19 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (x < h && z < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + row_span,
-					base_index + 1,
-					base_index + 1,
-					base_index + row_span,
-					base_index + row_span + 1
+					k1, k2, k1 + 1,
+					k1 + 1, k2, k2 + 1
 				});
 			}
-
-			base_index++;
 		}
 	}
 
 	//face 3
-	base_index = vertices.size();
+	k1 = vertices.size();
+	k2 = k1 + row_span;
 	for (float x = -h; x <= h; x += dt)
 	{
-		for (float y = -h; y <= h; y += dt)
+		for (float y = -h; y <= h; y += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { float(x), float(y), h };
@@ -137,24 +128,19 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (x < h && y < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + row_span,
-					base_index + 1,
-					base_index + 1,
-					base_index + row_span,
-					base_index + row_span + 1
+					k1, k2, k1 + 1,
+					k1 + 1, k2, k2 + 1
 				});
 			}
-
-			base_index++;
 		}
 	}
 
 	//face 4
-	base_index = vertices.size();
+	k1 = vertices.size();
+	k2 = k1 + row_span;
 	for (float x = -h; x <= h; x += dt)
 	{
-		for (float y = -h; y <= h; y += dt)
+		for (float y = -h; y <= h; y += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { float(x), float(y), -h };
@@ -164,24 +150,19 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (x < h && y < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + 1,
-					base_index + row_span,
-					base_index + 1,
-					base_index + row_span + 1,
-					base_index + row_span
+					k1, k1 + 1, k2,
+					k1 + 1, k2 + 1, k2
 				});
 			}
-
-			base_index++;
 		}
 	}
 
 	//face 5
-	base_index = vertices.size();
+	k1 = vertices.size();
+	k2 = k1 + row_span;
 	for (float z = -h; z <= h; z += dt)
 	{
-		for (float y = -h; y <= h; y += dt)
+		for (float y = -h; y <= h; y += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { h, float(y), float(z) };
@@ -191,24 +172,19 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (z < h && y < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + 1,
-					base_index + row_span,
-					base_index + 1,
-					base_index + row_span + 1,
-					base_index + row_span
+					k1, k1 + 1, k2,
+					k1 + 1, k2 + 1, k2
 				});
 			}
-
-			base_index++;
 		}
 	}
 
 	//face 6
-	base_index = vertices.size();
+	k1 = vertices.size();
+	k2 = k1 + row_span;
 	for (float z = -h; z <= h; z += dt)
 	{
-		for (float y = -h; y <= h; y += dt)
+		for (float y = -h; y <= h; y += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { -h, float(y), float(z) };
@@ -218,16 +194,10 @@ TAuto<Mesh> GRShape::Cube::Generate(const RenderScope& Scope) const
 			if (z < h && y < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + row_span,
-					base_index + 1,
-					base_index + 1,
-					base_index + row_span,
-					base_index + row_span + 1
+					k1, k2, k1 + 1,
+					k1 + 1, k2, k2 + 1
 				});
 			}
-
-			base_index++;
 		}
 	}
 
@@ -247,10 +217,11 @@ TAuto<Mesh> GRShape::Plane::Generate(const RenderScope& Scope) const
 
 	int row_span = 2 + edge_splits;
 
-	uint32_t base_index = vertices.size();
+	uint32_t k1 = vertices.size();
+	uint32_t k2 = k1 + row_span;
 	for (float x = -h; x <= h; x += dt)
 	{
-		for (float z = -h; z <= h; z += dt)
+		for (float z = -h; z <= h; z += dt, k1++, k2++)
 		{
 			Vertex v{};
 			v.position = { float(x), 0.0, float(z) };
@@ -260,16 +231,10 @@ TAuto<Mesh> GRShape::Plane::Generate(const RenderScope& Scope) const
 			if (x < h && z < h)
 			{
 				indices.insert(indices.end(), {
-					base_index,
-					base_index + row_span,
-					base_index + 1,
-					base_index + 1,
-					base_index + row_span,
-					base_index + row_span + 1
+					k1 + 1, k2, k1,
+					k2 + 1, k2, k1 + 1
 				});
 			}
-
-			base_index++;
 		}
 	}
 
@@ -288,11 +253,13 @@ TAuto<Mesh> GRShape::Sphere::Generate(const RenderScope& Scope) const
 
 	for (int i = 0; i <= slices; i++)
 	{
+		uint32_t k1 = i * (rings + 1);
+		uint32_t k2 = k1 + rings + 1;
 		stackAngle = glm::pi<double>() / 2 - i * stackStep;
 		xy = radius * glm::cos(stackAngle);
 		z = radius * glm::sin(stackAngle);
 
-		for (int j = 0; j <= rings; j++)
+		for (int j = 0; j <= rings; j++, k1++, k2++)
 		{
 			sectorAngle = j * sectorStep;
 			x = xy * glm::cos(sectorAngle);
@@ -302,30 +269,21 @@ TAuto<Mesh> GRShape::Sphere::Generate(const RenderScope& Scope) const
 			v.position = glm::vec3(x, y, z);
 			v.normal = glm::normalize(v.position);
 			v.tangent = glm::normalize(glm::vec3(-glm::sin(sectorAngle), 0.0, glm::cos(sectorAngle)));
-			v.uv = glm::vec2((1.f + glm::atan(v.normal.x, -v.normal.z) * glm::one_over_pi<float>()) / 2.f, glm::asin(v.normal.y) * glm::one_over_pi<float>() + 0.5f);
+			v.uv = glm::vec2(0.5f + glm::atan(v.normal.z, v.normal.x) * glm::one_over_two_pi<float>(), 0.5f + glm::asin(v.normal.y) * glm::one_over_pi<float>());
 
 			vertices.push_back(v);
-		}
-	}
 
-	for (int i = 0; i < slices; i++)
-	{
-		int k1 = i * (rings + 1);
-		int k2 = k1 + rings + 1;
-
-		for (int j = 0; j < rings; j++, k1++, k2++)
-		{
 			if (i != 0)
 			{
-				indices.push_back(k1);
-				indices.push_back(k2);
-				indices.push_back(k1 + 1);
+				indices.insert(indices.end(), { 
+					k1, k2, k1 + 1 
+				});
 			}
 			if (i != (slices - 1))
 			{
-				indices.push_back(k1 + 1);
-				indices.push_back(k2);
-				indices.push_back(k2 + 1);
+				indices.insert(indices.end(), { 
+					k1 + 1, k2, k2 + 1 
+				});
 			}
 		}
 	}

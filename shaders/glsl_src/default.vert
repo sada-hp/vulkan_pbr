@@ -23,8 +23,9 @@ layout(binding = 4) uniform sampler3D InscatteringLUT;
 
 void main()
 {
-    Tangent = normalize((PushConstants.WorldMatrix * vec4(vertTangent, 0.0)).xyz);
-    Normal = normalize((PushConstants.WorldMatrix * vec4(vertNormal, 0.0)).xyz);
+    mat3 mNormal = mat3(transpose(inverse(PushConstants.WorldMatrix)));
+    Tangent = normalize((mNormal * vertTangent).xyz);
+    Normal = normalize((mNormal * vertNormal).xyz);
 
     WorldPosition = PushConstants.WorldMatrix * vec4(vertPosition, 1.0);
     FragUV = vertUV;

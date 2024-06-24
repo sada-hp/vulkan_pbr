@@ -1,5 +1,4 @@
 #pragma once
-
 #include "core.hpp"
 #include "scope.hpp"
 #include "vulkan_objects/mesh.hpp"
@@ -13,7 +12,7 @@ namespace GRShape
 		virtual TAuto<Mesh> Generate(const RenderScope& Scope) const = 0;
 	};
 
-	GRAPI class Cube : public Shape
+	class Cube : public Shape
 	{
 	protected:
 		friend class VulkanBase;
@@ -24,7 +23,7 @@ namespace GRShape
 		float scale = 1.f;
 	};
 
-	GRAPI class Plane : public Shape
+	class Plane : public Shape
 	{
 	protected:
 		friend class VulkanBase;
@@ -35,7 +34,7 @@ namespace GRShape
 		float scale = 1.f;
 	};
 
-	GRAPI class Sphere : public Shape
+	class Sphere : public Shape
 	{
 	protected:
 		friend class VulkanBase;
