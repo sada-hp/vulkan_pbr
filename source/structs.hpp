@@ -34,7 +34,7 @@ struct CloudProfileLayer
 {
 	float Coverage = 0.175;
 	float VerticalSpan = 0.3;
-	float Absorption = 1e-2;
+	float Absorption = 3e-2;
 	float WindSpeed = 0.5;
 };
 /*

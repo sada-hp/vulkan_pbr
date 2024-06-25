@@ -5,6 +5,18 @@
 
 vec3 sphereStart;
 vec3 sphereEnd;
+float sphereRSq;
+
+// used for shadow sampling
+vec3 light_kernel[] =
+{
+    vec3(0.5, 0.5, 0.5),
+    vec3(-0.628, 0.64, 0.234),
+    vec3(0.23, -0.123, 0.75),
+    vec3(0.98, 0.45, -0.32),
+    vec3(-0.1, -0.54, 0.945),
+    vec3(0.0, 0.6, -0.78),
+};
 
 layout(location=0) out vec4 outColor;
 
@@ -98,8 +110,7 @@ void AtmosphereAtPoint(vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphe
 
 float GetHeightFraction(vec3 p)
 {
-    //return saturate((p.y - sphereStart.y) / (sphereEnd.y - sphereStart.y));
-    return 1.0 - saturate(dot(p, p) / dot(sphereEnd, sphereEnd));
+    return 1.0 - saturate(dot(p, p) / sphereRSq);
 }
 
 vec3 GetUV(vec3 p, float scale, float speed_mod)
@@ -140,16 +151,6 @@ float SampleDensity(vec3 x0, int lod)
     return remap(base, high_frequency_modifier * 0.1, 1.0, 0.0, 1.0) * height;
 }
 
-vec3 light_kernel[] =
-{
-    vec3(0.5, 0.5, 0.5),
-    vec3(-0.628, 0.64, 0.234),
-    vec3(0.23, -0.123, 0.75),
-    vec3(0.98, 0.45, -0.32),
-    vec3(-0.1, -0.54, 0.945),
-    vec3(0.0, 0.6, -0.78),
-};
-
 float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 {
     vec3 pos = rs;
@@ -181,7 +182,9 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 // I doubt it's physically correct and also very expensive
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
-    const int steps = 128;
+    // need more precision near horizon, worst case is very expensive
+    const int steps = int(mix(256, 64, abs(dot(rd, vec3(0.0, 1.0, 0.0)))));
+
     const float len = distance(rs, re);
     const float stepsize = len / float(steps);
 
@@ -213,7 +216,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
             float extinction = density * Clouds.Absorption;
             float transmittance = BeerLambert(stepsize * extinction);
 
-            // get scattering along the step ray for this sample
+            // get scattering along the step ray for this sample, expensive
             AtmosphereAtPoint(vec3(0, Rg, 0) + pos, stepsize, rd, rl, Atmosphere);
             float Vis = MarchToLight(pos, rl, stepsize) * Powder(stepsize, density, Clouds.Absorption);
 
@@ -256,6 +259,7 @@ void main()
     if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rcb, sphereStart)
     && RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rct, sphereEnd)) 
     {
+        sphereRSq = dot(sphereEnd, sphereEnd);
         outColor = MarchToCloud(sphereStart, sphereEnd, RayDirection);
     }
     else 
