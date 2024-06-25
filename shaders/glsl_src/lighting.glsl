@@ -1,6 +1,25 @@
 #include "common.glsl"
 #include "constants.glsl"
 
+float SphereDistance(vec3 ro, vec3 rd, vec3 so, float radius)
+{
+	vec3 sphereCenter = so;
+
+	float radius2 = radius*radius;
+
+	vec3 L = ro - sphereCenter;
+	float a = dot(rd, rd);
+	float b = 2.0 * dot(rd, L);
+	float c = dot(L, L) - radius2;
+
+	float discr = b * b - 4.0 * a * c;
+
+	if (discr < 0.0) 
+        return 0.0;
+
+	return max(0.0, (-b + sqrt(discr))/2);
+}
+
 bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius, out vec3 p1)
 {
 	vec3 sphereCenter = so;

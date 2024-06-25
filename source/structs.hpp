@@ -19,7 +19,9 @@ struct UniformBuffer
 	glm::vec3 SunDirection;
 	float Time;
 };
-
+/*
+* !@brief General per-frame values for rendering
+*/
 struct ViewBuffer
 {
 	glm::vec4 CameraPosition;
@@ -31,9 +33,8 @@ struct ViewBuffer
 struct CloudProfileLayer
 {
 	float Coverage = 0.175;
-	float VerticalSpan = 1.0;
-	float Absorption = 2e-3;
-	float PhaseCoefficient = 0.5;
+	float VerticalSpan = 0.3;
+	float Absorption = 1e-2;
 	float WindSpeed = 0.5;
 };
 /*

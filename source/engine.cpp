@@ -65,7 +65,7 @@ namespace GR
 #endif
 			renderer->Step(delta);
 
-			glfwSwapBuffers(window->glfwWindow);
+			//glfwSwapBuffers(window->glfwWindow);
 		}
 	}
 

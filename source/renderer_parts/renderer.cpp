@@ -260,9 +260,9 @@ void VulkanBase::Step(float DeltaTime)
 		skybox->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
-		//volume->descriptorSet->BindSet(cmd, *volume->pipeline);
-		//volume->pipeline->BindPipeline(cmd);
-		//vkCmdDraw(cmd, 3, 1, 0, 0);
+		volume->descriptorSet->BindSet(cmd, *volume->pipeline);
+		volume->pipeline->BindPipeline(cmd);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 

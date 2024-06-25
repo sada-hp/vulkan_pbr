@@ -62,7 +62,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	Transmittance = std::make_unique<VulkanImage>(Scope);
 	Transmittance->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearClamp)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	TrDSO = DescriptorSetDescriptor()
@@ -78,7 +78,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	DeltaE = std::make_unique<VulkanImage>(Scope);
 	DeltaE->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearClamp)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	DeltaEDSO = DescriptorSetDescriptor()
@@ -94,7 +94,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	IrradianceLUT = std::make_unique<VulkanImage>(Scope);
 	IrradianceLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearClamp)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	imageCI.imageType = VK_IMAGE_TYPE_3D;
@@ -126,7 +126,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	ScatteringLUT = std::make_unique<VulkanImage>(Scope);
 	ScatteringLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearClamp)
+		.CreateSampler(ESamplerType::LinearClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	SingleScatterDSO = DescriptorSetDescriptor()
@@ -143,7 +143,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	DeltaJ = std::make_unique<VulkanImage>(Scope);
 	DeltaJ->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearClamp)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	DeltaJDSO = DescriptorSetDescriptor()

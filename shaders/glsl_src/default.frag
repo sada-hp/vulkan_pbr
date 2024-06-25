@@ -43,7 +43,7 @@ vec3 PointRadiance(vec3 Sun, vec3 Eye, vec3 Point)
     const float Rp = length(Point);
     const float DotPL = dot(Point, Sun) / Rp;
 
-    return GetTransmittanceWithShadow(TransmittanceLUT, Rp, DotPL) * MaxLightIntensity / PI;
+    return GetTransmittanceWithShadow(TransmittanceLUT, Rp, DotPL) * MaxLightIntensity;
 }
 
 // course-notes-moving-frostbite-to-pbr-v2
@@ -80,10 +80,10 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
     vec3 specular = vec3(max((D * G * F) / (4.0 * NdotV * NdotL), 0.001));
     vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     //vec3 diffuse = kD * Material.Albedo.rgb;
-    vec3 ambient = Material.AO * vec3(0.03) * Material.Albedo.rgb;
+    vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
     vec3 radiance = PointRadiance(L, Eye, Point);
 
-    return (ambient + (specular + diffuse) * NdotL) * radiance;
+    return ambient * radiance + ((specular + diffuse) / PI * NdotL) * radiance * NdotV;
 }
 
 void main()

@@ -28,8 +28,8 @@ namespace GR
 		ImGui_ImplGlfw_Shutdown();
 #endif
 
-		glfwTerminate();
 		glfwDestroyWindow(glfwWindow);
+		glfwTerminate();
 	}
 
 	void Window::SetTitle(const char* title)
