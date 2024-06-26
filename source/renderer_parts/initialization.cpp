@@ -176,7 +176,7 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 
 	VkBufferCreateInfo uboInfo{};
 	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	uboInfo.size = sizeof(UniformBuffer);
 	uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -187,7 +187,7 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 
 	VkBufferCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	viewInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	viewInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	viewInfo.size = sizeof(ViewBuffer);
 	viewInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	view = std::make_unique<Buffer>(Scope, viewInfo, uboAllocCreateInfo);

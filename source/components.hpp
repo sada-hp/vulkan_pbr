@@ -83,6 +83,11 @@ namespace GRComponents
 		float M = 0.0;
 	};
 
+	struct DisplacementScale
+	{
+		float H = 1.0;
+	};
+
 	struct Color
 	{
 		glm::vec3 RGB = glm::vec3(1.0);

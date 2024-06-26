@@ -321,7 +321,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 	VkBufferCreateInfo cloudInfo{};
 	cloudInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	cloudInfo.size = sizeof(CloudLayer);
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	cloud_layer = std::make_unique<Buffer>(Scope, cloudInfo, allocCreateInfo);

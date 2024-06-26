@@ -1,6 +1,57 @@
 #include "pch.hpp"
 #include "renderer.hpp"
 
+entt::entity VulkanBase::AddMesh(const std::string& mesh_path)
+{
+	entt::entity ent = registry.create();
+
+	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
+	registry.emplace_or_replace<GRComponents::Transform>(ent);
+	registry.emplace_or_replace<GRComponents::Color>(ent);
+	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
+	registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);
+	registry.emplace_or_replace<GRComponents::DisplacementScale>(ent);
+
+	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultBlack, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::DisplacementMap>(ent, defaultWhite, &gro.dirty);
+
+	gro.mesh = mesh_path != "" ? GRFile::ImportMesh(Scope, mesh_path.c_str())
+		: GRShape::Cube().Generate(Scope);
+
+	gro.descriptorSet = create_pbr_set(*defaultWhite, *defaultNormal, *defaultWhite, *defaultBlack, *defaultWhite, *defaultWhite);
+	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
+
+	return ent;
+}
+
+entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
+{
+	entt::entity ent = registry.create();
+	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
+	registry.emplace_or_replace<GRComponents::Transform>(ent);
+	registry.emplace_or_replace<GRComponents::Color>(ent);
+	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
+	registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);
+	registry.emplace_or_replace<GRComponents::DisplacementScale>(ent);
+
+	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultBlack, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GRComponents::DisplacementMap>(ent, defaultWhite, &gro.dirty);
+
+	gro.mesh = descriptor.Generate(Scope);
+	gro.descriptorSet = create_pbr_set(*defaultWhite, *defaultNormal, *defaultWhite, *defaultBlack, *defaultWhite, *defaultWhite);
+	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
+
+	return ent;
+}
+
 void VulkanBase::update_pipeline(entt::entity ent)
 {
 	VulkanImage* albedo = static_cast<VulkanImage*>(registry.get<GRComponents::AlbedoMap>(ent).Get().get());

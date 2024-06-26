@@ -179,6 +179,14 @@ void VulkanBase::Step(float DeltaTime)
 
 	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphores[swapchain_index], VK_NULL_HANDLE, &swapchain_index);
 
+	const VkCommandBuffer& cmd = presentBuffers[swapchain_index];
+
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	vkBeginCommandBuffer(cmd, &beginInfo);
+
+	// need to create separate pipelines and uniform buffers for frames in flight, for now vkCmdUpdate is used
+
 	//UBO
 	{
 		TMat4 view_matrix = camera.get_view_matrix();
@@ -195,35 +203,29 @@ void VulkanBase::Step(float DeltaTime)
 			Time
 		};
 
-		ubo->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
+		ubo->Update(cmd, static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
 	//View
 	{
 		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
 		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 1.0);
-		ViewBuffer Uniform
+		ViewBuffer View
 		{
 			CameraPosition,
 			ScreenSize
 		};
 
-		view->Update(static_cast<void*>(&Uniform));
+		view->Update(cmd, static_cast<void*>(&View), sizeof(View));
 	}
 
 	//Cloud layer
 	{
-		cloud_layer->Update(&CloudLayer, sizeof(CloudProfileLayer));
+		cloud_layer->Update(cmd, &CloudLayer, sizeof(CloudLayer));
 	}
 
 	//Draw
 	{
-		VkResult res;
-		const VkCommandBuffer& cmd = presentBuffers[swapchain_index];
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		res = vkBeginCommandBuffer(cmd, &beginInfo);
-
 		VkClearValue clearValues[3];
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
@@ -360,55 +362,6 @@ TAuto<VulkanImage> VulkanBase::LoadImage(const std::string& path, VkFormat forma
 	return GRFile::ImportImage(Scope, path.c_str(), format, 0);
 }
 
-entt::entity VulkanBase::AddMesh(const std::string& mesh_path)
-{
-	entt::entity ent = registry.create();
-
-	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
-	registry.emplace_or_replace<GRComponents::Transform>(ent);
-	registry.emplace_or_replace<GRComponents::Color>(ent);
-	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
-	registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);
-
-	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultBlack, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::DisplacementMap>(ent, defaultWhite, &gro.dirty);
-
-	gro.mesh = mesh_path != "" ? GRFile::ImportMesh(Scope, mesh_path.c_str()) 
-							   : GRShape::Cube().Generate(Scope);
-
-	gro.descriptorSet = create_pbr_set(*defaultWhite, *defaultNormal, *defaultWhite, *defaultBlack, *defaultWhite, *defaultWhite);
-	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
-
-	return ent;
-}
-
-entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
-{
-	entt::entity ent = registry.create();
-	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
-	registry.emplace_or_replace<GRComponents::Transform>(ent);
-	registry.emplace_or_replace<GRComponents::Color>(ent);
-	registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
-	registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);
-
-	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::NormalMap>(ent, defaultNormal, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::RoughnessMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::MetallicMap>(ent, defaultBlack, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::AmbientMap>(ent, defaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::DisplacementMap>(ent, defaultWhite, &gro.dirty);
-
-	gro.mesh = descriptor.Generate(Scope);
-	gro.descriptorSet = create_pbr_set(*defaultWhite, *defaultNormal, *defaultWhite, *defaultBlack, *defaultWhite, *defaultWhite);
-	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
-
-	return ent;
-}
-
 void VulkanBase::Wait()
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
@@ -431,6 +384,7 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 		C.Color = glm::vec4(registry.get<GRComponents::Color>(ent).RGB, 1.0);
 		C.RoughnessMultiplier = registry.get<GRComponents::RoughnessMultiplier>(ent).R;
 		C.Metallic = registry.get<GRComponents::MetallicOverride>(ent).M;
+		C.HeightScale = registry.get<GRComponents::DisplacementScale>(ent).H;
 
 		gro.descriptorSet->BindSet(cmd, *gro.pipeline);
 		gro.pipeline->PushConstants(cmd, &C.World, sizeof(PBRConstants::World), 0u, VK_SHADER_STAGE_VERTEX_BIT);

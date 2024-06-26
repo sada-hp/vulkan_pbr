@@ -115,7 +115,7 @@ TAuto<Mesh> GRFile::ImportMesh(const RenderScope& Scope, const char* path)
 	TVector<Vertex> vertices;
 	Assimp::Importer importer;
 	std::string file = exec_path + path;
-	const aiScene* model = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_CalcTangentSpace | aiProcess_FixInfacingNormals);
+	const aiScene* model = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_CalcTangentSpace | aiProcess_FixInfacingNormals);
 	auto err = importer.GetErrorString();
 
 	assert(model != VK_NULL_HANDLE);
@@ -131,7 +131,7 @@ TAuto<Mesh> GRFile::ImportMesh(const RenderScope& Scope, const char* path)
 		{
 			Vertex vertex{};
 			vertex.position = { cur_mesh->mVertices[vert_ind].x, cur_mesh->mVertices[vert_ind].y, cur_mesh->mVertices[vert_ind].z };
-			vertex.uv = { cur_mesh->mTextureCoords[uv_ind][vert_ind].x, cur_mesh->mTextureCoords[uv_ind][vert_ind].y };
+			vertex.uv = { cur_mesh->mTextureCoords[uv_ind][vert_ind].x, 1.0 - cur_mesh->mTextureCoords[uv_ind][vert_ind].y };
 			vertex.submesh = submesh_ind;
 
 			if (cur_mesh->HasNormals())

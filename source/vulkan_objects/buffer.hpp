@@ -47,6 +47,8 @@ struct Buffer
 
 	Buffer& Update(void* data, size_t data_size = VK_WHOLE_SIZE);
 
+	Buffer& Update(VkCommandBuffer cmd, void* data, size_t data_size = VK_WHOLE_SIZE);
+
 	uint32_t GetSize() { return allocInfo.size; };
 
 private:

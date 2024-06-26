@@ -16,13 +16,13 @@ layout(push_constant) uniform constants
     layout(offset = 64) vec4 ColorMask;
     layout(offset = 80) float RoughnessMultiplier;
     layout(offset = 84) float Metallic;
+    layout(offset = 88) float HeightScale;
 } 
 PushConstants;
 
-layout(location = 0) in vec2 UV;
+layout(location = 0) in vec2 inUV;
 layout(location = 1) in vec4 WorldPosition;
-layout(location = 2) in vec3 Normal;
-layout(location = 3) in vec3 Tangent;
+layout(location = 2) in mat3 TBN;
 
 layout(binding = 2) uniform sampler2D TransmittanceLUT;
 layout(binding = 3) uniform sampler2D IrradianceLUT;
@@ -86,6 +86,32 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
     return ambient * radiance + ((specular + diffuse) / PI * NdotL) * radiance * NdotV;
 }
 
+vec2 Displace(vec2 inUV, vec3 V)
+{
+    const int steps = 64;
+    const float stepsize = 1.0 / float(steps);
+
+    vec2 UV = inUV;
+    vec2 dUV = (V.xy * 0.01 * PushConstants.HeightScale) / (V.z * float(steps));
+
+    float height = 1.0 - texture(HeightMap, UV).r;
+    float depth = 0.0;
+
+    while (depth < height)
+    {
+        UV -= dUV;
+        height = 1.0 - texture(HeightMap, UV).r;
+        depth += stepsize;
+    }
+
+    vec2 prevUV = UV + dUV;
+	float nextDepth = height - depth;
+	float prevDepth = 1.0 - texture(HeightMap, prevUV).r - depth + stepsize;
+    float weight = nextDepth / (nextDepth - prevDepth);
+    
+	return mix(UV, prevUV, weight);
+}
+
 void main()
 {
     // these are used to sample atmosphere, so we offset them to ground level
@@ -95,14 +121,13 @@ void main()
     // getting default lighting vectors
     vec3 V = normalize(View.CameraPosition.xyz - WorldPosition.xyz);
     vec3 L = normalize(ubo.SunDirection.xyz);
-    vec3 N = normalize(Normal);
-    vec3 T = normalize(Tangent);
-    vec3 B = normalize(cross(N, T));
-    mat3 TBN = mat3(T, B, N);
+
+    // parallax
+    vec2 UV = Displace(inUV, normalize(transpose(TBN) * V));
 
     // reading the normal map
     vec3 NormalMap = normalize(texture(NormalMap, UV).xyz * 2.0 - 1.0);
-    N = normalize(TBN * NormalMap);
+    vec3 N = normalize(TBN * NormalMap);
 
     // material descriptor    
     SMaterial Material;
@@ -111,6 +136,9 @@ void main()
     Material.AO = texture(AOMap, UV).r;
     Material.Albedo = texture(AlbedoMap, UV);
     Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
+
+    if (UV.x < 0.0 || UV.x > 1.0 || UV.y < 0.0 || UV.y > 1.0)
+        discard;
 
     // getting the color
     vec3 Lo = DirectSunlight(Eye, Point, V, L, N, Material);
