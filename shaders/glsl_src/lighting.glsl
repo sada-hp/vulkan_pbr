@@ -57,6 +57,11 @@ float RayleighPhase(float a)
     return 3.0 * (1 + a * a) / (16.0 * PI); 
 }
 
+float MiePhase(float a)
+{
+    return 1.5 * ONE_OVER_4PI * (1.0 - MieG * MieG) * pow(1.0 + (MieG * MieG) - 2.0 * MieG * a, -3.0/2.0) * (1.0 + a * a) / (2.0 + MieG * MieG);
+}
+
 float BeerLambert(float d)
 {
     return exp(-d);

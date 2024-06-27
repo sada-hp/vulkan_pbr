@@ -23,8 +23,8 @@ namespace GR
 {
 	struct Camera
 	{
-		GRComponents::Projection Projection;
-		GRComponents::Transform View;
+		GRComponents::Projection Projection = {};
+		GRComponents::Transform View = {};
 
 	private:
 		friend class VulkanBase;
@@ -58,50 +58,50 @@ class VulkanBase
 	TVector<VkSemaphore> presentSemaphores = {};
 	TVector<VkSemaphore> swapchainSemaphores = {};
 	TVector<VkCommandBuffer> presentBuffers = {};
-	TVector<TAuto<Pipeline>> HDRPipelines;
-	TVector<TAuto<DescriptorSet>> HDRDescriptors;
+	TVector<TAuto<Pipeline>> HDRPipelines = {};
+	TVector<TAuto<DescriptorSet>> HDRDescriptors = {};
 
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-	RenderScope Scope;
+	RenderScope Scope = {};
 	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
 
-	TAuto<Buffer> ubo = {};		
-	TAuto<Buffer> view = {};
+	TVector<TAuto<Buffer>> ubo = {};
 	TAuto<Buffer> cloud_layer = {};
 
-	TAuto<GraphicsObject> volume;
-	TAuto<GraphicsObject> skybox;
+	TVector<TAuto<DescriptorSet>> UBOSet = {};
 
-	TAuto<VulkanImage> CloudShape;
-	TAuto<VulkanImage> CloudDetail;
+	TAuto<GraphicsObject> volume = VK_NULL_HANDLE;
+	TAuto<GraphicsObject> skybox = VK_NULL_HANDLE;
 
-	TAuto<VulkanImage> ScatteringLUT;
-	TAuto<VulkanImage> IrradianceLUT;
-	TAuto<VulkanImage> Transmittance;
+	TAuto<VulkanImage> CloudShape = VK_NULL_HANDLE;
+	TAuto<VulkanImage> CloudDetail = VK_NULL_HANDLE;
+
+	TAuto<VulkanImage> ScatteringLUT = VK_NULL_HANDLE;
+	TAuto<VulkanImage> IrradianceLUT = VK_NULL_HANDLE;
+	TAuto<VulkanImage> Transmittance = VK_NULL_HANDLE;
 
 	uint32_t swapchain_index = 0;
 
 #ifdef INCLUDE_GUI
-	VkDescriptorPool imguiPool;
+	VkDescriptorPool imguiPool = VK_NULL_HANDLE;
 #endif
 
 public:
-	CloudProfileLayer CloudLayer;
 	// !@brief Defined in renderer.cpp
 	VulkanBase(GLFWwindow* window, entt::registry& registry);
 
 	// !@brief Defined in renderer.cpp
 	~VulkanBase() noexcept;
 	/*
-	* !@brief Renders the next frame of simulation. Defined in renderer.cpp.
+	* !@brief INTERNAL. Renders the next frame of simulation. Defined in renderer.cpp.
 	*/
-	void Step(float DeltaTime);
+	void _step(float DeltaTime);
 	/*
-	* !@brief Handles recreation of swapchain dependant objects. Defined in renderer.cpp.
+	* !@brief INTERNAL. Handles recreation of swapchain dependant objects. Defined in renderer.cpp.
 	*/
-	void HandleResize();
+	void _handleResize();
 	/*
 	* !@brief Load mesh model to the scene. Defined in renderer.cpp.
 	* 
@@ -109,7 +109,7 @@ public:
 	* 
 	* @return New entity handle
 	*/
-	entt::entity AddMesh(const std::string& mesh_path);
+	GRAPI entt::entity AddMesh(const std::string& mesh_path);
 	/*
 	* !@brief Generate and add a simple shape to the scene. Defined in renderer.cpp.
 	* 
@@ -117,15 +117,30 @@ public:
 	* 
 	* @return New entity handle
 	*/
-	entt::entity AddShape(const GRShape::Shape& descriptor);
-
-	TAuto<VulkanImage> LoadImage(const std::string& path, VkFormat format);
-
-	void Wait();
+	GRAPI entt::entity AddShape(const GRShape::Shape& descriptor);
+	/*
+	* !@brief INTERNAL. Import image file into the memory using specified format
+	* 
+	* @param[in] path - path to image file
+	* @param[in] format - format to store image in
+	* 
+	* @return Vulkan image memory
+	*/
+	TAuto<VulkanImage> _loadImage(const std::string& path, VkFormat format);
+	/*
+	* !@brief Wait on CPU for GPU to complete it's current rendering commands
+	*/
+	GRAPI void Wait() const;
+	/*
+	* !@brief Customize volumetric clouds
+	* 
+	* @param[in] settings - new parameters of cloud rendering
+	*/
+	GRAPI void SetCloudLayerSettings(CloudProfileLayer settings);
 	/*
 	* !@brief Should be modified to control the scene
 	*/
-	GR::Camera camera;
+	GR::Camera camera = {};
 	TVec3 SunDirection = glm::normalize(TVec3(1.0));
 
 private:
@@ -134,6 +149,7 @@ private:
 	TShared<VulkanImage> defaultWhite = VK_NULL_HANDLE;
 	TShared<VulkanImage> defaultBlack = VK_NULL_HANDLE;
 	TShared<VulkanImage> defaultNormal = VK_NULL_HANDLE;
+	TShared<VulkanImage> defaultARM = VK_NULL_HANDLE;
 
 	// !@brief Defined in initialization.cpp
 	VkBool32 create_instance();
@@ -163,7 +179,7 @@ private:
 	void update_pipeline(entt::entity ent);
 
 	// !@brief Defined in pbr_controls.cpp
-	TAuto<DescriptorSet> create_pbr_set(const VulkanImage& albedo, const VulkanImage& normal, const VulkanImage& roughness, const VulkanImage& metallic, const VulkanImage& ao, const VulkanImage& displacement);
+	TAuto<DescriptorSet> create_pbr_set(const VulkanImage& albedo, const VulkanImage& nh, const VulkanImage& arm);
 	
 	// !@brief Defined in pbr_controls.cpp
 	TAuto<Pipeline> create_pbr_pipeline(const DescriptorSet& set);

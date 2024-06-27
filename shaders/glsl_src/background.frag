@@ -4,7 +4,7 @@
 
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 2) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 1) uniform sampler3D InscatteringLUT;
 
 vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View, inout bool ShowSun)
 {
@@ -43,14 +43,14 @@ vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
 
 void main()
 {
-	vec2 ScreenUV = gl_FragCoord.xy / View.Resolution;
+	vec2 ScreenUV = gl_FragCoord.xy / ubo.Resolution;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = inverse(ubo.ProjectionMatrix) * ScreenNDC;
     vec4 ScreenWorld = inverse(ubo.ViewMatrix) * vec4(ScreenView.xy, -1.0, 0.0);
 
     vec3 V = normalize(ScreenWorld.xyz);
     vec3 S = normalize(ubo.SunDirection.xyz);
-    vec3 Eye = View.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
+    vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
     
     bool ShowSun = true;
     vec3 SkyColor = SkyRadiance(S, Eye, V, ShowSun);

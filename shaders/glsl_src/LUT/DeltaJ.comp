@@ -14,7 +14,7 @@ PushConstants;
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
-layout (binding = 0, rgba16f) uniform writeonly image3D outImage;
+layout (binding = 0, rgba32f) uniform writeonly image3D outImage;
 layout (binding = 1) uniform sampler2D Transmittance;
 layout (binding = 2) uniform sampler2D DeltaE;
 layout (binding = 3) uniform sampler3D DeltaSR;
@@ -76,14 +76,14 @@ vec3 ComputeDeltaJ(int Order, float R, float Mu, float MuS, float Nu)
                 vec3 Ray = GetInscattering(DeltaSR, R, W.z, MuS, nu1).rgb;
                 vec3 Mie = GetInscattering(DeltaSM, R, W.z, MuS, nu1).rgb;
 
-                S += Ray * RayleighPhase(nu1) + Mie * HGDPhase(nu1, MieG);
+                S += Ray * RayleighPhase(nu1) + Mie * MiePhase(nu1);
             }
             else
             {
                 S += GetInscattering(DeltaSR, R, W.z, MuS, nu1).rgb;
             }
 
-            DeltaJ += ( E + S ) * (GetAirDensity(R, HR) * BetaR * RayleighPhase(nu2) +  GetAirDensity(R, HM) * BetaMSca * HGDPhase(nu2, MieG)) * dW;
+            DeltaJ += (E + S) * (GetAirDensity(R, HR) * BetaR * RayleighPhase(nu2) +  GetAirDensity(R, HM) * BetaMSca * MiePhase(nu2)) * dW;
         }
     }
 

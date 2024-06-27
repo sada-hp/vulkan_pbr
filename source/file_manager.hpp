@@ -5,9 +5,9 @@
 #include "vulkan_objects/queue.hpp"
 #include "vulkan_api.hpp"
 
-namespace GRFile
+namespace GRVkFile
 {
-	TAuto<VulkanImage> ImportImage(const RenderScope& Scope, const char* path, const VkFormat& format, const VkImageCreateFlags& flags = 0);
+	TAuto<VulkanImage> _importImage(const RenderScope& Scope, const char* path, const VkFormat& format, const VkImageCreateFlags& flags = 0);
 
-	TAuto<Mesh> ImportMesh(const RenderScope& Scope, const char* path);
+	TAuto<Mesh> _importMesh(const RenderScope& Scope, const char* path);
 };

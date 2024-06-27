@@ -183,18 +183,22 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 	VmaAllocationCreateInfo uboAllocCreateInfo{};
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	ubo = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
 
-	VkBufferCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	viewInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	viewInfo.size = sizeof(ViewBuffer);
-	viewInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	view = std::make_unique<Buffer>(Scope, viewInfo, uboAllocCreateInfo);
+	ubo.resize(swapchainImages.size());
+	UBOSet.resize(swapchainImages.size());
+	for (uint32_t i = 0; i < ubo.size(); ++i)
+	{
+		ubo[i] = std::make_unique<Buffer>(Scope, uboInfo, uboAllocCreateInfo);
+
+		UBOSet[i] = DescriptorSetDescriptor()
+			.AddUniformBuffer(0, VK_SHADER_STAGE_ALL, *ubo[i])
+			.Allocate(Scope);
+	}
 
 	defaultWhite = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u)));
-	defaultNormal = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u)));
 	defaultBlack = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(0u)));
+	defaultNormal = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u)));
+	defaultARM = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(0u), std::byte(255u)));
 
 	return res;
 }

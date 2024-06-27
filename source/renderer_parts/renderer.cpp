@@ -115,8 +115,8 @@ VulkanBase::~VulkanBase() noexcept
 
 	skybox.reset();
 	volume.reset();
-	ubo.reset();
-	view.reset();
+	ubo.resize(0);
+
 	cloud_layer.reset();
 	CloudShape.reset();
 	CloudDetail.reset();
@@ -128,14 +128,12 @@ VulkanBase::~VulkanBase() noexcept
 	defaultWhite.reset();
 	defaultBlack.reset();
 	defaultNormal.reset();
+	defaultARM.reset();
 
 	registry.clear<PBRObject,
 		GRComponents::AlbedoMap,
-		GRComponents::NormalMap,
-		GRComponents::RoughnessMap,
-		GRComponents::MetallicMap,
-		GRComponents::AmbientMap,
-		GRComponents::DisplacementMap>();
+		GRComponents::NormalDisplacementMap,
+		GRComponents::AORoughnessMetallicMap>();
 
 	std::erase_if(presentFences, [&, this](VkFence& it) {
 			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -162,6 +160,7 @@ VulkanBase::~VulkanBase() noexcept
 	hdrAttachments.clear();
 	HDRPipelines.resize(0);
 	HDRDescriptors.resize(0);
+	UBOSet.resize(0);
 
 	Scope.Destroy();
 
@@ -169,7 +168,7 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyInstance(instance, VK_NULL_HANDLE);
 }
 
-void VulkanBase::Step(float DeltaTime)
+void VulkanBase::_step(float DeltaTime)
 {
 	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
 		return;
@@ -185,43 +184,28 @@ void VulkanBase::Step(float DeltaTime)
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	// need to create separate pipelines and uniform buffers for frames in flight, for now vkCmdUpdate is used
-
 	//UBO
 	{
 		TMat4 view_matrix = camera.get_view_matrix();
 		TMat4 projection_matrix = camera.get_projection_matrix();
 		TMat4 view_proj_matrix = projection_matrix * view_matrix;
-
+		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 1.0);
+		TVec3 Sun = glm::normalize(SunDirection);
+		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
 		float Time = glfwGetTime();
+
 		UniformBuffer Uniform
 		{ 
 			view_proj_matrix,
 			projection_matrix,
 			view_matrix,
-			glm::normalize(SunDirection),
-			Time
-		};
-
-		ubo->Update(cmd, static_cast<void*>(&Uniform), sizeof(Uniform));
-	}
-
-	//View
-	{
-		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
-		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 1.0);
-		ViewBuffer View
-		{
 			CameraPosition,
+			Sun,
+			Time,
 			ScreenSize
 		};
 
-		view->Update(cmd, static_cast<void*>(&View), sizeof(View));
-	}
-
-	//Cloud layer
-	{
-		cloud_layer->Update(cmd, &CloudLayer, sizeof(CloudLayer));
+		ubo[swapchain_index]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
 	//Draw
@@ -258,17 +242,19 @@ void VulkanBase::Step(float DeltaTime)
 
 		render_objects(cmd);
 
-		skybox->descriptorSet->BindSet(cmd, *skybox->pipeline);
+		UBOSet[swapchain_index]->BindSet(0, cmd, *skybox->pipeline);
+		skybox->descriptorSet->BindSet(1, cmd, *skybox->pipeline);
 		skybox->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
-		volume->descriptorSet->BindSet(cmd, *volume->pipeline);
+		UBOSet[swapchain_index]->BindSet(0, cmd, *volume->pipeline);
+		volume->descriptorSet->BindSet(1, cmd, *volume->pipeline);
 		volume->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
-		HDRDescriptors[swapchain_index]->BindSet(cmd, *HDRPipelines[swapchain_index]);
+		HDRDescriptors[swapchain_index]->BindSet(0, cmd, *HDRPipelines[swapchain_index]);
 		HDRPipelines[swapchain_index]->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 
@@ -311,7 +297,7 @@ void VulkanBase::Step(float DeltaTime)
 	swapchain_index = (swapchain_index + 1) % swapchainImages.size();
 }
 
-void VulkanBase::HandleResize()
+void VulkanBase::_handleResize()
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
 
@@ -357,14 +343,19 @@ void VulkanBase::HandleResize()
 	assert(swapchainImages.size() == presentBuffers.size());
 }
 
-TAuto<VulkanImage> VulkanBase::LoadImage(const std::string& path, VkFormat format)
+TAuto<VulkanImage> VulkanBase::_loadImage(const std::string& path, VkFormat format)
 {
-	return GRFile::ImportImage(Scope, path.c_str(), format, 0);
+	return GRVkFile::_importImage(Scope, path.c_str(), format, 0);
 }
 
-void VulkanBase::Wait()
+void VulkanBase::Wait() const
 {
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
+}
+
+void VulkanBase::SetCloudLayerSettings(CloudProfileLayer settings)
+{
+	cloud_layer->Update(&settings, sizeof(CloudProfileLayer));
 }
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
@@ -386,7 +377,8 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 		C.Metallic = registry.get<GRComponents::MetallicOverride>(ent).M;
 		C.HeightScale = registry.get<GRComponents::DisplacementScale>(ent).H;
 
-		gro.descriptorSet->BindSet(cmd, *gro.pipeline);
+		UBOSet[swapchain_index]->BindSet(0, cmd, *gro.pipeline);
+		gro.descriptorSet->BindSet(1, cmd, *gro.pipeline);
 		gro.pipeline->PushConstants(cmd, &C.World, sizeof(PBRConstants::World), 0u, VK_SHADER_STAGE_VERTEX_BIT);
 		gro.pipeline->PushConstants(cmd, &C.Color, sizeof(PBRConstants) - sizeof(PBRConstants::World), offsetof(PBRConstants, Color), VK_SHADER_STAGE_FRAGMENT_BIT);
 		gro.pipeline->BindPipeline(cmd);

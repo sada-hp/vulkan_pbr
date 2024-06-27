@@ -62,7 +62,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	Transmittance = std::make_unique<VulkanImage>(Scope);
 	Transmittance->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::LinearClamp)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	TrDSO = DescriptorSetDescriptor()
@@ -94,7 +94,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	IrradianceLUT = std::make_unique<VulkanImage>(Scope);
 	IrradianceLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::LinearClamp)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	imageCI.imageType = VK_IMAGE_TYPE_3D;
@@ -126,7 +126,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	ScatteringLUT = std::make_unique<VulkanImage>(Scope);
 	ScatteringLUT->CreateImage(imageCI, imageAlloc)
 		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::LinearClamp)
+		.CreateSampler(ESamplerType::PointClamp)
 		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
 
 	SingleScatterDSO = DescriptorSetDescriptor()
@@ -224,7 +224,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	::BeginOneTimeSubmitCmd(cmd);
 
 	GenTrLUT->BindPipeline(cmd);
-	TrDSO->BindSet(cmd, *GenTrLUT);
+	TrDSO->BindSet(0, cmd, *GenTrLUT);
 	vkCmdDispatch(cmd, Transmittance->GetExtent().width / 8u + uint32_t(Transmittance->GetExtent().width % 8u > 0)
 		, Transmittance->GetExtent().height / 8u + uint32_t(Transmittance->GetExtent().height % 8u > 0)
 		, 1u);
@@ -233,16 +233,16 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	GenDeltaELUT->BindPipeline(cmd);
-	DeltaEDSO->BindSet(cmd, *GenDeltaELUT);
+	DeltaEDSO->BindSet(0, cmd, *GenDeltaELUT);
 	vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
-		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().height % 8u > 0),
 		1u);
 
 	barrier.image = DeltaE->GetImage();
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	GenDeltaSRSMLUT->BindPipeline(cmd);
-	DeltaSRSMDSO->BindSet(cmd, *GenDeltaSRSMLUT);
+	DeltaSRSMDSO->BindSet(0, cmd, *GenDeltaSRSMLUT);
 	vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
 		DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
 		DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
@@ -251,7 +251,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	GenSingleScatterLUT->BindPipeline(cmd);
-	SingleScatterDSO->BindSet(cmd, *GenSingleScatterLUT);
+	SingleScatterDSO->BindSet(0, cmd, *GenSingleScatterLUT);
 	vkCmdDispatch(cmd, ScatteringLUT->GetExtent().width / 4u + uint32_t(ScatteringLUT->GetExtent().width % 4u > 0),
 		ScatteringLUT->GetExtent().height / 4u + uint32_t(ScatteringLUT->GetExtent().height % 4u > 0),
 		ScatteringLUT->GetExtent().depth / 4u + uint32_t(ScatteringLUT->GetExtent().depth % 4u > 0));
@@ -260,32 +260,32 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	{
 		GenDeltaJLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaJLUT->BindPipeline(cmd);
-		DeltaJDSO->BindSet(cmd, *GenDeltaJLUT);
+		DeltaJDSO->BindSet(0, cmd, *GenDeltaJLUT);
 		vkCmdDispatch(cmd, DeltaJ->GetExtent().width / 4u + uint32_t(DeltaJ->GetExtent().width % 4u > 0),
 			DeltaJ->GetExtent().height / 4u + uint32_t(DeltaJ->GetExtent().height % 4u > 0),
 			DeltaJ->GetExtent().depth / 4u + uint32_t(DeltaJ->GetExtent().depth % 4u > 0));
 
 		GenDeltaEnLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaEnLUT->BindPipeline(cmd);
-		DeltaEnDSO->BindSet(cmd, *GenDeltaEnLUT);
+		DeltaEnDSO->BindSet(0, cmd, *GenDeltaEnLUT);
 		vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
-			DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+			DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().height % 8u > 0),
 			1u);
 
 		GenDeltaSLUT->BindPipeline(cmd);
-		DeltaSDSO->BindSet(cmd, *GenDeltaSLUT);
+		DeltaSDSO->BindSet(0, cmd, *GenDeltaSLUT);
 		vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
 			DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
 			DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
 
 		AddE->BindPipeline(cmd);
-		AddEDSO->BindSet(cmd, *AddE);
-		vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
-			DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
+		AddEDSO->BindSet(0, cmd, *AddE);
+		vkCmdDispatch(cmd, IrradianceLUT->GetExtent().width / 8u + uint32_t(IrradianceLUT->GetExtent().width % 8u > 0),
+			IrradianceLUT->GetExtent().height / 8u + uint32_t(IrradianceLUT->GetExtent().height % 8u > 0),
 			1u);
 
 		AddS->BindPipeline(cmd);
-		AddSDSO->BindSet(cmd, *AddS);
+		AddSDSO->BindSet(0, cmd, *AddS);
 		vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
 			DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
 			DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
@@ -296,17 +296,20 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Wait()
 		.FreeCommandBuffers(1, &cmd);
 
+	Transmittance->CreateSampler(ESamplerType::LinearClamp);
+	ScatteringLUT->CreateSampler(ESamplerType::LinearClamp);
+	IrradianceLUT->CreateSampler(ESamplerType::LinearClamp);
+
 	skybox = std::make_unique<GraphicsObject>();
 	skybox->descriptorSet = DescriptorSetDescriptor()
-		.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
 		.Allocate(Scope);
 
 	skybox->pipeline = GraphicsPipelineDescriptor()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("background_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_NONE)
+		.AddDescriptorLayout(UBOSet[0]->GetLayout())
 		.AddDescriptorLayout(skybox->descriptorSet->GetLayout())
 		.Construct(Scope);
 
@@ -322,23 +325,24 @@ VkBool32 VulkanBase::volumetric_precompute()
 	VkBufferCreateInfo cloudInfo{};
 	cloudInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	cloudInfo.size = sizeof(CloudLayer);
+	cloudInfo.size = sizeof(CloudProfileLayer);
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	cloud_layer = std::make_unique<Buffer>(Scope, cloudInfo, allocCreateInfo);
 
+	CloudProfileLayer defaultClouds{};
+	cloud_layer->Update(&defaultClouds, sizeof(CloudProfileLayer));
+
 	CloudShape = GRNoise::GenerateCloudShapeNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
-	CloudDetail = GRNoise::GenerateCloudDetailNoise(Scope, { 32u, 32u, 32u }, 8u, 3u);
+	CloudDetail = GRNoise::GenerateCloudDetailNoise(Scope, { 32u, 32u, 32u }, 6u, 3u);
 
 	volume = std::make_unique<GraphicsObject>();
 	volume->descriptorSet = DescriptorSetDescriptor()
-		.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *ubo)
-		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *view)
-		.AddUniformBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT, *cloud_layer)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
-		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
+		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *cloud_layer)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudShape)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *CloudDetail)
+		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *Transmittance)
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *IrradianceLUT)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *ScatteringLUT)
 		.Allocate(Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};
@@ -355,6 +359,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("volumetric_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetBlendAttachments(1, &blendState)
+		.AddDescriptorLayout(UBOSet[0]->GetLayout())
 		.AddDescriptorLayout(volume->descriptorSet->GetLayout())
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.Construct(Scope);

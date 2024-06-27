@@ -3,14 +3,69 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/Importer.hpp>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
 extern std::string exec_path;
 
-extern void calculate_normals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+void calculate_normals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
+{
+	for (int i = 0; i < indices.size(); i += 3)
+	{
+		Vertex& A = vertices[indices[i]];
+		Vertex& B = vertices[indices[i + 1]];
+		Vertex& C = vertices[indices[i + 2]];
+		glm::vec3 contributingNormal = glm::cross(glm::vec3(B.position) - glm::vec3(A.position), glm::vec3(C.position) - glm::vec3(A.position));
+		float area = glm::length(contributingNormal) / 2.f;
+		glm::vec3 contributingNormal2 = glm::normalize(contributingNormal) * area;
 
-extern void calculate_tangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale);
+		vertices[indices[i]].normal += contributingNormal;
+		vertices[indices[i + 1]].normal += contributingNormal;
+		vertices[indices[i + 2]].normal += contributingNormal;
+	}
+
+	for (int i = 0; i < vertices.size(); i++)
+	{
+		vertices[i].normal = glm::normalize(vertices[i].normal);
+	}
+}
+
+void calculate_tangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale)
+{
+	for (int i = 0; i < indices.size(); i += 3)
+	{
+		Vertex& A = vertices[indices[i]];
+		Vertex& B = vertices[indices[i + 1]];
+		Vertex& C = vertices[indices[i + 2]];
+
+		glm::vec2 uv0 = (A.uv - 0.5f) * u_scale + (0.5f * v_scale);
+		glm::vec2 uv1 = (B.uv - 0.5f) * u_scale + (0.5f * v_scale);
+		glm::vec2 uv2 = (C.uv - 0.5f) * u_scale + (0.5f * v_scale);
+
+		glm::vec3 diff1;
+		glm::vec3 diff2;
+		glm::vec2 delta1;
+		glm::vec2 delta2;
+
+		diff1 = B.position - A.position;
+		diff2 = C.position - A.position;
+		delta1 = glm::vec2(uv1.x, 1.f - uv1.y) - glm::vec2(uv0.x, 1.f - uv0.y);
+		delta2 = glm::vec2(uv2.x, 1.f - uv2.y) - glm::vec2(uv0.x, 1.f - uv0.y);
+
+		float f = 1.0f / (delta1.x * delta2.y - delta1.y * delta2.x);
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+
+		tangent.x = f * (delta2.y * diff1.x - delta1.y * diff2.x);
+		tangent.y = f * (delta2.y * diff1.y - delta1.y * diff2.y);
+		tangent.z = f * (delta2.y * diff1.z - delta1.y * diff2.z);
+
+		vertices[indices[i]].tangent = tangent;
+		vertices[indices[i + 1]].tangent = tangent;
+		vertices[indices[i + 2]].tangent = tangent;
+	}
+}
 
 TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkFormat& format, const VkImageCreateFlags& flags)
 {
@@ -96,9 +151,12 @@ TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int coun
 	return target;
 }
 
-TAuto<VulkanImage> GRFile::ImportImage(const RenderScope& Scope, const char* path, const VkFormat& format, const VkImageCreateFlags& flags)
+TAuto<VulkanImage> GRVkFile::_importImage(const RenderScope& Scope, const char* path, const VkFormat& format, const VkImageCreateFlags& flags)
 {
 	assert(path != nullptr);
+
+	if (!path)
+		return VK_NULL_HANDLE;
 
 	int w, h, c;
 	unsigned char* pixels = stbi_load((exec_path + path).c_str(), &w, &h, &c, 4);
@@ -108,7 +166,7 @@ TAuto<VulkanImage> GRFile::ImportImage(const RenderScope& Scope, const char* pat
 	return target;
 }
 
-TAuto<Mesh> GRFile::ImportMesh(const RenderScope& Scope, const char* path)
+TAuto<Mesh> GRVkFile::_importMesh(const RenderScope& Scope, const char* path)
 {
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 	TVector<uint32_t> indices;
@@ -119,6 +177,9 @@ TAuto<Mesh> GRFile::ImportMesh(const RenderScope& Scope, const char* path)
 	auto err = importer.GetErrorString();
 
 	assert(model != VK_NULL_HANDLE);
+
+	if (!model)
+		return VK_NULL_HANDLE;
 
 	for (uint32_t submesh_ind = 0; submesh_ind < model->mNumMeshes; submesh_ind++) 
 	{

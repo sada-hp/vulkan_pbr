@@ -16,9 +16,9 @@ layout(location = 0) out vec2 FragUV;
 layout(location = 1) out vec4 WorldPosition;
 layout(location = 2) out mat3 TBN;
 
-layout(binding = 2) uniform sampler2D TransmittanceLUT;
-layout(binding = 3) uniform sampler2D IrradianceLUT;
-layout(binding = 4) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 1) uniform sampler2D TransmittanceLUT;
+layout(set = 1, binding = 2) uniform sampler2D IrradianceLUT;
+layout(set = 1, binding = 3) uniform sampler3D InscatteringLUT;
 
 void main()
 {

@@ -86,7 +86,7 @@ namespace GR
 		*/
 		void* userPointer4 = nullptr;
 
-		GRAPI GrayEngine(const std::string& ExecutablePath, ApplicationSettings& Settings);
+		GRAPI GrayEngine(int argc, char** argv, ApplicationSettings& Settings);
 
 		GRAPI ~GrayEngine();
 		/*

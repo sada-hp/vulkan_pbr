@@ -6,11 +6,12 @@ std::string exec_path = "";
 
 namespace GR
 {
-	GrayEngine::GrayEngine(const std::string& ExecutablePath, ApplicationSettings& Settings)
+	GrayEngine::GrayEngine(int argc, char** argv, ApplicationSettings& Settings)
 	{
-		assert(ExecutablePath != "");
+		assert(argc > 0);
 
-		exec_path = ExecutablePath;
+		exec_path = argv[0];
+		exec_path = exec_path.substr(0, exec_path.find_last_of('\\') + 1);
 
 #ifdef INCLUDE_GUI
 		GuiContext = ImGui::CreateContext();
@@ -63,9 +64,7 @@ namespace GR
 #ifdef INCLUDE_GUI
 			ImGui::Render();
 #endif
-			renderer->Step(delta);
-
-			//glfwSwapBuffers(window->glfwWindow);
+			renderer->_step(delta);
 		}
 	}
 
@@ -106,7 +105,7 @@ namespace GR
 			break;
 		}
 
-		Resource.Set(renderer->LoadImage(path, format));
+		Resource.Set(renderer->_loadImage(path, format));
 	}
 
 	Window& GrayEngine::GetWindow() const

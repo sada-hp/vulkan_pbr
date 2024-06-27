@@ -60,7 +60,7 @@ TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkForm
 		.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 	pipeline->BindPipeline(cmd);
-	noise_set->BindSet(cmd, *pipeline);
+	noise_set->BindSet(0, cmd, *pipeline);
 	vkCmdDispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, noise->GetExtent().depth);
 	::EndCommandBuffer(cmd);
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)

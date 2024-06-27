@@ -35,7 +35,7 @@ namespace GR
 	void GrayEngine::glfw_resize(GLFWwindow* window, int width, int height)
 	{
 		EngineContext* context = static_cast<EngineContext*>(glfwGetWindowUserPointer(window));
-		context->renderer->HandleResize();
+		context->renderer->_handleResize();
 	}
 
 	void GrayEngine::glfw_scroll(GLFWwindow* window, double dx, double dy)

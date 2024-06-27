@@ -20,7 +20,7 @@ vec3 light_kernel[] =
 
 layout(location=0) out vec4 outColor;
 
-layout(binding = 2) uniform CloudLayer
+layout(set = 1, binding = 1) uniform CloudLayer
 {
     float Coverage;
     float VerticalSpan;
@@ -28,11 +28,11 @@ layout(binding = 2) uniform CloudLayer
     float WindSpeed;
 } Clouds;
 
-layout(binding = 3) uniform sampler3D CloudLowFrequency;
-layout(binding = 4) uniform sampler3D CloudHighFrequency;
-layout(binding = 5) uniform sampler2D TransmittanceLUT;
-layout(binding = 6) uniform sampler2D IrradianceLUT;
-layout(binding = 7) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 2) uniform sampler3D CloudLowFrequency;
+layout(set = 1, binding = 3) uniform sampler3D CloudHighFrequency;
+layout(set = 1, binding = 4) uniform sampler2D TransmittanceLUT;
+layout(set = 1, binding = 5) uniform sampler2D IrradianceLUT;
+layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
 
 // precomputed-atmospheric-scattering
 void AtmosphereAtPoint(vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
@@ -179,7 +179,6 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     return transmittance;
 }
 
-// I doubt it's physically correct and also very expensive
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
     // need more precision near horizon, worst case is very expensive
@@ -192,16 +191,15 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     vec3 pos = rs;
     float density = 0.0;
     vec3 rl = normalize(ubo.SunDirection.xyz);
-    float phase = HGDPhase(dot(rl, rd), 0.75, -0.25, 0.5, MieG);
+    float phase = HGDPhase(dot(rl, rd), 0.75, -0.5, 0.5, MieG);
     //float phase = DualLobeFunction(dot(rl, rd), MieG, -0.25, 0.65);
 
     // skip empty space until cloud is found
     int i = 0;
-    while (density == 0.0 && i < steps)
+    for (; i < steps && density == 0.0; i += 10)
     {
         density = SampleDensity(pos, 2);
-        pos += stepsize * rd * 10.0;
-        i += 10;
+        pos = rs + stepsize * rd * i;
     }
 
     rs = pos;
@@ -230,19 +228,22 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
         pos += stepsize * rd;
     }
 
-    // add back the light that scatters between camera and beginning of the cloud
-    AtmosphereAtPoint(vec3(0, Rg, 0) + View.CameraPosition.xyz, SphereDistance(View.CameraPosition.xyz, rd, vec3(0.0, -Rg, 0.0), Rt), rd, rl, Atmosphere);
-
-    // aerial perspective with some made up ambient term
-    scattering.rgb *= Atmosphere.L * mix(0.06, 0.1, scattering.a);
-    scattering.rgb += Atmosphere.S * mix(0.06, 0.1, scattering.a);
+    // I doubt it's physically correct but looks nice
+    if (scattering.a != 1.0)
+    {
+        // add back the light that scatters between camera and beginning of the cloud
+        AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), rd, rl, Atmosphere);
+        // aerial perspective with some made up ambient term, alpha = 1.0 means sky -> inverse (?)
+        scattering.rgb += Atmosphere.S * mix(0.0, 1.0, 1.0 - scattering.a);
+        scattering.rgb *= phase * Atmosphere.L * mix(0.0, 1.0, 1.0 - scattering.a); // not sure about multiply, but otherwise the sunset looks very dull
+    }
 
     return scattering;
 }
 
 void main()
 {
-    vec2 ScreenUV = gl_FragCoord.xy / View.Resolution;
+    vec2 ScreenUV = gl_FragCoord.xy / ubo.Resolution;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = inverse(ubo.ProjectionMatrix) * ScreenNDC;
     vec4 ScreenWorld = inverse(ubo.ViewMatrix) * vec4(ScreenView.xy, -1.0, 0.0);
@@ -250,11 +251,11 @@ void main()
 
     if (dot(RayDirection, vec3(0.0, 1.0, 0.0)) < 0.0) 
     {
-        outColor = vec4(0.0);
+        outColor = vec4(0.0, 0.0, 0.0, 1.0);
         discard;
     }
 
-    vec3 RayOrigin = View.CameraPosition.xyz;
+    vec3 RayOrigin = ubo.CameraPosition.xyz;
     vec3 SphereCenter = vec3(0.0, -Rg, 0.0);
     if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rcb, sphereStart)
     && RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rct, sphereEnd)) 

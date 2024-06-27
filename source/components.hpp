@@ -43,33 +43,15 @@ namespace GRComponents
 			: Resource(resource, flagptr) { }
 	};
 
-	struct NormalMap : Resource<Image>
+	struct NormalDisplacementMap : Resource<Image>
 	{
-		NormalMap(TShared<Image> resource, bool* flagptr = nullptr)
+		NormalDisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	};
 
-	struct RoughnessMap : Resource<Image>
+	struct AORoughnessMetallicMap : Resource<Image>
 	{
-		RoughnessMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr) { }
-	};
-
-	struct MetallicMap : Resource<Image>
-	{
-		MetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr) { }
-	};
-
-	struct AmbientMap : Resource<Image>
-	{
-		AmbientMap(TShared<Image> resource, bool* flagptr = nullptr)
-			: Resource(resource, flagptr) { }
-	};
-
-	struct DisplacementMap : Resource<Image>
-	{
-		DisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
+		AORoughnessMetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	};
 

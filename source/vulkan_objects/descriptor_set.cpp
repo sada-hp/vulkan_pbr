@@ -12,9 +12,9 @@ DescriptorSet::~DescriptorSet()
 	vkFreeDescriptorSets(Scope.GetDevice(), Scope.GetDescriptorPool(), 1, &descriptorSet);
 }
 
-void DescriptorSet::BindSet(VkCommandBuffer cmd, const Pipeline& pipeline)
+void DescriptorSet::BindSet(uint32_t set, VkCommandBuffer cmd, const Pipeline& pipeline)
 {
-	vkCmdBindDescriptorSets(cmd, pipeline.GetBindPoint(), pipeline.GetLayout(), 0, 1, &descriptorSet, 0, VK_NULL_HANDLE);
+	vkCmdBindDescriptorSets(cmd, pipeline.GetBindPoint(), pipeline.GetLayout(), set, 1, &descriptorSet, 0, VK_NULL_HANDLE);
 }
 
 DescriptorSetDescriptor& DescriptorSetDescriptor::AddUniformBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer)
