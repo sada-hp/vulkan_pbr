@@ -136,7 +136,7 @@ public:
 	* 
 	* @param[in] settings - new parameters of cloud rendering
 	*/
-	GRAPI void SetCloudLayerSettings(CloudProfileLayer settings);
+	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings);
 	/*
 	* !@brief Should be modified to control the scene
 	*/

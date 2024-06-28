@@ -325,12 +325,12 @@ VkBool32 VulkanBase::volumetric_precompute()
 	VkBufferCreateInfo cloudInfo{};
 	cloudInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	cloudInfo.size = sizeof(CloudProfileLayer);
+	cloudInfo.size = sizeof(CloudLayerProfile);
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	cloud_layer = std::make_unique<Buffer>(Scope, cloudInfo, allocCreateInfo);
 
-	CloudProfileLayer defaultClouds{};
-	cloud_layer->Update(&defaultClouds, sizeof(CloudProfileLayer));
+	CloudLayerProfile defaultClouds{};
+	cloud_layer->Update(&defaultClouds, sizeof(CloudLayerProfile));
 
 	CloudShape = GRNoise::GenerateCloudShapeNoise(Scope, { 128u, 128u, 128u }, 4u, 4u);
 	CloudDetail = GRNoise::GenerateCloudDetailNoise(Scope, { 32u, 32u, 32u }, 6u, 3u);

@@ -15,8 +15,8 @@ const float Rg = 6360.0 * 1e3;
 const float Rt = 6420.0 * 1e3;
 #endif
 
-const float Rcb = 6380.0 * 1e3;
-const float Rct = 6405.0 * 1e3;
+const float Rcb = 6370.0 * 1e3;
+const float Rct = 6385.0 * 1e3;
 
 const float HR = 8.0;
 const vec3 BetaR = vec3(5.8e-3, 1.35e-2, 3.31e-2);
@@ -25,12 +25,12 @@ const vec3 BetaR = vec3(5.8e-3, 1.35e-2, 3.31e-2);
 //const float HM = 1.2;
 //const vec3 BetaMSca = vec3(4e-3);
 //const vec3 BetaMEx = BetaMSca / 0.9;
-//const float MieG = 0.8;
 
 // partly cloudy
 const float HM = 3.0;
 const vec3 BetaMSca = vec3(3e-3);
 const vec3 BetaMEx = BetaMSca / 0.9;
+
 const float MieG = 0.65;
 
 const float MaxLightIntensity = 25.0;

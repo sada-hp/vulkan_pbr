@@ -24,9 +24,9 @@ struct UniformBuffer
 /*
 * !@brief Struct describing the coverage of volumetric clouds
 */
-struct CloudProfileLayer
+struct CloudLayerProfile
 {
-	bool operator==(CloudProfileLayer& other)
+	bool operator==(CloudLayerProfile& other)
 	{
 		return Coverage == other.Coverage
 			&& VerticalSpan == other.VerticalSpan
@@ -35,9 +35,9 @@ struct CloudProfileLayer
 	}
 
 	float Coverage = 0.175;
-	float VerticalSpan = 0.3;
-	float Absorption = 0.035;
-	float WindSpeed = 0.5;
+	float VerticalSpan = 0.2;
+	float Absorption = 0.05;
+	float WindSpeed = 0.25;
 };
 /*
 * !@brief Dummy to inherit from

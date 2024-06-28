@@ -5,6 +5,9 @@
 
 namespace GRShape
 {
+	/*
+	* !@brief This is a base class, use one of the specifications
+	*/
 	class Shape
 	{
 	protected:

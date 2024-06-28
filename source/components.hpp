@@ -10,15 +10,27 @@
 */
 namespace GRComponents
 {
+	/*
+	* !@brief Resource holder, resource logic uses shared pointer
+	*/
 	template<typename Type, typename... Args>
 	struct Resource
 	{
+		/*
+		* @param[in] resource - heap pointer to resource data
+		* @param[in] flagptr - if given, specifies a bool value, 
+		* which is gonna be updated to true each time 'Set' function is called for this resource
+		*/
 		Resource(TShared<Type> resource, bool* flagptr = nullptr)
 			: res(resource), dirty_flag(flagptr)
 		{
 
 		}
-
+		/*
+		* !@brief Sets the new value of this resource
+		* 
+		* @param[in] r - new pointer
+		*/
 		GRAPI void Set(TShared<Type> r)
 		{
 			res = r;
@@ -26,7 +38,11 @@ namespace GRComponents
 			if (dirty_flag)
 				*dirty_flag = true;
 		}
-
+		/*
+		* !@brief Gets the resource pointer
+		* 
+		* @return Shared pointer to the resource
+		*/
 		GRAPI TShared<Type> Get() const
 		{
 			return res;
@@ -36,45 +52,61 @@ namespace GRComponents
 		TShared<Type> res = nullptr;
 		bool* dirty_flag = nullptr;
 	};
-
+	/*
+	* !@brief Albedo map defines color map in PBR pipeline
+	*/
 	struct AlbedoMap : Resource<Image>
 	{
 		AlbedoMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	};
-
+	/*
+	* !@brief Combined Normal(rgb) and Height(a) map used in PBR pipeline
+	*/
 	struct NormalDisplacementMap : Resource<Image>
 	{
 		NormalDisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	};
-
+	/*
+	* !@brief Combined AO(r), Roughness(g) and Metallic(b) map used in PBR pipeline
+	*/
 	struct AORoughnessMetallicMap : Resource<Image>
 	{
 		AORoughnessMetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	};
-
+	/*
+	* !@brief Multiplies roughness by this value
+	*/
 	struct RoughnessMultiplier
 	{
 		float R = 1.0;
 	};
-
+	/*
+	* !@brief If set to non zero, overrides metallic value of the material
+	*/
 	struct MetallicOverride
 	{
 		float M = 0.0;
 	};
-
+	/*
+	* !@brief Scale of Parallax mapping
+	*/
 	struct DisplacementScale
 	{
 		float H = 1.0;
 	};
-
+	/*
+	* !@brief Multiplies original color by this value
+	*/
 	struct Color
 	{
 		glm::vec3 RGB = glm::vec3(1.0);
 	};
-
+	/*
+	* !@brief Projection matrix
+	*/
 	struct Projection
 	{
 		glm::mat4 matrix = glm::mat4(glm::vec4(0.f), glm::vec4(0.f), glm::vec4(0.f, 0.f, 0.f, -1.f), glm::vec4(0.f));
@@ -97,7 +129,9 @@ namespace GRComponents
 			return *this;
 		}
 	};
-
+	/*
+	* !@brief World matrix
+	*/
 	struct Transform
 	{
 		glm::mat4 matrix = glm::mat4(1.0);

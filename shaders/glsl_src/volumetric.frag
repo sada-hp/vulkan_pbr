@@ -121,24 +121,23 @@ vec3 GetUV(vec3 p, float scale, float speed_mod)
 float SampleCloudShape(vec3 x0, int lod)
 {
     float height = GetHeightFraction(x0);
-    vec3 uv =  GetUV(x0, 25.0, 0.01);
+    vec3 uv =  GetUV(x0, 45.0, 0.01);
 
     vec4 low_frequency_noise = textureLod(CloudLowFrequency, uv, lod);
     float base = low_frequency_noise.r;
     base = remap(base, 1.0 - Clouds.Coverage, 1.0, 0.0, 1.0);
 
-    //base *= saturate(remap(height, 0.3, 0.5, 0.0, 1.0));
-    base *= saturate(remap(height, mix(0.7, 0.25, Clouds.VerticalSpan), mix(0.9, 0.4, Clouds.VerticalSpan), 0.0, 1.0));
+    base *= saturate(remap(height, mix(0.8, 0.25, Clouds.VerticalSpan), mix(0.95, 0.4, Clouds.VerticalSpan), 0.0, 1.0));
     base *= Clouds.Coverage;
 
     return base;
 }
 
-//GPU Pro 7
+// GPU-Pro-7
 float SampleDensity(vec3 x0, int lod)
 {
     float height = GetHeightFraction(x0);
-    vec3 uv =  GetUV(x0, 400.0, 0.3);
+    vec3 uv =  GetUV(x0, 750.0, 0.3);
 
     float base = SampleCloudShape(x0, lod);
 
@@ -151,6 +150,7 @@ float SampleDensity(vec3 x0, int lod)
     return remap(base, high_frequency_modifier * 0.1, 1.0, 0.0, 1.0) * height;
 }
 
+// volumetric-cloudscapes-of-horizon-zero-dawn
 float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 {
     vec3 pos = rs;
@@ -179,6 +179,8 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     return transmittance;
 }
 
+// I doubt it's physically correct but looks nice
+// Unoptimized and expensive
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
     // need more precision near horizon, worst case is very expensive
@@ -189,53 +191,49 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 
     vec4 scattering = vec4(0.0, 0.0, 0.0, 1.0);
     vec3 pos = rs;
-    float density = 0.0;
+    float sample_density = 0.0;
     vec3 rl = normalize(ubo.SunDirection.xyz);
-    float phase = HGDPhase(dot(rl, rd), 0.75, -0.5, 0.5, MieG);
+    float phase = HGDPhase(dot(rl, rd), 0.75, -0.15, 0.5, MieG);
     //float phase = DualLobeFunction(dot(rl, rd), MieG, -0.25, 0.65);
 
     // skip empty space until cloud is found
     int i = 0;
-    for (; i < steps && density == 0.0; i += 10)
+    for (; i < steps && sample_density == 0.0; i += 10)
     {
-        density = SampleDensity(pos, 2);
+        sample_density = SampleDensity(pos, 4);
         pos = rs + stepsize * rd * i;
     }
 
     rs = pos;
     SAtmosphere Atmosphere;
-    float lenRt = SphereDistance(rs, rd, vec3(0.0, -Rg, 0.0), Rt);
-    for (; i < steps; i++)
+    for (; i < steps; ++i)
     {
-        density = SampleDensity(pos, 0);
+        sample_density = SampleDensity(pos, 0);
 
-        if (density > 0.0) 
+        if (sample_density > 0.0) 
         {
-            float extinction = density * Clouds.Absorption;
+            float extinction = sample_density * Clouds.Absorption;
             float transmittance = BeerLambert(stepsize * extinction);
 
             // get scattering along the step ray for this sample, expensive
             AtmosphereAtPoint(vec3(0, Rg, 0) + pos, stepsize, rd, rl, Atmosphere);
-            float Vis = MarchToLight(pos, rl, stepsize) * Powder(stepsize, density, Clouds.Absorption);
+            float Vis = MarchToLight(pos, rl, stepsize) * Powder(stepsize, sample_density, Clouds.Absorption);
 
-            vec3 energy = density * Atmosphere.L * phase * Vis;
-            vec3 inScat = (energy - energy * transmittance) / density;
+            vec3 E = sample_density * (Atmosphere.L * phase * Vis + Atmosphere.S);
+            vec3 inScat = (E - E * transmittance) / sample_density;
 
-            scattering.rgb += inScat * scattering.a + Atmosphere.S * transmittance;
+            scattering.rgb += inScat * scattering.a;
             scattering.a *= transmittance;
         }
 
         pos += stepsize * rd;
     }
 
-    // I doubt it's physically correct but looks nice
     if (scattering.a != 1.0)
     {
-        // add back the light that scatters between camera and beginning of the cloud
         AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), rd, rl, Atmosphere);
-        // aerial perspective with some made up ambient term, alpha = 1.0 means sky -> inverse (?)
-        scattering.rgb += Atmosphere.S * mix(0.0, 1.0, 1.0 - scattering.a);
-        scattering.rgb *= phase * Atmosphere.L * mix(0.0, 1.0, 1.0 - scattering.a); // not sure about multiply, but otherwise the sunset looks very dull
+        // aerial perspective
+        scattering.rgb += (Atmosphere.S + phase * Atmosphere.L) * (1.0 - scattering.a);
     }
 
     return scattering;

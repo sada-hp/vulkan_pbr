@@ -10,7 +10,7 @@ namespace GRConvert
 	* @param[in] Roughness - local path to roughness map image file
 	* @param[in] Metallic - local path to metallic map image file
 	* @param[in] Ambient - local path to ambient (ao) map image file
-	* @param[in] Target - local path to where to write output image, should be in .jpg format
+	* @param[in] Target - local path to output file (create/override), should use .jpg format
 	*/
 	GRAPI void ConvertImage_ARM(const std::string& Roughness, const std::string& Metallic, const std::string& Ambient, const std::string& Target);
 	/*
@@ -18,7 +18,7 @@ namespace GRConvert
 	* 
 	* @param[in] Normal - local path to normal map file
 	* @param[in] Height - local path to height map file
-	* @param[in] Target - local path to where to write output image, should be in .png format
+	* @param[in] Target - local path to output file (create/override), should use .png format
 	*/
 	GRAPI void ConvertImage_NormalHeight(const std::string& Normal, const std::string& Height, const std::string& Target);
 };

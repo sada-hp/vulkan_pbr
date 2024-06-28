@@ -353,9 +353,9 @@ void VulkanBase::Wait() const
 	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
 }
 
-void VulkanBase::SetCloudLayerSettings(CloudProfileLayer settings)
+void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
-	cloud_layer->Update(&settings, sizeof(CloudProfileLayer));
+	cloud_layer->Update(&settings, sizeof(CloudLayerProfile));
 }
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
