@@ -233,7 +233,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     {
         AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), rd, rl, Atmosphere);
         // aerial perspective
-        scattering.rgb += (Atmosphere.S + phase * Atmosphere.L) * (1.0 - scattering.a);
+        scattering.rgb += (Atmosphere.S + phase * Atmosphere.L * scattering.a) * (1.0 - scattering.a);
     }
 
     return scattering;
