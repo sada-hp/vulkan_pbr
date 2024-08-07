@@ -3,45 +3,45 @@
 
 RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const TVector<const char*>& device_extensions)
 {
-	assert(physicalDevice == VK_NULL_HANDLE);
+	assert(m_PhysicalDevice == VK_NULL_HANDLE);
 
-	::EnumeratePhysicalDevices(instance, device_extensions, &physicalDevice);
+	::EnumeratePhysicalDevices(instance, device_extensions, &m_PhysicalDevice);
 	return *this;
 }
 
 RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const TVector<const char*>& device_extensions, const TVector<VkQueueFlagBits>& queues)
 {
-	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice == VK_NULL_HANDLE);
+	assert(m_PhysicalDevice != VK_NULL_HANDLE && m_LogicalDevice == VK_NULL_HANDLE);
 
-	::CreateLogicalDevice(physicalDevice, features, device_extensions, FindDeviceQueues(physicalDevice, queues), &logicalDevice);
+	::CreateLogicalDevice(m_PhysicalDevice, features, device_extensions, FindDeviceQueues(m_PhysicalDevice, queues), &m_LogicalDevice);
 
 	for (const auto& queue : queues) {
-		uint32_t queueFamilies = FindDeviceQueues(physicalDevice, { queue })[0];
-		available_queues.emplace(std::piecewise_construct, std::forward_as_tuple(queue), std::forward_as_tuple(logicalDevice, queueFamilies));
+		uint32_t queueFamilies = FindDeviceQueues(m_PhysicalDevice, { queue })[0];
+		m_Queues.emplace(std::piecewise_construct, std::forward_as_tuple(queue), std::forward_as_tuple(m_LogicalDevice, queueFamilies));
 	}
 	return *this;
 }
 
 RenderScope& RenderScope::CreateMemoryAllocator(const VkInstance& instance)
 {
-	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice != VK_NULL_HANDLE && allocator == VK_NULL_HANDLE);
+	assert(m_PhysicalDevice != VK_NULL_HANDLE && m_LogicalDevice != VK_NULL_HANDLE && m_Allocator == VK_NULL_HANDLE);
 
-	::CreateAllocator(instance, physicalDevice, logicalDevice, &allocator);
+	::CreateAllocator(instance, m_PhysicalDevice, m_LogicalDevice, &m_Allocator);
 
 	return *this;
 }
 
 RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 {
-	assert(physicalDevice != VK_NULL_HANDLE && logicalDevice != VK_NULL_HANDLE && swapchain == VK_NULL_HANDLE);
+	assert(m_PhysicalDevice != VK_NULL_HANDLE && m_LogicalDevice != VK_NULL_HANDLE && m_Swapchain == VK_NULL_HANDLE);
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, surface, &surfaceCapabilities);
 
-	if (::CreateSwapchain(logicalDevice, physicalDevice, surface, { swapchainFormat , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }, surfaceCapabilities.currentExtent, &swapchain)) {
-		vkGetSwapchainImagesKHR(logicalDevice, swapchain, &framesInFlight, VK_NULL_HANDLE);
+	if (::CreateSwapchain(m_LogicalDevice, m_PhysicalDevice, surface, { swapchainFormat , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }, surfaceCapabilities.currentExtent, &m_Swapchain)) {
+		vkGetSwapchainImagesKHR(m_LogicalDevice, m_Swapchain, &m_FramesInFlight, VK_NULL_HANDLE);
 	}
-	swapchainExtent = surfaceCapabilities.currentExtent;
+	m_SwapchainExtent = surfaceCapabilities.currentExtent;
 
 	return *this;
 }
@@ -132,69 +132,70 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	createInfo.subpassCount = subpassDescriptions.size();
 	createInfo.pSubpasses = subpassDescriptions.data();
 
-	::CreateRenderPass(logicalDevice, createInfo, &renderPass);
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_RenderPass);
 
 	return *this;
 }
 
 RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes)
 {
-	if (descriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);
+	if (m_DescriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, VK_NULL_HANDLE);
 	}
 
-	::CreateDescriptorPool(logicalDevice, poolSizes.data(), poolSizes.size(), setsCount, &descriptorPool);
+	::CreateDescriptorPool(m_LogicalDevice, poolSizes.data(), poolSizes.size(), setsCount, &m_DescriptorPool);
 
 	return *this;
 }
 
 void RenderScope::RecreateSwapchain(const VkSurfaceKHR& surface)
 {
-	vkDestroySwapchainKHR(logicalDevice, swapchain, VK_NULL_HANDLE);
-	swapchain = VK_NULL_HANDLE;
+	vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, VK_NULL_HANDLE);
+	m_Swapchain = VK_NULL_HANDLE;
 
 	CreateSwapchain(surface);
 }
 
 void RenderScope::Destroy()
 {
-	available_queues.clear();
+	m_Queues.clear();
 
-	for (auto pair : samplers)
-		vkDestroySampler(logicalDevice, pair.second, VK_NULL_HANDLE);
-	samplers.clear();
+	for (auto pair : m_Samplers)
+		vkDestroySampler(m_LogicalDevice, pair.second, VK_NULL_HANDLE);
+	m_Samplers.clear();
 
-	if (descriptorPool != VK_NULL_HANDLE)
-		vkDestroyDescriptorPool(logicalDevice, descriptorPool, VK_NULL_HANDLE);
-	if (renderPass != VK_NULL_HANDLE)
-		vkDestroyRenderPass(logicalDevice, renderPass, VK_NULL_HANDLE);
-	if (swapchain != VK_NULL_HANDLE)
-		vkDestroySwapchainKHR(logicalDevice, swapchain, VK_NULL_HANDLE);
-	if (allocator != VK_NULL_HANDLE)
-		vmaDestroyAllocator(allocator);
-	if (logicalDevice != VK_NULL_HANDLE)
-		vkDestroyDevice(logicalDevice, VK_NULL_HANDLE);
+	if (m_DescriptorPool != VK_NULL_HANDLE)
+		vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, VK_NULL_HANDLE);
+	if (m_RenderPass != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, VK_NULL_HANDLE);
+	if (m_Swapchain != VK_NULL_HANDLE)
+		vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, VK_NULL_HANDLE);
+	if (m_Allocator != VK_NULL_HANDLE)
+		vmaDestroyAllocator(m_Allocator);
+	if (m_LogicalDevice != VK_NULL_HANDLE)
+		vkDestroyDevice(m_LogicalDevice, VK_NULL_HANDLE);
 
-	descriptorPool = VK_NULL_HANDLE;
-	renderPass = VK_NULL_HANDLE;
-	swapchain = VK_NULL_HANDLE;
-	allocator = VK_NULL_HANDLE;
-	logicalDevice = VK_NULL_HANDLE;
+	m_DescriptorPool = VK_NULL_HANDLE;
+	m_RenderPass = VK_NULL_HANDLE;
+	m_Swapchain = VK_NULL_HANDLE;
+	m_Allocator = VK_NULL_HANDLE;
+	m_LogicalDevice = VK_NULL_HANDLE;
 }
 
 VkBool32 RenderScope::IsReadyToUse() const
 {
-	return logicalDevice != VK_NULL_HANDLE
-		&& physicalDevice != VK_NULL_HANDLE
-		&& allocator != VK_NULL_HANDLE
-		&& swapchain != VK_NULL_HANDLE
-		&& renderPass != VK_NULL_HANDLE
-		&& descriptorPool != VK_NULL_HANDLE;
+	return 
+		m_LogicalDevice != VK_NULL_HANDLE
+		&& m_PhysicalDevice != VK_NULL_HANDLE
+		&& m_Allocator != VK_NULL_HANDLE
+		&& m_Swapchain != VK_NULL_HANDLE
+		&& m_RenderPass != VK_NULL_HANDLE
+		&& m_DescriptorPool != VK_NULL_HANDLE;
 }
 
 const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 {
-	if (samplers.count(Type) == 0)
+	if (m_Samplers.count(Type) == 0)
 	{
 		const bool Point = Type == ESamplerType::PointClamp || Type == ESamplerType::PointMirror || Type == ESamplerType::PointRepeat;
 		const bool Repeat = Type == ESamplerType::PointRepeat || Type == ESamplerType::LinearRepeat || Type == ESamplerType::BillinearRepeat;
@@ -212,7 +213,7 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 		if (Anisotropy)
 		{
 			VkPhysicalDeviceProperties properties{};
-			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+			vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
 
 			samplerInfo.anisotropyEnable = VK_TRUE;
 			samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
@@ -226,8 +227,8 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 		samplerInfo.mipLodBias = 0.0;
 		samplerInfo.minLod = 0.0;
 		samplerInfo.maxLod = 1.0;
-		vkCreateSampler(logicalDevice, &samplerInfo, VK_NULL_HANDLE, &samplers[Type]);
+		vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &m_Samplers[Type]);
 	}
 
-	return samplers[Type];
+	return m_Samplers[Type];
 }

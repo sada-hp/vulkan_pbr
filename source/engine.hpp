@@ -24,20 +24,21 @@ namespace GR
 	*/
 	class GrayEngine
 	{
-		TVector<void(*)(GrayEngine*, double)> inputs;
-		entt::registry registry;
-		EventListener* listener;
-		VulkanBase* renderer;
-		Window* window;
-		double delta = 0.0;
-		double total_time = 0;
+	private:
+		TVector<void(*)(GrayEngine*, double)> m_Inputs;
+		entt::registry m_Registry;
+		EventListener* m_Listener;
+		VulkanBase* m_Renderer;
+		Window* m_Window;
+		double m_Delta = 0.0;
+		double m_Time = 0;
 
 		struct EngineContext
 		{
 			EventListener* listener;
 			VulkanBase* renderer;
 			GrayEngine* engine;
-		} context;
+		} m_Context;
 
 		// !@brief Defined in glfw_callbacks.cpp
 		static void glfw_key_press(GLFWwindow* window, int, int, int, int);
@@ -55,7 +56,7 @@ namespace GR
 		static void glfw_scroll(GLFWwindow* window, double, double);
 
 #ifdef INCLUDE_GUI
-		ImGuiContext* GuiContext;
+		ImGuiContext* m_GuiContext;
 #endif
 	public:
 #ifdef INCLUDE_GUI
@@ -66,7 +67,7 @@ namespace GR
 		*/
 		GRAPI ImGuiContext* GetGUIContext()
 		{
-			return GuiContext;
+			return m_GuiContext;
 		}
 #endif
 		/*
@@ -156,7 +157,7 @@ namespace GR
 		template<typename Type, typename... Args>
 		GRAPI decltype(auto) EmplaceComponent(Entity ent, Args&& ...args)
 		{
-			return registry.emplace_or_replace<Type>(ent, args...);
+			return m_Registry.emplace_or_replace<Type>(ent, args...);
 		}
 		/*
 		* !@brief Get <Type> component of an entity
@@ -168,7 +169,7 @@ namespace GR
 		template<typename... Type>
 		GRAPI decltype(auto) GetComponent(const Entity ent)
 		{
-			return registry.get<Type...>(ent);
+			return m_Registry.get<Type...>(ent);
 		}
 		/*
 		* !@brief Load an image from file and binds it to the specified shader location

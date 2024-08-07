@@ -22,8 +22,8 @@ namespace GRShape
 		GRAPI virtual TAuto<Mesh> Generate(const RenderScope& Scope) const override;
 
 	public:
-		uint32_t edge_splits = 0u;
-		float scale = 1.f;
+		uint32_t m_EdgeSplits = 0u;
+		float m_Scale = 1.f;
 	};
 
 	class Plane : public Shape
@@ -33,8 +33,8 @@ namespace GRShape
 		GRAPI virtual TAuto<Mesh> Generate(const RenderScope& Scope) const override;
 
 	public:
-		uint32_t edge_splits = 0u;
-		float scale = 1.f;
+		uint32_t m_EdgeSplits = 0u;
+		float m_Scale = 1.f;
 	};
 
 	class Sphere : public Shape
@@ -44,8 +44,8 @@ namespace GRShape
 		GRAPI virtual TAuto<Mesh> Generate(const RenderScope& Scope) const override;
 	
 	public:
-		uint32_t rings = 64u;
-		uint32_t slices = 64u;
-		float radius = 1.f;
+		uint32_t m_Rings = 64u;
+		uint32_t m_Slices = 64u;
+		float m_Radius = 1.f;
 	};
 }

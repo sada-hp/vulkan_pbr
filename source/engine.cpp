@@ -14,41 +14,41 @@ namespace GR
 		exec_path = exec_path.substr(0, exec_path.find_last_of('\\') + 1);
 
 #ifdef INCLUDE_GUI
-		GuiContext = ImGui::CreateContext();
-		ImGui::SetCurrentContext(GuiContext);
+		m_GuiContext = ImGui::CreateContext();
+		ImGui::SetCurrentContext(m_GuiContext);
 #endif
 
-		listener = new EventListener();
-		window = new Window(Settings.ApplicationName.c_str(), Settings.WindowExtents.x, Settings.WindowExtents.y);
-		renderer = new VulkanBase(window->glfwWindow, registry);
+		m_Listener = new EventListener();
+		m_Window = new Window(Settings.ApplicationName.c_str(), Settings.WindowExtents.x, Settings.WindowExtents.y);
+		m_Renderer = new VulkanBase(m_Window->m_GlfwWindow, m_Registry);
 
-		context = { listener , renderer, this };
+		m_Context = { m_Listener , m_Renderer, this };
 
-		glfwSetWindowUserPointer(window->glfwWindow, &context);
-		glfwSetWindowSizeCallback(window->glfwWindow, glfw_resize);
-		glfwSetKeyCallback(window->glfwWindow, glfw_key_press);
-		glfwSetMouseButtonCallback(window->glfwWindow, glfw_mouse_press);
-		glfwSetCursorPosCallback(window->glfwWindow, glfw_mouse_move);
-		glfwSetScrollCallback(window->glfwWindow, glfw_scroll);
+		glfwSetWindowUserPointer(m_Window->m_GlfwWindow, &m_Context);
+		glfwSetWindowSizeCallback(m_Window->m_GlfwWindow, glfw_resize);
+		glfwSetKeyCallback(m_Window->m_GlfwWindow, glfw_key_press);
+		glfwSetMouseButtonCallback(m_Window->m_GlfwWindow, glfw_mouse_press);
+		glfwSetCursorPosCallback(m_Window->m_GlfwWindow, glfw_mouse_move);
+		glfwSetScrollCallback(m_Window->m_GlfwWindow, glfw_scroll);
 	}
 
 	GrayEngine::~GrayEngine()
 	{
-		delete listener;
-		delete renderer;
-		delete window;
-		registry.clear();
+		delete m_Listener;
+		delete m_Renderer;
+		delete m_Window;
+		m_Registry.clear();
 	}
 
 	void GrayEngine::StartGameLoop()
 	{
-		while (!glfwWindowShouldClose(window->glfwWindow))
+		while (!glfwWindowShouldClose(m_Window->m_GlfwWindow))
 		{
 			glfwPollEvents();
 
 			double frame_time = GetTime();
-			delta = frame_time - total_time;
-			total_time = frame_time;
+			m_Delta = frame_time - m_Time;
+			m_Time = frame_time;
 
 #ifdef INCLUDE_GUI
 			ImGui_ImplVulkan_NewFrame();
@@ -56,21 +56,21 @@ namespace GR
 			ImGui::NewFrame();
 #endif
 
-			std::for_each(inputs.begin(), inputs.end(), [&](void(*func)(GrayEngine*, double))
+			std::for_each(m_Inputs.begin(), m_Inputs.end(), [&](void(*func)(GrayEngine*, double))
 			{
-				func(this, delta);
+				func(this, m_Delta);
 			});
 
 #ifdef INCLUDE_GUI
 			ImGui::Render();
 #endif
-			renderer->_step(delta);
+			m_Renderer->_step(m_Delta);
 		}
 	}
 
 	void GrayEngine::AddInputFunction(void(*function)(GrayEngine*, double))
 	{
-		inputs.push_back(function);
+		m_Inputs.push_back(function);
 	}
 
 	double GrayEngine::GetTime() const
@@ -80,12 +80,12 @@ namespace GR
 
 	Entity GrayEngine::AddMesh(const std::string& MeshPath) const
 	{
-		return renderer->AddMesh(MeshPath);
+		return m_Renderer->AddMesh(MeshPath);
 	}
 
 	Entity GrayEngine::AddShape(const GRShape::Shape& Descriptor) const
 	{
-		return renderer->AddShape(Descriptor);
+		return m_Renderer->AddShape(Descriptor);
 	}
 
 	void GrayEngine::BindImage(GRComponents::Resource<Image>& Resource, const std::string& path, EImageType type)
@@ -105,32 +105,32 @@ namespace GR
 			break;
 		}
 
-		Resource.Set(renderer->_loadImage(path, format));
+		Resource.Set(m_Renderer->_loadImage(path, format));
 	}
 
 	Window& GrayEngine::GetWindow() const
 	{
-		return *window;
+		return *m_Window;
 	}
 
 	Camera& GrayEngine::GetMainCamera() const
 	{
-		return renderer->camera;
+		return m_Renderer->m_Camera;
 	}
 
 	EventListener& GrayEngine::GetEventListener()
 	{
-		return *listener;
+		return *m_Listener;
 	}
 
 	VulkanBase& GrayEngine::GetRenderer()
 	{
-		return *renderer;
+		return *m_Renderer;
 	}
 
 	void GrayEngine::ClearEntities()
 	{
-		renderer->Wait();
-		registry.clear();
+		m_Renderer->Wait();
+		m_Registry.clear();
 	}
 };

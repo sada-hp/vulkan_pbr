@@ -51,7 +51,6 @@ void UVWToWorldInscatter(vec2 UV, float Layer, out float R, out float CosViewZen
     const float dHdH = Rt * Rt - Rg * Rg;
 
     R = Layer / float(DIM_R - 1.0);
-    R = R * R;
     R = sqrt(Rg * Rg + R * R * dHdH) + (Layer == 0 ? 0.01 : ((Layer == DIM_R - 1) ? -0.001 : 0.0));
 
     float x = gl_GlobalInvocationID.x;

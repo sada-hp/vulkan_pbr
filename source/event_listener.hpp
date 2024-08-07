@@ -26,10 +26,10 @@ namespace GR
 
 		~EventListener();
 
-		std::vector<void(*)(GrayEngine*, GREvent::KeyPress)> keypress;
-		std::vector<void(*)(GrayEngine*, GREvent::MousePress)> mousepress;
-		std::vector<void(*)(GrayEngine*, GREvent::MousePosition)> mousemove;
-		std::vector<void(*)(GrayEngine*, GREvent::ScrollDelta)> scroll;
+		std::vector<void(*)(GrayEngine*, GREvent::KeyPress)> m_KeyPressEvents;
+		std::vector<void(*)(GrayEngine*, GREvent::MousePress)> m_MousePressEvents;
+		std::vector<void(*)(GrayEngine*, GREvent::MousePosition)> m_MouseMoveEvents;
+		std::vector<void(*)(GrayEngine*, GREvent::ScrollDelta)> m_ScrollEvents;
 
 		void Register(GrayEngine*, GREvent::KeyPress);
 

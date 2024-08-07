@@ -16,13 +16,14 @@ namespace GRComponents
 	template<typename Type, typename... Args>
 	struct Resource
 	{
+	public:
 		/*
 		* @param[in] resource - heap pointer to resource data
 		* @param[in] flagptr - if given, specifies a bool value, 
 		* which is gonna be updated to true each time 'Set' function is called for this resource
 		*/
 		Resource(TShared<Type> resource, bool* flagptr = nullptr)
-			: res(resource), dirty_flag(flagptr)
+			: m_Resource(resource), m_Dirty(flagptr)
 		{
 
 		}
@@ -33,10 +34,10 @@ namespace GRComponents
 		*/
 		GRAPI void Set(TShared<Type> r)
 		{
-			res = r;
+			m_Resource = r;
 
-			if (dirty_flag)
-				*dirty_flag = true;
+			if (m_Dirty)
+				*m_Dirty = true;
 		}
 		/*
 		* !@brief Gets the resource pointer
@@ -45,64 +46,78 @@ namespace GRComponents
 		*/
 		GRAPI TShared<Type> Get() const
 		{
-			return res;
+			return m_Resource;
 		}
 
 	private:
-		TShared<Type> res = nullptr;
-		bool* dirty_flag = nullptr;
+		TShared<Type> m_Resource = nullptr;
+		bool* m_Dirty = nullptr;
 	};
 	/*
 	* !@brief Albedo map defines color map in PBR pipeline
 	*/
 	struct AlbedoMap : Resource<Image>
 	{
+	public:
 		AlbedoMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
+	private:
 	};
 	/*
 	* !@brief Combined Normal(rgb) and Height(a) map used in PBR pipeline
 	*/
 	struct NormalDisplacementMap : Resource<Image>
 	{
+	public:
 		NormalDisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
+	private:
 	};
 	/*
 	* !@brief Combined AO(r), Roughness(g) and Metallic(b) map used in PBR pipeline
 	*/
 	struct AORoughnessMetallicMap : Resource<Image>
 	{
+	public:
 		AORoughnessMetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
+	private:
 	};
 	/*
 	* !@brief Multiplies roughness by this value
 	*/
 	struct RoughnessMultiplier
 	{
-		float R = 1.0;
+	public:
+		float Value = 1.0;
+	private:
 	};
 	/*
 	* !@brief If set to non zero, overrides metallic value of the material
 	*/
 	struct MetallicOverride
 	{
-		float M = 0.0;
+	public:
+		float Value = 0.0;
+	private:
 	};
 	/*
 	* !@brief Scale of Parallax mapping
 	*/
 	struct DisplacementScale
 	{
-		float H = 1.0;
+	public:
+		float Value = 1.0;
+	private:
 	};
 	/*
 	* !@brief Multiplies original color by this value
 	*/
-	struct Color
+	struct RGBColor
 	{
-		glm::vec3 RGB = glm::vec3(1.0);
+	public:
+		glm::vec3 Value = glm::vec3(1.0);
+	private:
 	};
 	/*
 	* !@brief Projection matrix

@@ -12,7 +12,7 @@
 #endif
 
 VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
-	: glfwWindow(window), registry(in_registry)
+	: m_GlfwWindow(window), m_Registry(in_registry)
 {
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	TVector<VkDescriptorPoolSize> poolSizes(3);
@@ -28,12 +28,12 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 
 	VkBool32 res = create_instance();
 	
-	res = (glfwCreateWindowSurface(instance, glfwWindow, VK_NULL_HANDLE, &surface) == VK_SUCCESS) & res;
+	res = (glfwCreateWindowSurface(m_VkInstance, m_GlfwWindow, VK_NULL_HANDLE, &m_Surface) == VK_SUCCESS) & res;
 
-	Scope.CreatePhysicalDevice(instance, extensions)
-		.CreateLogicalDevice(deviceFeatures, extensions, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT })
-		.CreateMemoryAllocator(instance)
-		.CreateSwapchain(surface)
+	m_Scope.CreatePhysicalDevice(m_VkInstance, m_ExtensionsList)
+		.CreateLogicalDevice(deviceFeatures, m_ExtensionsList, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT })
+		.CreateMemoryAllocator(m_VkInstance)
+		.CreateSwapchain(m_Surface)
 		.CreateDefaultRenderPass()
 		.CreateDescriptorPool(100u, poolSizes);
 	
@@ -41,26 +41,27 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	res = create_framebuffers() & res;
 	res = create_hdr_pipeline() & res;
 
-	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
+	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
 		.SetDepthRange(1e-2f, 1e4f);
 
-	presentBuffers.resize(swapchainImages.size());
-	presentSemaphores.resize(swapchainImages.size());
-	swapchainSemaphores.resize(swapchainImages.size());
-	presentFences.resize(swapchainImages.size());
-	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
-		.AllocateCommandBuffers(presentBuffers.size(), presentBuffers.data());
+	m_PresentBuffers.resize(m_SwapchainImages.size());
+	m_PresentSemaphores.resize(m_SwapchainImages.size());
+	m_SwapchainSemaphores.resize(m_SwapchainImages.size());
+	m_PresentFences.resize(m_SwapchainImages.size());
+	
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
 
-	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {
-			res = CreateSemaphore(Scope.GetDevice(),  &it) & res;
+	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
+			res = CreateSemaphore(m_Scope.GetDevice(),  &it) & res;
 	});
 
-	std::for_each(swapchainSemaphores.begin(), swapchainSemaphores.end(), [&, this](VkSemaphore& it) {
-		res = CreateSemaphore(Scope.GetDevice(), &it) & res;
+	std::for_each(m_SwapchainSemaphores.begin(), m_SwapchainSemaphores.end(), [&, this](VkSemaphore& it) {
+		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
 	});
 
-	std::for_each(presentFences.begin(), presentFences.end(), [&, this](VkFence& it) {
-		res = CreateFence(Scope.GetDevice(), &it, VK_TRUE) & res;
+	std::for_each(m_PresentFences.begin(), m_PresentFences.end(), [&, this](VkFence& it) {
+		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
 	res = prepare_renderer_resources() & res;
@@ -83,19 +84,19 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 100 }
 	};
 
-	::CreateDescriptorPool(Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 100, &imguiPool);
+	::CreateDescriptorPool(m_Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 100, &m_ImguiPool);
 
 	//this initializes imgui for Vulkan
 	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = instance;
-	init_info.PhysicalDevice = Scope.GetPhysicalDevice();
-	init_info.Device = Scope.GetDevice();
-	init_info.Queue = Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue();
-	init_info.DescriptorPool = imguiPool;
+	init_info.Instance = m_VkInstance;
+	init_info.PhysicalDevice = m_Scope.GetPhysicalDevice();
+	init_info.Device = m_Scope.GetDevice();
+	init_info.Queue = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue();
+	init_info.DescriptorPool = m_ImguiPool;
 	init_info.MinImageCount = 3;
 	init_info.ImageCount = 3;
 	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	init_info.RenderPass = Scope.GetRenderPass();
+	init_info.RenderPass = m_Scope.GetRenderPass();
 	init_info.Subpass = 1;
 
 	ImGui_ImplVulkan_Init(&init_info);
@@ -106,79 +107,80 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 
 VulkanBase::~VulkanBase() noexcept
 {
-	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
 
 #ifdef INCLUDE_GUI
 	ImGui_ImplVulkan_Shutdown();
-	::vkDestroyDescriptorPool(Scope.GetDevice(), imguiPool, VK_NULL_HANDLE);
+	::vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
-	skybox.reset();
-	volume.reset();
-	ubo.resize(0);
+	m_Atmospherics.reset();
+	m_Volumetrics.reset();
+	m_UBOBuffers.resize(0);
 
-	cloud_layer.reset();
-	CloudShape.reset();
-	CloudDetail.reset();
+	m_CloudLayer.reset();
+	m_VolumeShape.reset();
+	m_VolumeDetail.reset();
 
-	Transmittance.reset();
-	ScatteringLUT.reset();
-	IrradianceLUT.reset();
+	m_TransmittanceLUT.reset();
+	m_ScatteringLUT.reset();
+	m_IrradianceLUT.reset();
 
-	defaultWhite.reset();
-	defaultBlack.reset();
-	defaultNormal.reset();
-	defaultARM.reset();
+	m_DefaultWhite.reset();
+	m_DefaultBlack.reset();
+	m_DefaultNormal.reset();
+	m_DefaultARM.reset();
 
-	registry.clear<PBRObject,
+	m_Registry.clear<PBRObject,
 		GRComponents::AlbedoMap,
 		GRComponents::NormalDisplacementMap,
 		GRComponents::AORoughnessMetallicMap>();
 
-	std::erase_if(presentFences, [&, this](VkFence& it) {
-			vkDestroyFence(Scope.GetDevice(), it, VK_NULL_HANDLE);
+	std::erase_if(m_PresentFences, [&, this](VkFence& it) {
+			vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 			return true;
 	});
-	std::erase_if(swapchainSemaphores, [&, this](VkSemaphore& it) {
-		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
+	std::erase_if(m_SwapchainSemaphores, [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 		return true;
 	});
-	std::erase_if(presentSemaphores, [&, this](VkSemaphore& it) {
-			vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
+	std::erase_if(m_PresentSemaphores, [&, this](VkSemaphore& it) {
+			vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 			return true;
 	});
-	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT) .FreeCommandBuffers(presentBuffers.size(), presentBuffers.data());
-	std::erase_if(framebuffers, [&, this](VkFramebuffer& fb) {
-			vkDestroyFramebuffer(Scope.GetDevice(), fb, VK_NULL_HANDLE);
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT) 
+		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
+	std::erase_if(m_Framebuffers, [&, this](VkFramebuffer& fb) {
+			vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 			return true;
 	});
-	std::erase_if(swapchainViews, [&, this](VkImageView& view) {
-			vkDestroyImageView(Scope.GetDevice(), view, VK_NULL_HANDLE);
+	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
+			vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 			return true;
 	});
-	depthAttachments.clear();
-	hdrAttachments.clear();
-	HDRPipelines.resize(0);
-	HDRDescriptors.resize(0);
-	UBOSet.resize(0);
+	m_DepthAttachments.clear();
+	m_HdrAttachments.clear();
+	m_HDRPipelines.resize(0);
+	m_HDRDescriptors.resize(0);
+	m_UBOSets.resize(0);
 
-	Scope.Destroy();
+	m_Scope.Destroy();
 
-	vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
-	vkDestroyInstance(instance, VK_NULL_HANDLE);
+	vkDestroySurfaceKHR(m_VkInstance, m_Surface, VK_NULL_HANDLE);
+	vkDestroyInstance(m_VkInstance, VK_NULL_HANDLE);
 }
 
 void VulkanBase::_step(float DeltaTime)
 {
-	if (Scope.GetSwapchainExtent().width == 0 || Scope.GetSwapchainExtent().height == 0)
+	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
 		return;
 
-	vkWaitForFences(Scope.GetDevice(), 1, &presentFences[swapchain_index], VK_TRUE, UINT64_MAX);
-	vkResetFences(Scope.GetDevice(), 1, &presentFences[swapchain_index]);
+	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex], VK_TRUE, UINT64_MAX);
+	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex]);
 
-	vkAcquireNextImageKHR(Scope.GetDevice(), Scope.GetSwapchain(), UINT64_MAX, swapchainSemaphores[swapchain_index], VK_NULL_HANDLE, &swapchain_index);
+	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], VK_NULL_HANDLE, &m_SwapchainIndex);
 
-	const VkCommandBuffer& cmd = presentBuffers[swapchain_index];
+	const VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -186,12 +188,12 @@ void VulkanBase::_step(float DeltaTime)
 
 	//UBO
 	{
-		TMat4 view_matrix = camera.get_view_matrix();
-		TMat4 projection_matrix = camera.get_projection_matrix();
+		TMat4 view_matrix = m_Camera.get_view_matrix();
+		TMat4 projection_matrix = m_Camera.get_projection_matrix();
 		TMat4 view_proj_matrix = projection_matrix * view_matrix;
-		TVec4 CameraPosition = TVec4(camera.View.GetOffset(), 1.0);
-		TVec3 Sun = glm::normalize(SunDirection);
-		TVec2 ScreenSize = TVec2(static_cast<float>(Scope.GetSwapchainExtent().width), static_cast<float>(Scope.GetSwapchainExtent().height));
+		TVec4 CameraPosition = TVec4(m_Camera.View.GetOffset(), 1.0);
+		TVec3 Sun = glm::normalize(m_SunDirection);
+		TVec2 ScreenSize = TVec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
 		float Time = glfwGetTime();
 
 		UniformBuffer Uniform
@@ -205,7 +207,7 @@ void VulkanBase::_step(float DeltaTime)
 			ScreenSize
 		};
 
-		ubo[swapchain_index]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
+		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
 	//Draw
@@ -217,45 +219,45 @@ void VulkanBase::_step(float DeltaTime)
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.framebuffer = framebuffers[swapchain_index];
-		renderPassInfo.renderPass = Scope.GetRenderPass();
+		renderPassInfo.framebuffer = m_Framebuffers[m_SwapchainIndex];
+		renderPassInfo.renderPass = m_Scope.GetRenderPass();
 		renderPassInfo.renderArea.offset = { 0, 0 }; 
-		renderPassInfo.renderArea.extent = Scope.GetSwapchainExtent();
+		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
 		renderPassInfo.clearValueCount = 3;
 		renderPassInfo.pClearValues = clearValues;
 
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = (float)Scope.GetSwapchainExtent().width;
-		viewport.height = (float)Scope.GetSwapchainExtent().height;
+		viewport.width = (float)m_Scope.GetSwapchainExtent().width;
+		viewport.height = (float)m_Scope.GetSwapchainExtent().height;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent = Scope.GetSwapchainExtent();
+		scissor.extent = m_Scope.GetSwapchainExtent();
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		render_objects(cmd);
 
-		UBOSet[swapchain_index]->BindSet(0, cmd, *skybox->pipeline);
-		skybox->descriptorSet->BindSet(1, cmd, *skybox->pipeline);
-		skybox->pipeline->BindPipeline(cmd);
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Atmospherics->pipeline);
+		m_Atmospherics->descriptorSet->BindSet(1, cmd, *m_Atmospherics->pipeline);
+		m_Atmospherics->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 36, 1, 0, 0);
 
-		UBOSet[swapchain_index]->BindSet(0, cmd, *volume->pipeline);
-		volume->descriptorSet->BindSet(1, cmd, *volume->pipeline);
-		volume->pipeline->BindPipeline(cmd);
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->pipeline->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
-		HDRDescriptors[swapchain_index]->BindSet(0, cmd, *HDRPipelines[swapchain_index]);
-		HDRPipelines[swapchain_index]->BindPipeline(cmd);
+		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_HDRPipelines[m_SwapchainIndex]);
+		m_HDRPipelines[m_SwapchainIndex]->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 #ifdef INCLUDE_GUI
@@ -267,8 +269,8 @@ void VulkanBase::_step(float DeltaTime)
 	}
 
 	VkSubmitInfo submitInfo{};
-	TArray<VkSemaphore, 1> waitSemaphores   = { swapchainSemaphores[swapchain_index] };
-	TArray<VkSemaphore, 1> signalSemaphores = { presentSemaphores[swapchain_index] };
+	TArray<VkSemaphore, 1> waitSemaphores   = { m_SwapchainSemaphores[m_SwapchainIndex] };
+	TArray<VkSemaphore, 1> signalSemaphores = { m_PresentSemaphores[m_SwapchainIndex] };
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -276,11 +278,11 @@ void VulkanBase::_step(float DeltaTime)
 	submitInfo.pWaitSemaphores = waitSemaphores.data();
 	submitInfo.pWaitDstStageMask = waitStages;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &presentBuffers[swapchain_index];
+	submitInfo.pCommandBuffers = &m_PresentBuffers[m_SwapchainIndex];
 	submitInfo.signalSemaphoreCount = signalSemaphores.size();
 	submitInfo.pSignalSemaphores = signalSemaphores.data();
 
-	VkResult res = vkQueueSubmit(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, presentFences[swapchain_index]);
+	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
@@ -289,78 +291,78 @@ void VulkanBase::_step(float DeltaTime)
 	presentInfo.waitSemaphoreCount = signalSemaphores.size();
 	presentInfo.pWaitSemaphores = signalSemaphores.data();
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &Scope.GetSwapchain();
-	presentInfo.pImageIndices = &swapchain_index;
+	presentInfo.pSwapchains = &m_Scope.GetSwapchain();
+	presentInfo.pImageIndices = &m_SwapchainIndex;
 	presentInfo.pResults = VK_NULL_HANDLE;
 
-	vkQueuePresentKHR(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), &presentInfo);
-	swapchain_index = (swapchain_index + 1) % swapchainImages.size();
+	vkQueuePresentKHR(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), &presentInfo);
+	m_SwapchainIndex = (m_SwapchainIndex + 1) % m_SwapchainImages.size();
 }
 
 void VulkanBase::_handleResize()
 {
-	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
 
-	std::erase_if(framebuffers, [&, this](VkFramebuffer& fb) {
-		vkDestroyFramebuffer(Scope.GetDevice(), fb, VK_NULL_HANDLE);
+	std::erase_if(m_Framebuffers, [&, this](VkFramebuffer& fb) {
+		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 		return true;
 	});
-	std::erase_if(swapchainViews, [&, this](VkImageView& view) {
-		vkDestroyImageView(Scope.GetDevice(), view, VK_NULL_HANDLE);
+	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
+		vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 		return true;
 	});
-	depthAttachments.resize(0);
-	swapchainImages.resize(0);
-	hdrAttachments.resize(0);
-	HDRPipelines.resize(0);
-	HDRDescriptors.resize(0);
+	m_DepthAttachments.resize(0);
+	m_SwapchainImages.resize(0);
+	m_HdrAttachments.resize(0);
+	m_HDRPipelines.resize(0);
+	m_HDRDescriptors.resize(0);
 
-	Scope.RecreateSwapchain(surface);
+	m_Scope.RecreateSwapchain(m_Surface);
 
-	if (Scope.GetSwapchain() == VK_NULL_HANDLE)
+	if (m_Scope.GetSwapchain() == VK_NULL_HANDLE)
 		return;
 
 	create_swapchain_images();
 	create_framebuffers();
 	create_hdr_pipeline();
 
-	camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(Scope.GetSwapchainExtent().width) / static_cast<float>(Scope.GetSwapchainExtent().height))
+	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
 		.SetDepthRange(1e-2f, 1e4f);
 
-	std::for_each(presentSemaphores.begin(), presentSemaphores.end(), [&, this](VkSemaphore& it) {
-		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
-		CreateSemaphore(Scope.GetDevice(), &it);
+	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
+		CreateSemaphore(m_Scope.GetDevice(), &it);
 	});
 
-	std::for_each(swapchainSemaphores.begin(), swapchainSemaphores.end(), [&, this](VkSemaphore& it) {
-		vkDestroySemaphore(Scope.GetDevice(), it, VK_NULL_HANDLE);
-		CreateSemaphore(Scope.GetDevice(), &it);
+	std::for_each(m_SwapchainSemaphores.begin(), m_SwapchainSemaphores.end(), [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
+		CreateSemaphore(m_Scope.GetDevice(), &it);
 	});
 
-	swapchain_index = 0;
+	m_SwapchainIndex = 0;
 
 	//it shouldn't change afaik, but better to keep it under control
-	assert(swapchainImages.size() == presentBuffers.size());
+	assert(m_SwapchainImages.size() == m_PresentBuffers.size());
 }
 
 TAuto<VulkanImage> VulkanBase::_loadImage(const std::string& path, VkFormat format)
 {
-	return GRVkFile::_importImage(Scope, path.c_str(), format, 0);
+	return GRVkFile::_importImage(m_Scope, path.c_str(), format, 0);
 }
 
 void VulkanBase::Wait() const
 {
-	vkWaitForFences(Scope.GetDevice(), presentFences.size(), presentFences.data(), VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
 }
 
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
-	cloud_layer->Update(&settings, sizeof(CloudLayerProfile));
+	m_CloudLayer->Update(&settings, sizeof(CloudLayerProfile));
 }
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
 {
-	auto view = registry.view<PBRObject, GRComponents::Transform>();
+	auto view = m_Registry.view<PBRObject, GRComponents::Transform>();
 
 	VkDeviceSize offsets[] = { 0 };
 	for (const auto& [ent, gro, world] : view.each())
@@ -372,12 +374,12 @@ void VulkanBase::render_objects(VkCommandBuffer cmd)
 
 		PBRConstants C{};
 		C.World = world.matrix;
-		C.Color = glm::vec4(registry.get<GRComponents::Color>(ent).RGB, 1.0);
-		C.RoughnessMultiplier = registry.get<GRComponents::RoughnessMultiplier>(ent).R;
-		C.Metallic = registry.get<GRComponents::MetallicOverride>(ent).M;
-		C.HeightScale = registry.get<GRComponents::DisplacementScale>(ent).H;
+		C.Color = glm::vec4(m_Registry.get<GRComponents::RGBColor>(ent).Value, 1.0);
+		C.RoughnessMultiplier = m_Registry.get<GRComponents::RoughnessMultiplier>(ent).Value;
+		C.Metallic = m_Registry.get<GRComponents::MetallicOverride>(ent).Value;
+		C.HeightScale = m_Registry.get<GRComponents::DisplacementScale>(ent).Value;
 
-		UBOSet[swapchain_index]->BindSet(0, cmd, *gro.pipeline);
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *gro.pipeline);
 		gro.descriptorSet->BindSet(1, cmd, *gro.pipeline);
 		gro.pipeline->PushConstants(cmd, &C.World, sizeof(PBRConstants::World), 0u, VK_SHADER_STAGE_VERTEX_BIT);
 		gro.pipeline->PushConstants(cmd, &C.Color, sizeof(PBRConstants) - sizeof(PBRConstants::World), offsetof(PBRConstants, Color), VK_SHADER_STAGE_FRAGMENT_BIT);

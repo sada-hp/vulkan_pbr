@@ -23,6 +23,7 @@ namespace GR
 {
 	struct Camera
 	{
+	public:
 		GRComponents::Projection Projection = {};
 		GRComponents::Transform View = {};
 
@@ -48,44 +49,45 @@ namespace GR
 
 class VulkanBase
 {
-	TVector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	TVector<VkImage> swapchainImages = {};
-	TVector<VkImageView> swapchainViews = {};
-	TVector<TAuto<VulkanImage>> depthAttachments = {};
-	TVector<TAuto<VulkanImage>> hdrAttachments = {};
-	TVector<VkFramebuffer> framebuffers = {};
-	TVector<VkFence> presentFences = {};
-	TVector<VkSemaphore> presentSemaphores = {};
-	TVector<VkSemaphore> swapchainSemaphores = {};
-	TVector<VkCommandBuffer> presentBuffers = {};
-	TVector<TAuto<Pipeline>> HDRPipelines = {};
-	TVector<TAuto<DescriptorSet>> HDRDescriptors = {};
+private:
+	TVector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	TVector<VkImage> m_SwapchainImages = {};
+	TVector<VkImageView> m_SwapchainViews = {};
+	TVector<TAuto<VulkanImage>> m_DepthAttachments = {};
+	TVector<TAuto<VulkanImage>> m_HdrAttachments = {};
+	TVector<VkFramebuffer> m_Framebuffers = {};
+	TVector<VkFence> m_PresentFences = {};
+	TVector<VkSemaphore> m_PresentSemaphores = {};
+	TVector<VkSemaphore> m_SwapchainSemaphores = {};
+	TVector<VkCommandBuffer> m_PresentBuffers = {};
+	TVector<TAuto<Pipeline>> m_HDRPipelines = {};
+	TVector<TAuto<DescriptorSet>> m_HDRDescriptors = {};
 
-	VkInstance instance = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	VkInstance m_VkInstance = VK_NULL_HANDLE;
+	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
 
-	RenderScope Scope = {};
-	GLFWwindow* glfwWindow = VK_NULL_HANDLE;
+	RenderScope m_Scope = {};
+	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
-	TVector<TAuto<Buffer>> ubo = {};
-	TAuto<Buffer> cloud_layer = {};
+	TVector<TAuto<Buffer>> m_UBOBuffers = {};
+	TAuto<Buffer> m_CloudLayer = {};
 
-	TVector<TAuto<DescriptorSet>> UBOSet = {};
+	TVector<TAuto<DescriptorSet>> m_UBOSets = {};
 
-	TAuto<GraphicsObject> volume = VK_NULL_HANDLE;
-	TAuto<GraphicsObject> skybox = VK_NULL_HANDLE;
+	TAuto<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
+	TAuto<GraphicsObject> m_Atmospherics = VK_NULL_HANDLE;
 
-	TAuto<VulkanImage> CloudShape = VK_NULL_HANDLE;
-	TAuto<VulkanImage> CloudDetail = VK_NULL_HANDLE;
+	TAuto<VulkanImage> m_VolumeShape = VK_NULL_HANDLE;
+	TAuto<VulkanImage> m_VolumeDetail = VK_NULL_HANDLE;
 
-	TAuto<VulkanImage> ScatteringLUT = VK_NULL_HANDLE;
-	TAuto<VulkanImage> IrradianceLUT = VK_NULL_HANDLE;
-	TAuto<VulkanImage> Transmittance = VK_NULL_HANDLE;
+	TAuto<VulkanImage> m_ScatteringLUT = VK_NULL_HANDLE;
+	TAuto<VulkanImage> m_IrradianceLUT = VK_NULL_HANDLE;
+	TAuto<VulkanImage> m_TransmittanceLUT = VK_NULL_HANDLE;
 
-	uint32_t swapchain_index = 0;
+	uint32_t m_SwapchainIndex = 0;
 
 #ifdef INCLUDE_GUI
-	VkDescriptorPool imguiPool = VK_NULL_HANDLE;
+	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
 #endif
 
 public:
@@ -140,16 +142,16 @@ public:
 	/*
 	* !@brief Should be modified to control the scene
 	*/
-	GR::Camera camera = {};
-	TVec3 SunDirection = glm::normalize(TVec3(1.0));
+	GR::Camera m_Camera = {};
+	TVec3 m_SunDirection = glm::normalize(TVec3(1.0));
 
 private:
-	entt::registry& registry;
+	entt::registry& m_Registry;
 
-	TShared<VulkanImage> defaultWhite = VK_NULL_HANDLE;
-	TShared<VulkanImage> defaultBlack = VK_NULL_HANDLE;
-	TShared<VulkanImage> defaultNormal = VK_NULL_HANDLE;
-	TShared<VulkanImage> defaultARM = VK_NULL_HANDLE;
+	TShared<VulkanImage> m_DefaultWhite = VK_NULL_HANDLE;
+	TShared<VulkanImage> m_DefaultBlack = VK_NULL_HANDLE;
+	TShared<VulkanImage> m_DefaultNormal = VK_NULL_HANDLE;
+	TShared<VulkanImage> m_DefaultARM = VK_NULL_HANDLE;
 
 	// !@brief Defined in initialization.cpp
 	VkBool32 create_instance();
@@ -188,8 +190,8 @@ private:
 	void render_objects(VkCommandBuffer cmd);
 
 #ifdef VALIDATION
-	VkDebugUtilsMessengerEXT debugMessenger;
-	const TVector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+	VkDebugUtilsMessengerEXT m_DebugMessenger;
+	const TVector<const char*> m_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
 
 	// !@brief Defined in debug_layers.cpp
 	VkResult createDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);

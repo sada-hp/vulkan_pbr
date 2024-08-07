@@ -36,7 +36,7 @@ void VulkanBase::setupDebugMessenger()
 	VkDebugUtilsMessengerCreateInfoEXT createInfo;
 	populateDebugMessengerCreateInfo(createInfo);
 
-	if (createDebugUtilsMessengerEXT(instance, &createInfo, VK_NULL_HANDLE, &debugMessenger) != VK_SUCCESS) {
+	if (createDebugUtilsMessengerEXT(m_VkInstance, &createInfo, VK_NULL_HANDLE, &m_DebugMessenger) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug messenger!");
 	}
 }
@@ -49,7 +49,7 @@ VkBool32 VulkanBase::checkValidationLayerSupport() const
 	TVector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-	for (const char* layerName : validationLayers)
+	for (const char* layerName : m_ValidationLayers)
 	{
 		VkBool32 layerFound = false;
 

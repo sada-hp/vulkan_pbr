@@ -10,9 +10,10 @@ namespace GR
 {
 	class Window
 	{
+	private:
 		friend class GrayEngine;
 
-		GLFWwindow* glfwWindow;
+		GLFWwindow* m_GlfwWindow;
 
 	protected:
 		Window(const char* title, int width, int height);

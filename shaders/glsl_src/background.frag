@@ -6,7 +6,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 1, binding = 1) uniform sampler3D InscatteringLUT;
 
-vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View, inout bool ShowSun)
+vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View)
 {
     const float Re = length(Eye);
     float DotEV = dot(Eye, View) / Re;
@@ -52,9 +52,8 @@ void main()
     vec3 S = normalize(ubo.SunDirection.xyz);
     vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
     
-    bool ShowSun = true;
-    vec3 SkyColor = SkyRadiance(S, Eye, V, ShowSun);
-    vec3 SunColor = ShowSun ? GetSunColor(Eye, V, S) : vec3(0.0);
+    vec3 SkyColor = SkyRadiance(S, Eye, V);
+    vec3 SunColor = GetSunColor(Eye, V, S);
 
     vec3 L = SkyColor + SunColor;
     outColor = vec4(L, 0.0);

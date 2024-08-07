@@ -15,10 +15,10 @@ namespace GR
 		assert(glfwVulkanSupported());
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-		glfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
+		m_GlfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
 
 #ifdef INCLUDE_GUI
-		ImGui_ImplGlfw_InitForVulkan(glfwWindow, false);
+		ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
 #endif
 	}
 
@@ -28,64 +28,64 @@ namespace GR
 		ImGui_ImplGlfw_Shutdown();
 #endif
 
-		glfwDestroyWindow(glfwWindow);
+		glfwDestroyWindow(m_GlfwWindow);
 		glfwTerminate();
 	}
 
 	void Window::SetTitle(const char* title)
 	{
-		glfwSetWindowTitle(glfwWindow, title);
+		glfwSetWindowTitle(m_GlfwWindow, title);
 	}
 
 	void Window::SetWindowSize(int width, int height)
 	{
-		glfwSetWindowSize(glfwWindow, width, height);
+		glfwSetWindowSize(m_GlfwWindow, width, height);
 	}
 
 	void Window::MinimizeWindow()
 	{
-		glfwIconifyWindow(glfwWindow);
+		glfwIconifyWindow(m_GlfwWindow);
 	}
 
 	TIVec2 Window::GetWindowSize() const
 	{
 		int width = 0, height = 0;
-		glfwGetWindowSize(glfwWindow, &width, &height);
+		glfwGetWindowSize(m_GlfwWindow, &width, &height);
 		return TIVec2{ width, height };
 	}
 
 	TVec2 Window::GetCursorPos() const
 	{
 		double xpos = 0.0, ypos = 0.0;
-		glfwGetCursorPos(glfwWindow, &xpos, &ypos);
+		glfwGetCursorPos(m_GlfwWindow, &xpos, &ypos);
 		return TVec2{ xpos, ypos };
 	}
 
 	GRAPI double Window::GetAspectRatio() const
 	{
 		int width = 0, height = 0;
-		glfwGetWindowSize(glfwWindow, &width, &height);
+		glfwGetWindowSize(m_GlfwWindow, &width, &height);
 
 		return double(width) / double(height);
 	}
 
 	void Window::SetCursorPos(double xpos, double ypos)
 	{
-		glfwSetCursorPos(glfwWindow, xpos, ypos);
+		glfwSetCursorPos(m_GlfwWindow, xpos, ypos);
 	}
 
 	void Window::ShowCursor(bool bShow)
 	{
-		glfwSetInputMode(glfwWindow, GLFW_CURSOR, bShow ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+		glfwSetInputMode(m_GlfwWindow, GLFW_CURSOR, bShow ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
 	}
 
 	void Window::DisableCursor(bool bDisabled)
 	{
-		glfwSetInputMode(glfwWindow, GLFW_CURSOR, bDisabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+		glfwSetInputMode(m_GlfwWindow, GLFW_CURSOR, bDisabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
 	}
 
 	void Window::SetAttribute(int attrib, int value)
 	{
-		glfwSetWindowAttrib(glfwWindow, attrib, value);
+		glfwSetWindowAttrib(m_GlfwWindow, attrib, value);
 	}
 };

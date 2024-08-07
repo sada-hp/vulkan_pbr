@@ -40,48 +40,48 @@ public:
 
 	VkBool32 IsReadyToUse() const;
 
-	inline const VkDevice& GetDevice() const { return logicalDevice; };
+	inline const VkDevice& GetDevice() const { return m_LogicalDevice; };
 
-	inline const VmaAllocator& GetAllocator() const { return allocator; };
+	inline const VmaAllocator& GetAllocator() const { return m_Allocator; };
 
-	inline const VkPhysicalDevice& GetPhysicalDevice() const { return physicalDevice; };
+	inline const VkPhysicalDevice& GetPhysicalDevice() const { return m_PhysicalDevice; };
 
-	inline const VkRenderPass& GetRenderPass() const { return renderPass; };
+	inline const VkRenderPass& GetRenderPass() const { return m_RenderPass; };
 
-	inline const VkSwapchainKHR& GetSwapchain() const { return swapchain; };
+	inline const VkSwapchainKHR& GetSwapchain() const { return m_Swapchain; };
 
-	inline const VkExtent2D& GetSwapchainExtent() const { return swapchainExtent; };
+	inline const VkExtent2D& GetSwapchainExtent() const { return m_SwapchainExtent; };
 
-	inline const VkDescriptorPool& GetDescriptorPool() const { return descriptorPool; };
+	inline const VkDescriptorPool& GetDescriptorPool() const { return m_DescriptorPool; };
 
 	inline const VkFormat& GetColorFormat() const { return swapchainFormat; };
 
 	inline const VkFormat& GetDepthFormat() const { return depthFormat; };
 
-	inline const uint32_t& GetMaxFramesInFlight() const { return framesInFlight; };
+	inline const uint32_t& GetMaxFramesInFlight() const { return m_FramesInFlight; };
 
 	const VkSampler& GetSampler(ESamplerType Type) const;
 
 	inline const Queue& GetQueue(VkQueueFlagBits Type) const 
 	{
-		assert(available_queues.contains(Type));
-		return available_queues.at(Type);
+		assert(m_Queues.contains(Type));
+		return m_Queues.at(Type);
 	}
 
 private:
-	std::unordered_map<VkQueueFlagBits, Queue> available_queues;
-	mutable std::unordered_map<ESamplerType, VkSampler> samplers;
+	std::unordered_map<VkQueueFlagBits, Queue> m_Queues;
+	mutable std::unordered_map<ESamplerType, VkSampler> m_Samplers;
 
-	uint32_t framesInFlight = 1u;
+	uint32_t m_FramesInFlight = 1u;
 
-	VkDevice logicalDevice = VK_NULL_HANDLE;
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VmaAllocator allocator = VK_NULL_HANDLE;
-	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-	VkRenderPass renderPass = VK_NULL_HANDLE;
-	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+	VkDevice m_LogicalDevice = VK_NULL_HANDLE;
+	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+	VmaAllocator m_Allocator = VK_NULL_HANDLE;
+	VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
+	VkRenderPass m_RenderPass = VK_NULL_HANDLE;
+	VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
 
 	const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
-	VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
-	VkExtent2D swapchainExtent = { 0, 0 };
+	const VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	VkExtent2D m_SwapchainExtent = { 0, 0 };
 };
