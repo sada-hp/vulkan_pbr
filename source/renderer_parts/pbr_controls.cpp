@@ -19,7 +19,7 @@ entt::entity VulkanBase::AddMesh(const std::string& mesh_path)
 	gro.mesh = mesh_path != "" ? GRVkFile::_importMesh(m_Scope, mesh_path.c_str())
 		: GRShape::Cube().Generate(m_Scope);
 
-	gro.descriptorSet = create_pbr_set(*m_DefaultWhite, *m_DefaultNormal, *m_DefaultARM);
+	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
 
 	return ent;
@@ -40,7 +40,7 @@ entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
 	m_Registry.emplace_or_replace<GRComponents::AORoughnessMetallicMap>(ent, m_DefaultWhite, &gro.dirty);
 
 	gro.mesh = descriptor.Generate(m_Scope);
-	gro.descriptorSet = create_pbr_set(*m_DefaultWhite, *m_DefaultNormal, *m_DefaultARM);
+	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
 
 	return ent;
@@ -48,27 +48,30 @@ entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
 
 void VulkanBase::update_pipeline(entt::entity ent)
 {
-	VulkanImage* albedo = static_cast<VulkanImage*>(m_Registry.get<GRComponents::AlbedoMap>(ent).Get().get());
-	VulkanImage* nh = static_cast<VulkanImage*>(m_Registry.get<GRComponents::NormalDisplacementMap>(ent).Get().get());
-	VulkanImage* arm = static_cast<VulkanImage*>(m_Registry.get<GRComponents::AORoughnessMetallicMap>(ent).Get().get());
+	VulkanTexture* albedo = static_cast<VulkanTexture*>(m_Registry.get<GRComponents::AlbedoMap>(ent).Get().get());
+	VulkanTexture* nh = static_cast<VulkanTexture*>(m_Registry.get<GRComponents::NormalDisplacementMap>(ent).Get().get());
+	VulkanTexture* arm = static_cast<VulkanTexture*>(m_Registry.get<GRComponents::AORoughnessMetallicMap>(ent).Get().get());
 
 	PBRObject& gro = m_Registry.get<PBRObject>(ent);
-	gro.descriptorSet = create_pbr_set(*albedo, *nh, *arm);
+	gro.descriptorSet = create_pbr_set(*albedo->View, *nh->View, *arm->View);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
 	gro.dirty = false;
 }
 
-TAuto<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImage& albedo
-	, const VulkanImage& nh
-	, const VulkanImage& arm)
+TAuto<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImageView& albedo
+	, const VulkanImageView& nh
+	, const VulkanImageView& arm)
 {
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
+
 	return DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *m_TransmittanceLUT)
-		.AddImageSampler(2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *m_IrradianceLUT)
-		.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, *m_ScatteringLUT)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, albedo)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, nh)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, arm)
+		.AddImageSampler(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
 

@@ -3,10 +3,10 @@
 
 VkBool32 VulkanBase::atmosphere_precompute()
 {
-	TAuto<VulkanImage> DeltaE;
-	TAuto<VulkanImage> DeltaSR;
-	TAuto<VulkanImage> DeltaSM;
-	TAuto<VulkanImage> DeltaJ;
+	VulkanTexture DeltaE{};
+	VulkanTexture DeltaSR{};
+	VulkanTexture DeltaSM{};
+	VulkanTexture DeltaJ{};
 
 	TAuto<DescriptorSet> TrDSO;
 	TAuto<DescriptorSet> DeltaEDSO;
@@ -41,7 +41,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	imageCI.arrayLayers = 1;
 	imageCI.extent = { 256, 64, 1u };
 	imageCI.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageCI.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageCI.mipLevels = 1;
 	imageCI.flags = 0;
 	imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -59,14 +59,13 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VmaAllocationCreateInfo imageAlloc{};
 	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	m_TransmittanceLUT = std::make_unique<VulkanImage>(m_Scope);
-	m_TransmittanceLUT->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp);
+
+	m_TransmittanceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	m_TransmittanceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TransmittanceLUT.Image);
 
 	TrDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_TransmittanceLUT)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView())
 		.Allocate(m_Scope);
 
 	GenTrLUT = ComputePipelineDescriptor()
@@ -75,15 +74,12 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Construct(m_Scope);
 
 	imageCI.extent = { 64u, 16u, 1u };
-	DeltaE = std::make_unique<VulkanImage>(m_Scope);
-	DeltaE->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	DeltaE.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	DeltaE.View = std::make_unique<VulkanImageView>(m_Scope, *DeltaE.Image);
 
 	DeltaEDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TransmittanceLUT)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenDeltaELUT = ComputePipelineDescriptor()
@@ -91,31 +87,22 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.AddDescriptorLayout(DeltaEDSO->GetLayout())
 		.Construct(m_Scope);
 
-	m_IrradianceLUT = std::make_unique<VulkanImage>(m_Scope);
-	m_IrradianceLUT->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	m_IrradianceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	m_IrradianceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_IrradianceLUT.Image);
 
 	imageCI.imageType = VK_IMAGE_TYPE_3D;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_3D;
 	imageCI.extent = { 256u, 128u, 32u };
-	DeltaSR = std::make_unique<VulkanImage>(m_Scope);
-	DeltaSR->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	DeltaSR.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	DeltaSR.View = std::make_unique<VulkanImageView>(m_Scope, *DeltaSR.Image);
 
-	DeltaSM = std::make_unique<VulkanImage>(m_Scope);
-	DeltaSM->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	DeltaSM.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	DeltaSM.View = std::make_unique<VulkanImageView>(m_Scope, *DeltaSM.Image);
 
 	DeltaSRSMDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_TransmittanceLUT)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView())
+		.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView())
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenDeltaSRSMLUT = ComputePipelineDescriptor()
@@ -123,16 +110,13 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.AddDescriptorLayout(DeltaSRSMDSO->GetLayout())
 		.Construct(m_Scope);
 
-	m_ScatteringLUT = std::make_unique<VulkanImage>(m_Scope);
-	m_ScatteringLUT->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	m_ScatteringLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	m_ScatteringLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_ScatteringLUT.Image);
 
 	SingleScatterDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_ScatteringLUT)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenSingleScatterLUT = ComputePipelineDescriptor()
@@ -140,18 +124,15 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.AddDescriptorLayout(SingleScatterDSO->GetLayout())
 		.Construct(m_Scope);
 
-	DeltaJ = std::make_unique<VulkanImage>(m_Scope);
-	DeltaJ->CreateImage(imageCI, imageAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::PointClamp)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	DeltaJ.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	DeltaJ.View = std::make_unique<VulkanImageView>(m_Scope, *DeltaJ.Image);
 
 	DeltaJDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TransmittanceLUT)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
-		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaJ.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView(), ImageSampler)
+		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
+		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenDeltaJLUT = ComputePipelineDescriptor()
@@ -161,9 +142,9 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Construct(m_Scope);
 
 	DeltaEnDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSM)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenDeltaEnLUT = ComputePipelineDescriptor()
@@ -173,9 +154,9 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Construct(m_Scope);
 
 	DeltaSDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TransmittanceLUT)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaJ)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaJ.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	GenDeltaSLUT = ComputePipelineDescriptor()
@@ -184,8 +165,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Construct(m_Scope);
 
 	AddEDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_IrradianceLUT)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaE)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	AddE = ComputePipelineDescriptor()
@@ -194,8 +175,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Construct(m_Scope);
 
 	AddSDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_ScatteringLUT)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, *DeltaSR)
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView())
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
 	AddS = ComputePipelineDescriptor()
@@ -206,89 +187,84 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VkCommandBuffer cmd;
 	const Queue& Queue = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
 
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_COMPUTE_BIT;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_COMPUTE_BIT;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-	barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
 	Queue.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 
 	GenTrLUT->BindPipeline(cmd);
 	TrDSO->BindSet(0, cmd, *GenTrLUT);
-	vkCmdDispatch(cmd, m_TransmittanceLUT->GetExtent().width / 8u + uint32_t(m_TransmittanceLUT->GetExtent().width % 8u > 0)
-		, m_TransmittanceLUT->GetExtent().height / 8u + uint32_t(m_TransmittanceLUT->GetExtent().height % 8u > 0)
+	vkCmdDispatch(cmd, m_TransmittanceLUT.Image->GetExtent().width / 8u + uint32_t(m_TransmittanceLUT.Image->GetExtent().width % 8u > 0)
+		, m_TransmittanceLUT.Image->GetExtent().height / 8u + uint32_t(m_TransmittanceLUT.Image->GetExtent().height % 8u > 0)
 		, 1u);
 
-	barrier.image = m_TransmittanceLUT->GetImage();
-	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	m_TransmittanceLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 	GenDeltaELUT->BindPipeline(cmd);
 	DeltaEDSO->BindSet(0, cmd, *GenDeltaELUT);
-	vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
-		DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().height % 8u > 0),
+	vkCmdDispatch(cmd, DeltaE.Image->GetExtent().width / 8u + uint32_t(DeltaE.Image->GetExtent().width % 8u > 0),
+		DeltaE.Image->GetExtent().height / 8u + uint32_t(DeltaE.Image->GetExtent().height % 8u > 0),
 		1u);
 
-	barrier.image = DeltaE->GetImage();
-	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	DeltaE.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 	GenDeltaSRSMLUT->BindPipeline(cmd);
 	DeltaSRSMDSO->BindSet(0, cmd, *GenDeltaSRSMLUT);
-	vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
-		DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
-		DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
+	vkCmdDispatch(cmd, DeltaSR.Image->GetExtent().width / 4u + uint32_t(DeltaSR.Image->GetExtent().width % 4u > 0),
+		DeltaSR.Image->GetExtent().height / 4u + uint32_t(DeltaSR.Image->GetExtent().height % 4u > 0),
+		DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
 
-	barrier.image = DeltaSM->GetImage();
-	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	DeltaSM.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+	DeltaSR.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 	GenSingleScatterLUT->BindPipeline(cmd);
 	SingleScatterDSO->BindSet(0, cmd, *GenSingleScatterLUT);
-	vkCmdDispatch(cmd, m_ScatteringLUT->GetExtent().width / 4u + uint32_t(m_ScatteringLUT->GetExtent().width % 4u > 0),
-		m_ScatteringLUT->GetExtent().height / 4u + uint32_t(m_ScatteringLUT->GetExtent().height % 4u > 0),
-		m_ScatteringLUT->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT->GetExtent().depth % 4u > 0));
+	vkCmdDispatch(cmd, m_ScatteringLUT.Image->GetExtent().width / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().width % 4u > 0),
+		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
+		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (int Sample = 2; Sample <= 15; ++Sample)
+	for (uint32_t Sample = 2; Sample <= 15; ++Sample)
 	{
+		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+
 		GenDeltaJLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaJLUT->BindPipeline(cmd);
 		DeltaJDSO->BindSet(0, cmd, *GenDeltaJLUT);
-		vkCmdDispatch(cmd, DeltaJ->GetExtent().width / 4u + uint32_t(DeltaJ->GetExtent().width % 4u > 0),
-			DeltaJ->GetExtent().height / 4u + uint32_t(DeltaJ->GetExtent().height % 4u > 0),
-			DeltaJ->GetExtent().depth / 4u + uint32_t(DeltaJ->GetExtent().depth % 4u > 0));
+		vkCmdDispatch(cmd, DeltaJ.Image->GetExtent().width / 4u + uint32_t(DeltaJ.Image->GetExtent().width % 4u > 0),
+			DeltaJ.Image->GetExtent().height / 4u + uint32_t(DeltaJ.Image->GetExtent().height % 4u > 0),
+			DeltaJ.Image->GetExtent().depth / 4u + uint32_t(DeltaJ.Image->GetExtent().depth % 4u > 0));
+
+		DeltaE.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		GenDeltaEnLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaEnLUT->BindPipeline(cmd);
 		DeltaEnDSO->BindSet(0, cmd, *GenDeltaEnLUT);
-		vkCmdDispatch(cmd, DeltaE->GetExtent().width / 8u + uint32_t(DeltaE->GetExtent().width % 8u > 0),
-			DeltaE->GetExtent().height / 8u + uint32_t(DeltaE->GetExtent().height % 8u > 0),
+		vkCmdDispatch(cmd, DeltaE.Image->GetExtent().width / 8u + uint32_t(DeltaE.Image->GetExtent().width % 8u > 0),
+			DeltaE.Image->GetExtent().height / 8u + uint32_t(DeltaE.Image->GetExtent().height % 8u > 0),
 			1u);
+
+		DeltaSR.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 		GenDeltaSLUT->BindPipeline(cmd);
 		DeltaSDSO->BindSet(0, cmd, *GenDeltaSLUT);
-		vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
-			DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
-			DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
+		vkCmdDispatch(cmd, DeltaSR.Image->GetExtent().width / 4u + uint32_t(DeltaSR.Image->GetExtent().width % 4u > 0),
+			DeltaSR.Image->GetExtent().height / 4u + uint32_t(DeltaSR.Image->GetExtent().height % 4u > 0),
+			DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
+
+		DeltaE.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 		AddE->BindPipeline(cmd);
 		AddEDSO->BindSet(0, cmd, *AddE);
-		vkCmdDispatch(cmd, m_IrradianceLUT->GetExtent().width / 8u + uint32_t(m_IrradianceLUT->GetExtent().width % 8u > 0),
-			m_IrradianceLUT->GetExtent().height / 8u + uint32_t(m_IrradianceLUT->GetExtent().height % 8u > 0),
+		vkCmdDispatch(cmd, m_IrradianceLUT.Image->GetExtent().width / 8u + uint32_t(m_IrradianceLUT.Image->GetExtent().width % 8u > 0),
+			m_IrradianceLUT.Image->GetExtent().height / 8u + uint32_t(m_IrradianceLUT.Image->GetExtent().height % 8u > 0),
 			1u);
+
+		DeltaSR.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 		AddS->BindPipeline(cmd);
 		AddSDSO->BindSet(0, cmd, *AddS);
-		vkCmdDispatch(cmd, DeltaSR->GetExtent().width / 4u + uint32_t(DeltaSR->GetExtent().width % 4u > 0),
-			DeltaSR->GetExtent().height / 4u + uint32_t(DeltaSR->GetExtent().height % 4u > 0),
-			DeltaSR->GetExtent().depth / 4u + uint32_t(DeltaSR->GetExtent().depth % 4u > 0));
+		vkCmdDispatch(cmd, DeltaSR.Image->GetExtent().width / 4u + uint32_t(DeltaSR.Image->GetExtent().width % 4u > 0),
+			DeltaSR.Image->GetExtent().height / 4u + uint32_t(DeltaSR.Image->GetExtent().height % 4u > 0),
+			DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
 	}
 
 	::EndCommandBuffer(cmd);
@@ -296,13 +272,13 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.Wait()
 		.FreeCommandBuffers(1, &cmd);
 
-	m_TransmittanceLUT->CreateSampler(ESamplerType::BillinearClamp);
-	m_ScatteringLUT->CreateSampler(ESamplerType::BillinearClamp);
-	m_IrradianceLUT->CreateSampler(ESamplerType::BillinearClamp);
+	m_TransmittanceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_ScatteringLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_IrradianceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_Atmospherics = std::make_unique<GraphicsObject>();
 	m_Atmospherics->descriptorSet = DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, *m_ScatteringLUT)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
 		.Allocate(m_Scope);
 
 	m_Atmospherics->pipeline = GraphicsPipelineDescriptor()
@@ -332,17 +308,23 @@ VkBool32 VulkanBase::volumetric_precompute()
 	CloudLayerProfile defaultClouds{};
 	m_CloudLayer->Update(&defaultClouds, sizeof(CloudLayerProfile));
 
-	m_VolumeShape = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
-	m_VolumeDetail = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 6u, 3u);
+	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
+	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
+
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 6u, 3u);
+	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
+
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_Volumetrics->descriptorSet = DescriptorSetDescriptor()
 		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, *m_VolumeShape)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, *m_VolumeDetail)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, *m_TransmittanceLUT)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, *m_IrradianceLUT)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, *m_ScatteringLUT)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 		.Allocate(m_Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};

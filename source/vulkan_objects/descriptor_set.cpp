@@ -59,7 +59,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageBuffer(uint32_t bind
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -72,7 +72,9 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t bindi
 	DSWrites.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
-	DSWrites.pImageInfo = &image.GetDescriptor();
+
+	imageInfos.emplace_back(sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
 	writes.push_back(DSWrites);
@@ -80,7 +82,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t bindi
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -93,7 +95,9 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t 
 	DSWrites.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
-	DSWrites.pImageInfo = &image.GetDescriptor();
+
+	imageInfos.emplace_back(VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
 	writes.push_back(DSWrites);
@@ -101,7 +105,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t 
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -114,7 +118,9 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t bindi
 	DSWrites.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
-	DSWrites.pImageInfo = &image.GetDescriptor();
+
+	imageInfos.emplace_back(VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_GENERAL);
+	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
 	writes.push_back(DSWrites);

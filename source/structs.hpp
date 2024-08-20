@@ -42,7 +42,7 @@ struct CloudLayerProfile
 /*
 * !@brief Dummy to inherit from
 */
-struct Image
+struct Texture
 {
 
 };

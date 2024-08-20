@@ -56,30 +56,30 @@ namespace GRComponents
 	/*
 	* !@brief Albedo map defines color map in PBR pipeline
 	*/
-	struct AlbedoMap : Resource<Image>
+	struct AlbedoMap : Resource<Texture>
 	{
 	public:
-		AlbedoMap(TShared<Image> resource, bool* flagptr = nullptr)
+		AlbedoMap(TShared<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};
 	/*
 	* !@brief Combined Normal(rgb) and Height(a) map used in PBR pipeline
 	*/
-	struct NormalDisplacementMap : Resource<Image>
+	struct NormalDisplacementMap : Resource<Texture>
 	{
 	public:
-		NormalDisplacementMap(TShared<Image> resource, bool* flagptr = nullptr)
+		NormalDisplacementMap(TShared<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};
 	/*
 	* !@brief Combined AO(r), Roughness(g) and Metallic(b) map used in PBR pipeline
 	*/
-	struct AORoughnessMetallicMap : Resource<Image>
+	struct AORoughnessMetallicMap : Resource<Texture>
 	{
 	public:
-		AORoughnessMetallicMap(TShared<Image> resource, bool* flagptr = nullptr)
+		AORoughnessMetallicMap(TShared<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};

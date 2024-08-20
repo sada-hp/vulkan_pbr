@@ -178,7 +178,7 @@ namespace GR
 		* @param[in] path - local path to image file
 		* @param[in] type - helper on how to interpret image format
 		*/
-		GRAPI void BindImage(GRComponents::Resource<Image>& Resource, const std::string& path, EImageType type);
+		GRAPI void BindImage(GRComponents::Resource<Texture>& Resource, const std::string& path, EImageType type);
 		/*
 		* !@brief Erase all entities from the scene
 		*/

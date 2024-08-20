@@ -158,8 +158,10 @@ VulkanBase::~VulkanBase() noexcept
 			vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 			return true;
 	});
-	m_DepthAttachments.clear();
-	m_HdrAttachments.clear();
+	m_DepthAttachments.resize(0);
+	m_HdrAttachments.resize(0);
+	m_HdrViewsHR.resize(0);
+	m_DepthViewsHR.resize(0);
 	m_HDRPipelines.resize(0);
 	m_HDRDescriptors.resize(0);
 	m_UBOSets.resize(0);
@@ -345,9 +347,13 @@ void VulkanBase::_handleResize()
 	assert(m_SwapchainImages.size() == m_PresentBuffers.size());
 }
 
-TAuto<VulkanImage> VulkanBase::_loadImage(const std::string& path, VkFormat format)
+TAuto<VulkanTexture> VulkanBase::_loadImage(const std::string& path, VkFormat format)
 {
-	return GRVkFile::_importImage(m_Scope, path.c_str(), format, 0);
+	TAuto< VulkanTexture> Texture = std::make_unique<VulkanTexture>();
+	Texture->Image = GRVkFile::_importImage(m_Scope, path.c_str(), format, 0);
+	Texture->View = std::make_unique<VulkanImageView>(m_Scope, *Texture->Image, Texture->Image->GetSubResourceRange());
+
+	return Texture;
 }
 
 void VulkanBase::Wait() const

@@ -28,17 +28,20 @@ private:
 class DescriptorSetDescriptor
 {
 public:
-	DescriptorSetDescriptor() {};
+	DescriptorSetDescriptor() 
+	{
+		imageInfos.reserve(32);
+	};
 
 	DescriptorSetDescriptor& AddUniformBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
 
 	DescriptorSetDescriptor& AddStorageBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
 
-	DescriptorSetDescriptor& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+	DescriptorSetDescriptor& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler);
 
-	DescriptorSetDescriptor& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+	DescriptorSetDescriptor& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view);
 
-	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VulkanImage& image);
+	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view);
 
 	TAuto<DescriptorSet> Allocate(const RenderScope& Scope);
 
@@ -46,5 +49,7 @@ private:
 	TVector<VkDescriptorSetLayoutBinding> bindings;
 	TVector<VkWriteDescriptorSet> writes;
 
-	const RenderScope* Scope;
+	std::vector<VkDescriptorImageInfo> imageInfos;
+
+	const RenderScope* Scope = VK_NULL_HANDLE;
 };

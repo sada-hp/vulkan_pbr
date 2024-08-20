@@ -118,16 +118,14 @@ TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int coun
 	VkPhysicalDeviceProperties properties{};
 	vkGetPhysicalDeviceProperties(Scope.GetPhysicalDevice(), &properties);
 	std::unique_ptr<VulkanImage> target = std::make_unique<VulkanImage>(Scope);
-	target->CreateImage(imageCI, skyAlloc)
-		.CreateImageView(imageViewCI)
-		.CreateSampler(ESamplerType::BillinearRepeat);
+	target->CreateImage(imageCI, skyAlloc);
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
 		.AllocateCommandBuffers(1, &cmd);
 
 	BeginOneTimeSubmitCmd(cmd);
-	target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_TRANSFER_BIT);
 	CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, { (uint32_t)w, (uint32_t)h, 1u });
 	EndCommandBuffer(cmd);
 

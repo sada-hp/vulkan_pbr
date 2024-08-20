@@ -10,12 +10,13 @@ TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkForm
 	TVector<uint32_t> queueFamilyIndices;
 	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
 	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+
 	VkImageCreateInfo noiseInfo{};
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	noiseInfo.arrayLayers = 1u;
 	noiseInfo.extent = imageSize;
 	noiseInfo.format = format;
-	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	noiseInfo.mipLevels = 1u;
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -25,8 +26,10 @@ TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkForm
 	noiseInfo.pQueueFamilyIndices = queueFamilyIndices.data();
 	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	noiseInfo.imageType = imageSize.depth == 1u ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
+
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
 	VkImageViewCreateInfo noiseImageView{};
 	noiseImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	noiseImageView.viewType = imageSize.depth == 1u ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D;
@@ -37,14 +40,11 @@ TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkForm
 	noiseImageView.subresourceRange.layerCount = 1u;
 	noiseImageView.subresourceRange.levelCount = 1u;
 
-	TAuto<VulkanImage> noise = std::make_unique<VulkanImage>(Scope);
-	noise->CreateImage(noiseInfo, noiseAllocCreateInfo)
-		.CreateImageView(noiseImageView)
-		.CreateSampler(ESamplerType::LinearRepeat)
-		.TransitionLayout(VK_IMAGE_LAYOUT_GENERAL);
+	TAuto<VulkanImage> noise = std::make_unique<VulkanImage>(Scope, noiseInfo, noiseAllocCreateInfo);
+	TAuto<VulkanImageView> noise_view = std::make_unique<VulkanImageView>(Scope, *noise, noiseImageView.subresourceRange);
 
 	ComputePipelineDescriptor noise_pipeline{};
-	TAuto<DescriptorSet> noise_set = DescriptorSetDescriptor().AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, *noise)
+	TAuto<DescriptorSet> noise_set = DescriptorSetDescriptor().AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, noise_view->GetImageView())
 		.Allocate(Scope);
 	noise_pipeline.SetShaderName(shader) 
 		.AddDescriptorLayout(noise_set->GetLayout());

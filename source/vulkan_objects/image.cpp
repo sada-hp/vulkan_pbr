@@ -7,7 +7,7 @@ VulkanImage::VulkanImage(const RenderScope& InScope)
 
 }
 
-VulkanImage::VulkanImage(const RenderScope& InScope, const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+VulkanImage::VulkanImage(const RenderScope& InScope, VkImageCreateInfo imgInfo, VmaAllocationCreateInfo allocCreateInfo)
 	: Scope(&InScope)
 {
 	CreateImage(imgInfo, allocCreateInfo);
@@ -15,65 +15,52 @@ VulkanImage::VulkanImage(const RenderScope& InScope, const VkImageCreateInfo& im
 
 VulkanImage::~VulkanImage()
 {
-	if (view != VK_NULL_HANDLE)
-		vkDestroyImageView(Scope->GetDevice(), view, VK_NULL_HANDLE);
 	if (image != VK_NULL_HANDLE)
 		vmaDestroyImage(Scope->GetAllocator(), image, memory);
-
-	image = VK_NULL_HANDLE;
-	view = VK_NULL_HANDLE;
-	sampler = VK_NULL_HANDLE;
-	memory = VK_NULL_HANDLE;
 }
 
-VulkanImage& VulkanImage::CreateImage(const VkImageCreateInfo& imgInfo, const VmaAllocationCreateInfo& allocCreateInfo)
+VulkanImage& VulkanImage::CreateImage(VkImageCreateInfo imgInfo, VmaAllocationCreateInfo allocCreateInfo)
 {
 	if (image != VK_NULL_HANDLE)
 		vmaDestroyImage(Scope->GetAllocator(), image, memory);
+
+	VkImageLayout layout = imgInfo.initialLayout;
+	imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VkBool32 res = vmaCreateImage(Scope->GetAllocator(), &imgInfo, &allocCreateInfo, &image, &memory, &allocInfo) == VK_SUCCESS;
-	descriptorInfo.imageLayout = imgInfo.initialLayout;
-	subRange.levelCount = imgInfo.arrayLayers;
-	subRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subRange.baseArrayLayer = 0;
+	subRange.baseMipLevel = 0;
+	subRange.layerCount = imgInfo.arrayLayers;
+	subRange.levelCount = imgInfo.mipLevels;
 	imageSize = imgInfo.extent;
+	imageFormat = imgInfo.format;
+	imageType = imgInfo.imageType;
+	subRange.aspectMask = (imageFormat == VK_FORMAT_D16_UNORM 
+		|| imageFormat == VK_FORMAT_D32_SFLOAT
+		|| imageFormat == VK_FORMAT_D24_UNORM_S8_UINT
+		|| imageFormat == VK_FORMAT_D32_SFLOAT_S8_UINT
+		|| imageFormat == VK_FORMAT_D16_UNORM) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 
 	assert(res);
+
+	if (layout != VK_IMAGE_LAYOUT_UNDEFINED)
+		TransitionLayout(layout);
+
 	return *this;
 }
 
-VulkanImage& VulkanImage::CreateImageView(const VkImageViewCreateInfo& viewInfo)
-{
-	if (view != VK_NULL_HANDLE)
-		vkDestroyImageView(Scope->GetDevice(), view, VK_NULL_HANDLE);
-
-	VkImageViewCreateInfo Info = viewInfo;
-	Info.image = image;
-	VkBool32 res = vkCreateImageView(Scope->GetDevice(), &Info, VK_NULL_HANDLE, &view) == VK_SUCCESS;
-	descriptorInfo.imageView = view;
-	subRange = viewInfo.subresourceRange;
-
-	assert(res);
-	return *this;
-}
-
-VulkanImage& VulkanImage::CreateSampler(ESamplerType Type)
-{
-	sampler = Scope->GetSampler(Type);
-	descriptorInfo.sampler = sampler;
-	return *this;
-}
-
-VulkanImage& VulkanImage::TransitionLayout(VkImageLayout newLayout)
+VulkanImage& VulkanImage::TransitionLayout(VkImageLayout newLayout, VkQueueFlagBits Queue)
 {
 	VkCommandBuffer cmd;
-	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+	Scope->GetQueue(Queue)
 		.AllocateCommandBuffers(1, &cmd);
 
 	::BeginOneTimeSubmitCmd(cmd);
-	TransitionLayout(cmd, newLayout);
+	TransitionLayout(cmd, newLayout, Queue);
 	::EndCommandBuffer(cmd);
 
-	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+	Scope->GetQueue(Queue)
 		.Submit(cmd)
 		.Wait()
 		.FreeCommandBuffers(1, &cmd);
@@ -81,13 +68,16 @@ VulkanImage& VulkanImage::TransitionLayout(VkImageLayout newLayout)
 	return *this;
 }
 
-VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout)
+VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout, VkQueueFlagBits Queue)
 {
+	if (newLayout == descriptorInfo.imageLayout)
+		return *this;
+
 	const std::unordered_map<VkImageLayout, VkPipelineStageFlags> stageTable = {
 		{VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
-		{VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
+		{VK_IMAGE_LAYOUT_GENERAL, (Queue == VK_QUEUE_GRAPHICS_BIT) ? VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT },
 		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
-		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
+		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (Queue == VK_QUEUE_GRAPHICS_BIT) ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
 		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
 		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
 		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
@@ -96,7 +86,7 @@ VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout n
 
 	const std::unordered_map<VkImageLayout, VkAccessFlags> accessTable = {
 		{VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_NONE_KHR},
-		{VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_NONE_KHR},
+		{VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT},
 		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT},
 		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT},
 		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT},
@@ -145,11 +135,11 @@ VulkanImage& VulkanImage::GenerateMipMaps()
 VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer& cmd)
 {
 	if (subRange.levelCount == 1) {
-		TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 		return *this;
 	}
 
-	TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 	for (int k = 0; k < subRange.layerCount; k++) {
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -231,5 +221,47 @@ VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer& cmd)
 
 	descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	return *this;;
+	return *this;
+}
+
+VulkanImageView::VulkanImageView(const RenderScope& InScope)
+	: Scope(&InScope)
+{
+
+}
+
+VulkanImageView::VulkanImageView(const RenderScope& InScope, const VulkanImage& Image)
+	: Scope(&InScope)
+{
+	CreateImageView(Image, Image.GetSubResourceRange());
+}
+
+VulkanImageView::VulkanImageView(const RenderScope& InScope, const VulkanImage& Image, const VkImageSubresourceRange& SubResource)
+	: Scope(&InScope)
+{
+	CreateImageView(Image, SubResource);
+}
+
+VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, const VkImageSubresourceRange& SubResource)
+{
+	if (m_View != VK_NULL_HANDLE)
+		vkDestroyImageView(Scope->GetDevice(), m_View, VK_NULL_HANDLE);
+
+	VkImageViewCreateInfo Info = {};
+	Info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	Info.image = Image.GetImage();
+	Info.format = Image.GetFormat();
+	Info.subresourceRange = SubResource;
+	Info.viewType = Image.GetImageType() == VK_IMAGE_TYPE_2D ? (Image.GetSubResourceRange().layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D) : VK_IMAGE_VIEW_TYPE_3D;
+
+	VkBool32 res = vkCreateImageView(Scope->GetDevice(), &Info, VK_NULL_HANDLE, &m_View) == VK_SUCCESS;
+
+	assert(res);
+
+	return *this;
+}
+
+VulkanImageView::~VulkanImageView()
+{
+	vkDestroyImageView(Scope->GetDevice(), m_View, VK_NULL_HANDLE);
 }

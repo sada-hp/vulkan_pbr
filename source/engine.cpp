@@ -88,7 +88,7 @@ namespace GR
 		return m_Renderer->AddShape(Descriptor);
 	}
 
-	void GrayEngine::BindImage(GRComponents::Resource<Image>& Resource, const std::string& path, EImageType type)
+	void GrayEngine::BindImage(GRComponents::Resource<Texture>& Resource, const std::string& path, EImageType type)
 	{
 		VkFormat format;
 

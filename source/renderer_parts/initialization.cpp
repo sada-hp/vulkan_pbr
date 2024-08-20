@@ -60,6 +60,8 @@ VkBool32 VulkanBase::create_swapchain_images()
 	m_SwapchainImages.resize(imagesCount);
 	m_DepthAttachments.resize(imagesCount);
 	m_HdrAttachments.resize(imagesCount);
+	m_HdrViewsHR.resize(imagesCount);
+	m_DepthViewsHR.resize(imagesCount);
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
 	const TArray<uint32_t, 2> queueIndices = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
@@ -88,7 +90,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		hdrInfo.extent = { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 };
 		hdrInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		hdrInfo.imageType = VK_IMAGE_TYPE_2D;
-		hdrInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		hdrInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		hdrInfo.mipLevels = 1;
 		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
@@ -114,17 +116,11 @@ VkBool32 VulkanBase::create_swapchain_images()
 		res = (vkCreateImageView(m_Scope.GetDevice(), &viewInfo, VK_NULL_HANDLE, &imageView) == VK_SUCCESS) & res;
 		m_SwapchainViews.push_back(imageView);
 
-		viewInfo.format = hdrInfo.format;
-		m_HdrAttachments[i] = std::make_unique<VulkanImage>(m_Scope);
-		m_HdrAttachments[i]->CreateImage(hdrInfo, allocCreateInfo)
-			.CreateImageView(viewInfo)
-			.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		m_HdrAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachments[i]);
 
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		viewInfo.format = m_Scope.GetDepthFormat();
-		m_DepthAttachments[i] = std::make_unique<VulkanImage>(m_Scope);
-		m_DepthAttachments[i]->CreateImage(depthInfo, allocCreateInfo)
-			.CreateImageView(viewInfo);
+		m_DepthAttachments[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
+		m_DepthViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachments[i]);
 	}
 
 	return res;
@@ -139,7 +135,7 @@ VkBool32 VulkanBase::create_framebuffers()
 	VkBool32 res = 1;
 	for (size_t i = 0; i < m_Framebuffers.size(); ++i)
 	{
-		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrAttachments[i]->GetImageView(), m_SwapchainViews[i], m_DepthAttachments[i]->GetImageView() }, &m_Framebuffers[i]) & res;
+		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView() }, &m_Framebuffers[i]) & res;
 	}
 
 	return res;
@@ -154,7 +150,7 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 	for (size_t i = 0; i < m_HDRDescriptors.size(); ++i)
 	{
 		m_HDRDescriptors[i] = DescriptorSetDescriptor()
-			.AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_HdrAttachments[i])
+			.AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView())
 			.Allocate(m_Scope);
 
 		m_HDRPipelines[i] = GraphicsPipelineDescriptor()
@@ -195,10 +191,21 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 			.Allocate(m_Scope);
 	}
 
-	m_DefaultWhite = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u)));
-	m_DefaultBlack = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(0u)));
-	m_DefaultNormal = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u)));
-	m_DefaultARM = std::shared_ptr<VulkanImage>(GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(0u), std::byte(255u)));
+	m_DefaultWhite = std::make_shared<VulkanTexture>();
+	m_DefaultWhite->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u));
+	m_DefaultWhite->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultWhite->Image);
+
+	m_DefaultBlack = std::make_shared<VulkanTexture>();
+	m_DefaultBlack->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(0u));
+	m_DefaultBlack->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultBlack->Image);
+
+	m_DefaultNormal = std::make_shared<VulkanTexture>();
+	m_DefaultNormal->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u));
+	m_DefaultNormal->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultNormal->Image);
+
+	m_DefaultARM = std::make_shared<VulkanTexture>();
+	m_DefaultARM->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(0u), std::byte(255u));
+	m_DefaultARM->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultARM->Image);
 
 	return res;
 }

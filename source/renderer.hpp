@@ -19,6 +19,19 @@
 #define VALIDATION
 #endif
 
+struct VulkanTexture : Texture
+{
+	TShared<VulkanImage> Image = VK_NULL_HANDLE;
+	TAuto<VulkanImageView> View = VK_NULL_HANDLE;
+
+public:
+	void reset()
+	{
+		Image.reset();
+		View.reset();
+	}
+};
+
 namespace GR
 {
 	struct Camera
@@ -53,8 +66,13 @@ private:
 	TVector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	TVector<VkImage> m_SwapchainImages = {};
 	TVector<VkImageView> m_SwapchainViews = {};
+
 	TVector<TAuto<VulkanImage>> m_DepthAttachments = {};
+	TVector<TAuto<VulkanImageView>> m_DepthViewsHR = {};
+	
 	TVector<TAuto<VulkanImage>> m_HdrAttachments = {};
+	TVector<TAuto<VulkanImageView>> m_HdrViewsHR = {};
+
 	TVector<VkFramebuffer> m_Framebuffers = {};
 	TVector<VkFence> m_PresentFences = {};
 	TVector<VkSemaphore> m_PresentSemaphores = {};
@@ -77,12 +95,12 @@ private:
 	TAuto<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
 	TAuto<GraphicsObject> m_Atmospherics = VK_NULL_HANDLE;
 
-	TAuto<VulkanImage> m_VolumeShape = VK_NULL_HANDLE;
-	TAuto<VulkanImage> m_VolumeDetail = VK_NULL_HANDLE;
+	VulkanTexture m_VolumeShape = {};
+	VulkanTexture m_VolumeDetail = {};
 
-	TAuto<VulkanImage> m_ScatteringLUT = VK_NULL_HANDLE;
-	TAuto<VulkanImage> m_IrradianceLUT = VK_NULL_HANDLE;
-	TAuto<VulkanImage> m_TransmittanceLUT = VK_NULL_HANDLE;
+	VulkanTexture m_ScatteringLUT = {};
+	VulkanTexture m_IrradianceLUT = {};
+	VulkanTexture m_TransmittanceLUT = {};
 
 	uint32_t m_SwapchainIndex = 0;
 
@@ -128,7 +146,7 @@ public:
 	* 
 	* @return Vulkan image memory
 	*/
-	TAuto<VulkanImage> _loadImage(const std::string& path, VkFormat format);
+	TAuto<VulkanTexture> _loadImage(const std::string& path, VkFormat format);
 	/*
 	* !@brief Wait on CPU for GPU to complete it's current rendering commands
 	*/
@@ -148,10 +166,12 @@ public:
 private:
 	entt::registry& m_Registry;
 
-	TShared<VulkanImage> m_DefaultWhite = VK_NULL_HANDLE;
-	TShared<VulkanImage> m_DefaultBlack = VK_NULL_HANDLE;
-	TShared<VulkanImage> m_DefaultNormal = VK_NULL_HANDLE;
-	TShared<VulkanImage> m_DefaultARM = VK_NULL_HANDLE;
+	TShared<VulkanTexture> m_DefaultWhite = {};
+	TShared<VulkanTexture> m_DefaultBlack = {};
+	TShared<VulkanTexture> m_DefaultNormal = {};
+	TShared<VulkanTexture> m_DefaultARM = {};
+
+private:
 
 	// !@brief Defined in initialization.cpp
 	VkBool32 create_instance();
@@ -181,7 +201,7 @@ private:
 	void update_pipeline(entt::entity ent);
 
 	// !@brief Defined in pbr_controls.cpp
-	TAuto<DescriptorSet> create_pbr_set(const VulkanImage& albedo, const VulkanImage& nh, const VulkanImage& arm);
+	TAuto<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm);
 	
 	// !@brief Defined in pbr_controls.cpp
 	TAuto<Pipeline> create_pbr_pipeline(const DescriptorSet& set);
