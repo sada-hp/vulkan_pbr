@@ -163,7 +163,7 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     {
         pos = rs + float(i) * radius * light_kernel[i];
 
-        float sampled_density = SampleDensity(pos, 2);
+        float sampled_density = SampleDensity(pos, 1);
 
         if (sampled_density > 0.0)
         {
@@ -183,8 +183,7 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 // Unoptimized and expensive
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
-    // need more precision near horizon, worst case is very expensive
-    const int steps = int(mix(256, 64, abs(dot(rd, vec3(0.0, 1.0, 0.0)))));
+    const int steps = 128;
 
     const float len = distance(rs, re);
     const float stepsize = len / float(steps);
@@ -204,8 +203,10 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
         pos = rs + stepsize * rd * i;
     }
 
+    float meanD = 0.0;
+    float meanT = 0.0;
+
     rs = pos;
-    SAtmosphere Atmosphere;
     for (; i < steps; ++i)
     {
         sample_density = SampleDensity(pos, 0);
@@ -215,25 +216,34 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
             float extinction = sample_density * Clouds.Absorption;
             float transmittance = BeerLambert(stepsize * extinction);
 
-            // get scattering along the step ray for this sample, expensive
-            AtmosphereAtPoint(vec3(0, Rg, 0) + pos, stepsize, rd, rl, Atmosphere);
-            float Vis = MarchToLight(pos, rl, stepsize) * Powder(stepsize, sample_density, Clouds.Absorption);
+            float Vis = MarchToLight(pos, rl, stepsize); // * Powder(stepsize, sample_density, Clouds.Absorption)
 
-            vec3 E = sample_density * (Atmosphere.L * phase * Vis + Atmosphere.S);
+            //vec3 E = sample_density * (Atmosphere.L * phase * Vis + Atmosphere.S);
+            vec3 E = vec3(sample_density * phase * Vis);
             vec3 inScat = (E - E * transmittance) / sample_density;
 
             scattering.rgb += inScat * scattering.a;
             scattering.a *= transmittance;
+
+            meanD += (length(pos) / length(re)) * transmittance;
+            meanT += transmittance;
         }
 
         pos += stepsize * rd;
     }
 
+    // aerial perspective
     if (scattering.a != 1.0)
     {
+        SAtmosphere Atmosphere;
+        AtmosphereAtPoint(vec3(0, Rg, 0) + rs, distance(rs, re), rd, rl, Atmosphere);
+        float CloudTr = (meanD / meanT);
+        vec3 E = Atmosphere.L + Atmosphere.S;
+        E = (E - E * CloudTr) / CloudTr;
+        scattering.rgb = scattering.rgb * E;
+
         AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), rd, rl, Atmosphere);
-        // aerial perspective
-        scattering.rgb += (Atmosphere.S + phase * Atmosphere.L * scattering.a) * (1.0 - scattering.a);
+        scattering.rgb = scattering.rgb + Atmosphere.S * (1.0 - scattering.a);
     }
 
     return scattering;
