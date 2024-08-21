@@ -1,7 +1,8 @@
 #pragma once
 #include "core.hpp"
 #include "scope.hpp"
-#include "vulkan_objects/mesh.hpp"
+#include "Engine/math.hpp"
+#include "Vulkan/mesh.hpp"
 
 namespace GRShape
 {

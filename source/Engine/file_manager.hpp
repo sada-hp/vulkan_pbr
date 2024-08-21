@@ -1,9 +1,9 @@
 #pragma once
 #include "pch.hpp"
-#include "vulkan_objects/mesh.hpp"
-#include "vulkan_objects/image.hpp"
-#include "vulkan_objects/queue.hpp"
-#include "vulkan_api.hpp"
+#include "Vulkan/mesh.hpp"
+#include "Vulkan/image.hpp"
+#include "Vulkan/queue.hpp"
+#include "Vulkan/vulkan_api.hpp"
 
 namespace GRVkFile
 {

@@ -1,5 +1,5 @@
 #include "scope.hpp"
-#include "vulkan_objects/image.hpp"
+#include "Vulkan/image.hpp"
 
 namespace GRNoise
 {

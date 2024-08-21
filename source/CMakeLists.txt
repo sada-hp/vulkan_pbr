@@ -1,9 +1,11 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../source)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../libraries)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Vulkan)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Engine)
 
-file(GLOB ROOT_SOURCES	"${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
-file(GLOB VULKAN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_objects/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_objects/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/renderer_parts/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/renderer_parts/*.hpp")
+file(GLOB ROOT_SOURCES	"${CMAKE_CURRENT_SOURCE_DIR}/Engine/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Engine/*.hpp")
+file(GLOB VULKAN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan/*.hpp")
 
 if (INCLUDE_GUI)
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include/imgui)
@@ -11,6 +13,7 @@ if (INCLUDE_GUI)
 endif()
 
 add_library(source SHARED ${ROOT_SOURCES} ${VULKAN_SOURCES} ${IMGUI_SOURCES})
+
 
 add_compile_definitions(DEBUG=$<CONFIG:Debug>)
 target_compile_definitions(source PRIVATE GRAPI)

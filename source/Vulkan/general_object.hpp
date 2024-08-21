@@ -1,6 +1,6 @@
 #pragma once
-#include "vulkan_objects/pipeline.hpp"
-#include "vulkan_objects/descriptor_set.hpp"
+#include "Vulkan/pipeline.hpp"
+#include "Vulkan/descriptor_set.hpp"
 
 struct GraphicsObject
 {

@@ -1,7 +1,7 @@
 #pragma once
-#include "general_object.hpp"
-#include "vulkan_objects/mesh.hpp"
-#include "vulkan_objects/image.hpp"
+#include "Vulkan/general_object.hpp"
+#include "Vulkan/mesh.hpp"
+#include "Vulkan/image.hpp"
 
 struct PBRConstants
 {

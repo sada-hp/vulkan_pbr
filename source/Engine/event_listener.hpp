@@ -1,7 +1,7 @@
 #pragma once
 #include "core.hpp"
 #include "glm/glm.hpp"
-#include "enums.hpp"
+#include "Engine/enums.hpp"
 
 namespace GREvent
 {

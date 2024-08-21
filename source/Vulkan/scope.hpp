@@ -1,6 +1,6 @@
 #pragma once
-#include "vulkan_objects/queue.hpp"
-#include "vulkan_api.hpp"
+#include "Vulkan/queue.hpp"
+#include "Vulkan/vulkan_api.hpp"
 
 enum class ESamplerType
 {

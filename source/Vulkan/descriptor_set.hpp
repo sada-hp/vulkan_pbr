@@ -1,9 +1,9 @@
 #pragma once
 #include "vulkan_api.hpp"
-#include "pipeline.hpp"
-#include "buffer.hpp"
-#include "image.hpp"
-#include "scope.hpp"
+#include "Vulkan/pipeline.hpp"
+#include "Vulkan/buffer.hpp"
+#include "Vulkan/image.hpp"
+#include "Vulkan/scope.hpp"
 
 class DescriptorSet
 {

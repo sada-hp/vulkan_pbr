@@ -3,8 +3,8 @@
 #include "glm/gtx/quaternion.hpp"
 #include "glm/glm.hpp"
 #include "glm/common.hpp"
-#include "math.hpp"
-#include "file_manager.hpp"
+#include "Engine/math.hpp"
+#include "Engine/structs.hpp"
 /*
 * List of engine-specific components
 */

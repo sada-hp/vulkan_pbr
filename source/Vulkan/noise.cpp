@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "noise.hpp"
-#include "vulkan_objects/pipeline.hpp"
-#include "vulkan_objects/descriptor_set.hpp"
+#include "Vulkan/pipeline.hpp"
+#include "Vulkan/descriptor_set.hpp"
 
 extern TAuto<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkFormat& format, const VkImageCreateFlags& flags);
 

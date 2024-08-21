@@ -3,8 +3,8 @@
 #include <vma/vk_mem_alloc.h>
 #include <vector>
 #include <array>
-#include "scope.hpp"
-#include "structs.hpp"
+#include "Vulkan/scope.hpp"
+#include "Engine/structs.hpp"
 
 struct VulkanImage
 {

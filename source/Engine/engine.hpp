@@ -3,10 +3,10 @@
 #include "core.hpp"
 #include "glm/glm.hpp"
 #include "entt/entt.hpp"
-#include "window.hpp"
-#include "event_listener.hpp"
-#include "math.hpp"
-#include "renderer.hpp"
+#include "Engine/window.hpp"
+#include "Engine/event_listener.hpp"
+#include "Engine/math.hpp"
+#include "Vulkan/renderer.hpp"
 
 #ifdef INCLUDE_GUI
 #include "imgui/imgui.h"

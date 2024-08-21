@@ -1,6 +1,6 @@
 #pragma once
-#include "vulkan_api.hpp"
-#include "scope.hpp"
+#include "Vulkan/vulkan_api.hpp"
+#include "Vulkan/scope.hpp"
 
 enum class EPipelineType
 {

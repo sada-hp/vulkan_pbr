@@ -3,7 +3,7 @@
 #include <vma/vk_mem_alloc.h>
 #include <vector>
 #include <array>
-#include "scope.hpp"
+#include "Vulkan/scope.hpp"
 
 struct Buffer
 {

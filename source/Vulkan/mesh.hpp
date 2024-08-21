@@ -3,9 +3,9 @@
 #include <vector>
 #include <array>
 #include <string>
-#include "buffer.hpp"
-#include "vertex.hpp"
-#include "scope.hpp"
+#include "Vulkan/buffer.hpp"
+#include "Vulkan/vertex.hpp"
+#include "Vulkan/scope.hpp"
 
 struct Mesh
 {

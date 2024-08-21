@@ -1,8 +1,7 @@
 #pragma once
 #include "core.hpp"
-#include "math.hpp"
-#include "renderer.hpp"
-
+#include "Engine/math.hpp"
+#include "Vulkan/renderer.hpp"
 
 class GrayEnigne;
 
