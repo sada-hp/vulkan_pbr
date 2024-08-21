@@ -32,6 +32,8 @@ public:
 
 	RenderScope& CreateDefaultRenderPass();
 
+	RenderScope& CreateLowResRenderPass();
+
 	RenderScope& CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes);
 
 	void RecreateSwapchain(const VkSurfaceKHR& surface);
@@ -47,6 +49,8 @@ public:
 	inline const VkPhysicalDevice& GetPhysicalDevice() const { return m_PhysicalDevice; };
 
 	inline const VkRenderPass& GetRenderPass() const { return m_RenderPass; };
+
+	inline const VkRenderPass& GetLowResRenderPass() const { return m_RenderPassLR; };
 
 	inline const VkSwapchainKHR& GetSwapchain() const { return m_Swapchain; };
 
@@ -78,8 +82,10 @@ private:
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 	VmaAllocator m_Allocator = VK_NULL_HANDLE;
 	VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
-	VkRenderPass m_RenderPass = VK_NULL_HANDLE;
 	VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
+
+	VkRenderPass m_RenderPass = VK_NULL_HANDLE;
+	VkRenderPass m_RenderPassLR = VK_NULL_HANDLE;
 
 	const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 	const VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;

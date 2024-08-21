@@ -53,10 +53,10 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 
 	//HDR attachment
 	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
-	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -66,7 +66,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -137,6 +137,54 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	return *this;
 }
 
+RenderScope& RenderScope::CreateLowResRenderPass()
+{
+	VkRenderPassCreateInfo createInfo{};
+	TArray<VkAttachmentDescription, 2> attachments;
+
+	//HDR attachment
+	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].flags = 0;
+	// Depth attachment
+	attachments[1].format = depthFormat;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].flags = 0;
+
+	VkAttachmentReference hdr_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	VkAttachmentReference depth_ref{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+
+	TArray<VkSubpassDescription, 1> subpassDescriptions{};
+	subpassDescriptions[0].colorAttachmentCount = 1;
+	subpassDescriptions[0].pColorAttachments = &hdr_ref;
+	subpassDescriptions[0].pDepthStencilAttachment = &depth_ref;
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = attachments.size();
+	createInfo.pAttachments = attachments.data();
+	createInfo.dependencyCount = 0;
+	createInfo.pDependencies = VK_NULL_HANDLE;
+	createInfo.subpassCount = subpassDescriptions.size();
+	createInfo.pSubpasses = subpassDescriptions.data();
+
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_RenderPassLR);
+
+	return *this;
+}
+
 RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes)
 {
 	if (m_DescriptorPool != VK_NULL_HANDLE) {
@@ -168,6 +216,8 @@ void RenderScope::Destroy()
 		vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, VK_NULL_HANDLE);
 	if (m_RenderPass != VK_NULL_HANDLE)
 		vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, VK_NULL_HANDLE);
+	if (m_RenderPassLR != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_RenderPassLR, VK_NULL_HANDLE);
 	if (m_Swapchain != VK_NULL_HANDLE)
 		vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, VK_NULL_HANDLE);
 	if (m_Allocator != VK_NULL_HANDLE)
@@ -177,6 +227,7 @@ void RenderScope::Destroy()
 
 	m_DescriptorPool = VK_NULL_HANDLE;
 	m_RenderPass = VK_NULL_HANDLE;
+	m_RenderPassLR = VK_NULL_HANDLE;
 	m_Swapchain = VK_NULL_HANDLE;
 	m_Allocator = VK_NULL_HANDLE;
 	m_LogicalDevice = VK_NULL_HANDLE;

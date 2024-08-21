@@ -287,6 +287,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.SetCullMode(VK_CULL_MODE_NONE)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Atmospherics->descriptorSet->GetLayout())
+		.SetRenderPass(m_Scope.GetLowResRenderPass())
 		.Construct(m_Scope);
 
 	return 1;
@@ -344,6 +345,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Volumetrics->descriptorSet->GetLayout())
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
+		.SetRenderPass(m_Scope.GetLowResRenderPass())
 		.Construct(m_Scope);
 	
 	return 1;

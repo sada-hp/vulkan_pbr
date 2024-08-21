@@ -158,10 +158,13 @@ public:
 
 	GraphicsPipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage);
 
+	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass);
+
 	TAuto<Pipeline> Construct(const RenderScope& Scope) override;
 
 private:
 	uint32_t subpass = 0;
+	VkRenderPass renderPass = VK_NULL_HANDLE;
 
 	VkPipelineVertexInputStateCreateInfo vertexInput{
 		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

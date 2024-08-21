@@ -258,6 +258,13 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetSubpass(uint32_t inSu
 	return *this;
 }
 
+GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRenderPass& RenderPass)
+{
+	renderPass = RenderPass;
+
+	return *this;
+}
+
 //TODO: Check pipeline cache?
 TAuto<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 {
@@ -329,7 +336,7 @@ TAuto<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 	VkGraphicsPipelineCreateInfo pipelineCI{};
 	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineCI.subpass = subpass;
-	pipelineCI.renderPass = Scope.GetRenderPass();
+	pipelineCI.renderPass = renderPass ? renderPass : Scope.GetRenderPass();
 	pipelineCI.pInputAssemblyState = &inputAssembly;
 	pipelineCI.pVertexInputState = &vertexInput;
 	pipelineCI.pRasterizationState = &rasterizationState;

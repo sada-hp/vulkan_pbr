@@ -67,13 +67,24 @@ private:
 	TVector<VkImage> m_SwapchainImages = {};
 	TVector<VkImageView> m_SwapchainViews = {};
 
-	TVector<TAuto<VulkanImage>> m_DepthAttachments = {};
+
+	TVector<TAuto<VulkanImage>> m_DepthAttachmentsHR = {};
 	TVector<TAuto<VulkanImageView>> m_DepthViewsHR = {};
 	
-	TVector<TAuto<VulkanImage>> m_HdrAttachments = {};
+	TVector<TAuto<VulkanImage>> m_HdrAttachmentsHR = {};
 	TVector<TAuto<VulkanImageView>> m_HdrViewsHR = {};
 
-	TVector<VkFramebuffer> m_Framebuffers = {};
+
+	TVector<TAuto<VulkanImage>> m_HdrAttachmentsLR = {};
+	TVector<TAuto<VulkanImageView>> m_HdrViewsLR = {};
+
+	TVector<TAuto<VulkanImage>> m_DepthAttachmentsLR = {};
+	TVector<TAuto<VulkanImageView>> m_DepthViewsLR = {};
+
+
+	TVector<VkFramebuffer> m_FramebuffersHR = {};
+	TVector<VkFramebuffer> m_FramebuffersLR = {};
+
 	TVector<VkFence> m_PresentFences = {};
 	TVector<VkSemaphore> m_PresentSemaphores = {};
 	TVector<VkSemaphore> m_SwapchainSemaphores = {};

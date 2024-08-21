@@ -35,6 +35,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 		.CreateMemoryAllocator(m_VkInstance)
 		.CreateSwapchain(m_Surface)
 		.CreateDefaultRenderPass()
+		.CreateLowResRenderPass()
 		.CreateDescriptorPool(100u, poolSizes);
 	
 	res = create_swapchain_images() & res;
@@ -111,7 +112,7 @@ VulkanBase::~VulkanBase() noexcept
 
 #ifdef INCLUDE_GUI
 	ImGui_ImplVulkan_Shutdown();
-	::vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
+	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
 	m_Atmospherics.reset();
@@ -150,18 +151,31 @@ VulkanBase::~VulkanBase() noexcept
 	});
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT) 
 		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
-	std::erase_if(m_Framebuffers, [&, this](VkFramebuffer& fb) {
+	std::erase_if(m_FramebuffersHR, [&, this](VkFramebuffer& fb) {
 			vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 			return true;
+	});
+	std::erase_if(m_FramebuffersLR, [&, this](VkFramebuffer& fb) {
+		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
+		return true;
 	});
 	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
 			vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 			return true;
 	});
-	m_DepthAttachments.resize(0);
-	m_HdrAttachments.resize(0);
-	m_HdrViewsHR.resize(0);
+
+	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
+
+	m_HdrAttachmentsHR.resize(0);
+	m_HdrViewsHR.resize(0);
+
+	m_DepthAttachmentsLR.resize(0);
+	m_DepthViewsLR.resize(0);
+
+	m_HdrAttachmentsLR.resize(0);
+	m_HdrViewsLR.resize(0);
+
 	m_HDRPipelines.resize(0);
 	m_HDRDescriptors.resize(0);
 	m_UBOSets.resize(0);
@@ -188,7 +202,7 @@ void VulkanBase::_step(float DeltaTime)
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	//UBO
+	// Udpate UBO
 	{
 		TMat4 view_matrix = m_Camera.get_view_matrix();
 		TMat4 projection_matrix = m_Camera.get_projection_matrix();
@@ -212,16 +226,128 @@ void VulkanBase::_step(float DeltaTime)
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
-	//Draw
+	// Draw Low Resolution Background
+	{
+		VkClearValue clearValues[2];
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.framebuffer = m_FramebuffersLR[m_SwapchainIndex];
+		renderPassInfo.renderPass = m_Scope.GetLowResRenderPass();
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 };
+		renderPassInfo.clearValueCount = 2;
+		renderPassInfo.pClearValues = clearValues;
+
+		VkViewport viewport{};
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = (float)(m_Scope.GetSwapchainExtent().width / 2);
+		viewport.height = (float)(m_Scope.GetSwapchainExtent().height / 2);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 };
+		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Atmospherics->pipeline);
+		m_Atmospherics->descriptorSet->BindSet(1, cmd, *m_Atmospherics->pipeline);
+		m_Atmospherics->pipeline->BindPipeline(cmd);
+		vkCmdDraw(cmd, 36, 1, 0, 0);
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->pipeline->BindPipeline(cmd);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		vkCmdEndRenderPass(cmd);
+	}
+
+	// Blit Low Resolution Image to High Resolution Attachment
+	{
+		TArray<VkImageMemoryBarrier, 2> barriers = {};
+		barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[0].image = m_HdrAttachmentsHR[m_SwapchainIndex]->GetImage();
+		barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[0].subresourceRange.baseArrayLayer = 0;
+		barriers[0].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barriers[0].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		barriers[0].subresourceRange.baseMipLevel = 0;
+		barriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barriers[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+		barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[1].image = m_HdrAttachmentsLR[m_SwapchainIndex]->GetImage();
+		barriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[1].subresourceRange.baseArrayLayer = 0;
+		barriers[1].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barriers[1].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		barriers[1].subresourceRange.baseMipLevel = 0;
+		barriers[1].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barriers.size(), barriers.data());
+
+		VkImageBlit Region{};
+		Region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		Region.dstSubresource.baseArrayLayer = 0;
+		Region.dstSubresource.mipLevel = 0;
+		Region.dstSubresource.layerCount = 1;
+		Region.dstOffsets[0] = { 0, 0, 0 };
+		Region.dstOffsets[1] = { int(m_Scope.GetSwapchainExtent().width), int(m_Scope.GetSwapchainExtent().height), 1 };
+
+		Region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		Region.srcSubresource.baseArrayLayer = 0;
+		Region.srcSubresource.mipLevel = 0;
+		Region.srcSubresource.layerCount = 1;
+		Region.srcOffsets[0] = { 0, 0, 0 };
+		Region.srcOffsets[1] = { int(m_Scope.GetSwapchainExtent().width / 2), int(m_Scope.GetSwapchainExtent().height / 2), 1 };
+		
+		vkCmdBlitImage(cmd, m_HdrAttachmentsLR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			m_HdrAttachmentsHR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &Region, VK_FILTER_LINEAR);
+
+		barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[0].image = m_HdrAttachmentsHR[m_SwapchainIndex]->GetImage();
+		barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[0].subresourceRange.baseArrayLayer = 0;
+		barriers[0].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barriers[0].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		barriers[0].subresourceRange.baseMipLevel = 0;
+		barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barriers[0].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barriers[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barriers[0]);
+	}
+
+	// Draw High Resolution Objects
 	{
 		VkClearValue clearValues[3];
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // HDR Attachment loads and doesn't use clear
 		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 		clearValues[2].depthStencil = { 1.0f, 0 };
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.framebuffer = m_Framebuffers[m_SwapchainIndex];
+		renderPassInfo.framebuffer = m_FramebuffersHR[m_SwapchainIndex];
 		renderPassInfo.renderPass = m_Scope.GetRenderPass();
 		renderPassInfo.renderArea.offset = { 0, 0 }; 
 		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
@@ -246,16 +372,6 @@ void VulkanBase::_step(float DeltaTime)
 
 		render_objects(cmd);
 
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Atmospherics->pipeline);
-		m_Atmospherics->descriptorSet->BindSet(1, cmd, *m_Atmospherics->pipeline);
-		m_Atmospherics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 36, 1, 0, 0);
-
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
-		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
-		m_Volumetrics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
-
 		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
 		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_HDRPipelines[m_SwapchainIndex]);
@@ -267,8 +383,9 @@ void VulkanBase::_step(float DeltaTime)
 #endif
 
 		vkCmdEndRenderPass(cmd);
-		vkEndCommandBuffer(cmd);
 	}
+
+	vkEndCommandBuffer(cmd);
 
 	VkSubmitInfo submitInfo{};
 	TArray<VkSemaphore, 1> waitSemaphores   = { m_SwapchainSemaphores[m_SwapchainIndex] };
@@ -305,17 +422,32 @@ void VulkanBase::_handleResize()
 {
 	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
 
-	std::erase_if(m_Framebuffers, [&, this](VkFramebuffer& fb) {
+	std::erase_if(m_FramebuffersHR, [&, this](VkFramebuffer& fb) {
 		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 		return true;
 	});
+	std::erase_if(m_FramebuffersLR, [&, this](VkFramebuffer& fb) {
+		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
+		return true;
+		});
 	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
 		vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 		return true;
 	});
-	m_DepthAttachments.resize(0);
+
+	m_HdrAttachmentsHR.resize(0);
+	m_HdrViewsHR.resize(0);
+
+	m_DepthAttachmentsHR.resize(0);
+	m_DepthViewsHR.resize(0);
+
+	m_HdrAttachmentsLR.resize(0);
+	m_HdrViewsLR.resize(0);
+
+	m_DepthAttachmentsLR.resize(0);
+	m_DepthViewsLR.resize(0);
+
 	m_SwapchainImages.resize(0);
-	m_HdrAttachments.resize(0);
 	m_HDRPipelines.resize(0);
 	m_HDRDescriptors.resize(0);
 

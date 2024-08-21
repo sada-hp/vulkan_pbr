@@ -63,6 +63,8 @@ struct VulkanImage
 
 	const uint32_t GetMipLevelsCount() const { return subRange.levelCount; };
 
+	const VkImageLayout GetImageLayout() const { return descriptorInfo.imageLayout; };
+
 private:
 	VkImage image = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;

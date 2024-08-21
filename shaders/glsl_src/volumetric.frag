@@ -18,6 +18,7 @@ vec3 light_kernel[] =
     vec3(0.0, 0.6, -0.78),
 };
 
+layout(location = 0) in vec2 ScreenUV;
 layout(location=0) out vec4 outColor;
 
 layout(set = 1, binding = 1) uniform CloudLayer
@@ -251,7 +252,6 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 
 void main()
 {
-    vec2 ScreenUV = gl_FragCoord.xy / ubo.Resolution;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = inverse(ubo.ProjectionMatrix) * ScreenNDC;
     vec4 ScreenWorld = inverse(ubo.ViewMatrix) * vec4(ScreenView.xy, -1.0, 0.0);

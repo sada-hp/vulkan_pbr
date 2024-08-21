@@ -58,10 +58,18 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 	uint32_t imagesCount = m_Scope.GetMaxFramesInFlight();
 	m_SwapchainImages.resize(imagesCount);
-	m_DepthAttachments.resize(imagesCount);
-	m_HdrAttachments.resize(imagesCount);
+	m_SwapchainViews.resize(imagesCount);
+
+	m_DepthAttachmentsHR.resize(imagesCount);
+	m_HdrAttachmentsHR.resize(imagesCount);
 	m_HdrViewsHR.resize(imagesCount);
 	m_DepthViewsHR.resize(imagesCount);
+
+	m_DepthAttachmentsLR.resize(imagesCount);
+	m_HdrAttachmentsLR.resize(imagesCount);
+	m_HdrViewsLR.resize(imagesCount);
+	m_DepthViewsLR.resize(imagesCount);
+
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
 	const TArray<uint32_t, 2> queueIndices = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
@@ -70,8 +78,6 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 	for (size_t i = 0; i < m_SwapchainImages.size(); ++i)
 	{
-		VkImageView imageView;
-
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.image = m_SwapchainImages[i];
@@ -93,7 +99,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		hdrInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		hdrInfo.mipLevels = 1;
-		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		hdrInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 		hdrInfo.queueFamilyIndexCount = queueIndices.size();
 		hdrInfo.pQueueFamilyIndices = queueIndices.data();
@@ -113,14 +119,25 @@ VkBool32 VulkanBase::create_swapchain_images()
 		depthInfo.queueFamilyIndexCount = queueIndices.size();
 		depthInfo.pQueueFamilyIndices = queueIndices.data();
 
-		res = (vkCreateImageView(m_Scope.GetDevice(), &viewInfo, VK_NULL_HANDLE, &imageView) == VK_SUCCESS) & res;
-		m_SwapchainViews.push_back(imageView);
+		res = (vkCreateImageView(m_Scope.GetDevice(), &viewInfo, VK_NULL_HANDLE, &m_SwapchainViews[i]) == VK_SUCCESS) & res;
 
-		m_HdrAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachments[i]);
+		m_HdrAttachmentsHR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsHR[i]);
 
-		m_DepthAttachments[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
-		m_DepthViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachments[i]);
+		m_DepthAttachmentsHR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
+		m_DepthViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsHR[i]);
+
+		hdrInfo.extent.width /= 2;
+		hdrInfo.extent.height /= 2;
+		hdrInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		m_HdrAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_HdrViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsLR[i]);
+
+		depthInfo.extent.width /= 2;
+		depthInfo.extent.height /= 2;
+		m_DepthAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
+		m_DepthViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsLR[i]);
 	}
 
 	return res;
@@ -130,12 +147,14 @@ VkBool32 VulkanBase::create_framebuffers()
 {
 	assert(m_SwapchainImages.size() > 0 && m_Scope.GetRenderPass() != VK_NULL_HANDLE);
 
-	m_Framebuffers.resize(m_SwapchainImages.size());
+	m_FramebuffersHR.resize(m_SwapchainImages.size());
+	m_FramebuffersLR.resize(m_SwapchainImages.size());
 
 	VkBool32 res = 1;
-	for (size_t i = 0; i < m_Framebuffers.size(); ++i)
+	for (size_t i = 0; i < m_SwapchainImages.size(); ++i)
 	{
-		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView() }, &m_Framebuffers[i]) & res;
+		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView() }, &m_FramebuffersHR[i]) & res;
+		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView() }, &m_FramebuffersLR[i]) & res;
 	}
 
 	return res;

@@ -2,6 +2,7 @@
 #include "ubo.glsl"
 #include "lighting.glsl"
 
+layout(location = 0) in vec2 ScreenUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 1, binding = 1) uniform sampler3D InscatteringLUT;
@@ -43,7 +44,6 @@ vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
 
 void main()
 {
-	vec2 ScreenUV = gl_FragCoord.xy / ubo.Resolution;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = inverse(ubo.ProjectionMatrix) * ScreenNDC;
     vec4 ScreenWorld = inverse(ubo.ViewMatrix) * vec4(ScreenView.xy, -1.0, 0.0);
