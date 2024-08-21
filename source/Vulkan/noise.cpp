@@ -30,18 +30,8 @@ TAuto<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkForm
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	VkImageViewCreateInfo noiseImageView{};
-	noiseImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	noiseImageView.viewType = imageSize.depth == 1u ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D;
-	noiseImageView.format = format;
-	noiseImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	noiseImageView.subresourceRange.baseArrayLayer = 0u;
-	noiseImageView.subresourceRange.baseMipLevel = 0u;
-	noiseImageView.subresourceRange.layerCount = 1u;
-	noiseImageView.subresourceRange.levelCount = 1u;
-
 	TAuto<VulkanImage> noise = std::make_unique<VulkanImage>(Scope, noiseInfo, noiseAllocCreateInfo);
-	TAuto<VulkanImageView> noise_view = std::make_unique<VulkanImageView>(Scope, *noise, noiseImageView.subresourceRange);
+	TAuto<VulkanImageView> noise_view = std::make_unique<VulkanImageView>(Scope, *noise);
 
 	ComputePipelineDescriptor noise_pipeline{};
 	TAuto<DescriptorSet> noise_set = DescriptorSetDescriptor().AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, noise_view->GetImageView())

@@ -122,6 +122,7 @@ VulkanBase::~VulkanBase() noexcept
 	m_CloudLayer.reset();
 	m_VolumeShape.reset();
 	m_VolumeDetail.reset();
+	m_VolumeWeather.reset();
 
 	m_TransmittanceLUT.reset();
 	m_ScatteringLUT.reset();

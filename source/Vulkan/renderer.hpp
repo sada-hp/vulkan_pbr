@@ -108,12 +108,15 @@ private:
 
 	VulkanTexture m_VolumeShape = {};
 	VulkanTexture m_VolumeDetail = {};
+	VulkanTexture m_VolumeWeather = {};
 
 	VulkanTexture m_ScatteringLUT = {};
 	VulkanTexture m_IrradianceLUT = {};
 	VulkanTexture m_TransmittanceLUT = {};
 
 	uint32_t m_SwapchainIndex = 0;
+
+	const float Rg = 6360.0 * 1e3;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
