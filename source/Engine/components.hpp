@@ -189,9 +189,9 @@ namespace GRComponents
 			return *this;
 		}
 
-		GRAPI Transform& SetRotation(float pitch, float yaw, float roll)
+		GRAPI Transform& SetRotation(T pitch, T yaw, T roll)
 		{
-			TQuat q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
+			glm::qua<T> q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
 			q = q * glm::angleAxis(roll, glm::vec<3, T>(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec<3, T>(1, 0, 0));
 
@@ -204,16 +204,16 @@ namespace GRComponents
 			return *this;
 		}
 
-		GRAPI Transform& Rotate(float pitch, float yaw, float roll)
+		GRAPI Transform& Rotate(T pitch, T yaw, T roll)
 		{
-			TQuat q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
+			glm::qua<T> q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
 			q = q * glm::angleAxis(roll, glm::vec<3, T>(0, 0, 1));
 			q = q * glm::angleAxis(-pitch, glm::vec<3, T>(1, 0, 0));
 
 			return SetRotation(glm::mat3_cast(q) * GetRotation());
 		}
 
-		GRAPI Transform& SetScale(float x, float y, float z)
+		GRAPI Transform& SetScale(T x, T y, T z)
 		{
 			glm::mat<3, 3, T> mat = glm::mat<3, 3, T>(matrix);
 			mat[0] = glm::normalize(mat[0]) * x;
