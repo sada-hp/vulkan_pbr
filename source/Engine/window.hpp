@@ -22,6 +22,8 @@ namespace GR
 
 		void _init(entt::registry& registry, ApplicationSettings& settrings);
 
+		void _destroy();
+
 		GLFWwindow* _wptr() const { return m_GlfwWindow; };
 
 	public:

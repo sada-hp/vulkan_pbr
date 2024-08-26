@@ -16,13 +16,10 @@ namespace GR
 
 	Window::~Window()
 	{
-#ifdef INCLUDE_GUI
-		ImGui_ImplGlfw_Shutdown();
-#endif
-
-		delete m_Renderer;
-		glfwDestroyWindow(m_GlfwWindow);
-		glfwTerminate();
+		if (m_GlfwWindow)
+		{
+			_destroy();
+		}
 	}
 
 	void Window::_init(entt::registry& registry, ApplicationSettings& settings)
@@ -38,6 +35,20 @@ namespace GR
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
 #endif
+	}
+
+	void Window::_destroy()
+	{
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_Shutdown();
+#endif
+
+		delete m_Renderer;
+		glfwDestroyWindow(m_GlfwWindow);
+		glfwTerminate();
+
+		m_GlfwWindow = nullptr;
+		m_Renderer = nullptr;
 	}
 
 	void Window::SetTitle(const char* title)

@@ -19,7 +19,6 @@ namespace GR
 #endif
 
 		m_Window._init(m_Registry, Settings);
-
 		m_Context = { &m_Listener , &GetRenderer(), this };
 
 		glfwSetWindowUserPointer(m_Window._wptr(), &m_Context);
@@ -32,6 +31,7 @@ namespace GR
 
 	GrayEngine::~GrayEngine()
 	{
+		m_Window._destroy();
 		m_Registry.clear();
 	}
 

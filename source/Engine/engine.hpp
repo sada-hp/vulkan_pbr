@@ -29,6 +29,7 @@ namespace GR
 		entt::registry m_Registry;
 		EventListener m_Listener;
 		Window m_Window;
+
 		double m_Delta = 0.0;
 		double m_Time = 0;
 
@@ -58,17 +59,6 @@ namespace GR
 		ImGuiContext* m_GuiContext;
 #endif
 	public:
-#ifdef INCLUDE_GUI
-		/*
-		* !@brief Get the associated ImGui context
-		* 
-		* @return ImGui context associated with engine context
-		*/
-		GRAPI ImGuiContext* GetGUIContext()
-		{
-			return m_GuiContext;
-		}
-#endif
 		/*
 		* !@brief User defined pointer, renderer itself does not reference it
 		*/
@@ -85,6 +75,19 @@ namespace GR
 		* !@brief User defined pointer, renderer itself does not reference it
 		*/
 		void* userPointer4 = nullptr;
+
+	public:
+#ifdef INCLUDE_GUI
+		/*
+		* !@brief Get the associated ImGui context
+		* 
+		* @return ImGui context associated with engine context
+		*/
+		GRAPI ImGuiContext* GetGUIContext()
+		{
+			return m_GuiContext;
+		}
+#endif
 
 		GRAPI GrayEngine(int argc, char** argv, ApplicationSettings& Settings);
 
