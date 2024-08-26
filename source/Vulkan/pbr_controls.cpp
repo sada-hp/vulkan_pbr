@@ -6,7 +6,7 @@ entt::entity VulkanBase::AddMesh(const std::string& mesh_path)
 	entt::entity ent = m_Registry.create();
 
 	PBRObject& gro = m_Registry.emplace_or_replace<PBRObject>(ent);
-	m_Registry.emplace_or_replace<GRComponents::Transform>(ent);
+	m_Registry.emplace_or_replace<GRComponents::Transform<float>>(ent);
 	m_Registry.emplace_or_replace<GRComponents::RGBColor>(ent);
 	m_Registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
 	m_Registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);
@@ -29,7 +29,7 @@ entt::entity VulkanBase::AddShape(const GRShape::Shape& descriptor)
 {
 	entt::entity ent = m_Registry.create();
 	PBRObject& gro = m_Registry.emplace_or_replace<PBRObject>(ent);
-	m_Registry.emplace_or_replace<GRComponents::Transform>(ent);
+	m_Registry.emplace_or_replace<GRComponents::Transform<float>>(ent);
 	m_Registry.emplace_or_replace<GRComponents::RGBColor>(ent);
 	m_Registry.emplace_or_replace<GRComponents::RoughnessMultiplier>(ent);
 	m_Registry.emplace_or_replace<GRComponents::MetallicOverride>(ent);

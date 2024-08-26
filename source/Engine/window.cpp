@@ -9,17 +9,9 @@
 
 namespace GR
 {
-	Window::Window(const char* title, int width, int height)
+	Window::Window()
 	{
-		glfwInit();
-		assert(glfwVulkanSupported());
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-		m_GlfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
 
-#ifdef INCLUDE_GUI
-		ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
-#endif
 	}
 
 	Window::~Window()
@@ -28,8 +20,24 @@ namespace GR
 		ImGui_ImplGlfw_Shutdown();
 #endif
 
+		delete m_Renderer;
 		glfwDestroyWindow(m_GlfwWindow);
 		glfwTerminate();
+	}
+
+	void Window::_init(entt::registry& registry, ApplicationSettings& settings)
+	{
+		glfwInit();
+		assert(glfwVulkanSupported());
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+		m_GlfwWindow = glfwCreateWindow(settings.WindowExtents.x, settings.WindowExtents.y, settings.ApplicationName.c_str(), nullptr, nullptr);
+
+		m_Renderer = new VulkanBase(m_GlfwWindow, registry);
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
+#endif
 	}
 
 	void Window::SetTitle(const char* title)
@@ -87,5 +95,10 @@ namespace GR
 	void Window::SetAttribute(int attrib, int value)
 	{
 		glfwSetWindowAttrib(m_GlfwWindow, attrib, value);
+	}
+
+	VulkanBase& Window::GetRenderer()
+	{
+		return *m_Renderer;
 	}
 };

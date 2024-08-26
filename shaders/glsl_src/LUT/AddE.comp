@@ -15,6 +15,6 @@ void main()
 {
     vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
     vec4 E = imageLoad(outImage, ivec2(gl_GlobalInvocationID.xy));
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(E.rgb + texture(DeltaE, UV).rgb, 0.0));
-    //imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(texture(DeltaE, UV).rgb, 0.0));
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(E.rgb + texelFetch(DeltaE, ivec2(gl_GlobalInvocationID.xy), 0).rgb, 0.0));
+    //imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(texelFetch(DeltaE, ivec2(gl_GlobalInvocationID.xy), 0).rgb, 0.0));
 }

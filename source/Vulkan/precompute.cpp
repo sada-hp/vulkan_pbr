@@ -59,7 +59,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VmaAllocationCreateInfo imageAlloc{};
 	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp);
+	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::LinearRepeat);
 
 	m_TransmittanceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	m_TransmittanceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TransmittanceLUT.Image);

@@ -18,6 +18,7 @@ VulkanBase::VulkanBase(GLFWwindow* window, entt::registry& in_registry)
 	TVector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
 	deviceFeatures.fullDrawIndexUint32 = VK_TRUE;
+	deviceFeatures.shaderFloat64 = VK_TRUE;
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	poolSizes[0].descriptorCount = 100u;
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLER;
@@ -205,9 +206,12 @@ void VulkanBase::_step(float DeltaTime)
 
 	// Udpate UBO
 	{
-		TMat4 view_matrix = m_Camera.get_view_matrix();
+		TDMat4 view_matrix = m_Camera.get_view_matrix();
+		TDMat4 view_matrix_inverse = glm::inverse(view_matrix);
 		TMat4 projection_matrix = m_Camera.get_projection_matrix();
-		TMat4 view_proj_matrix = projection_matrix * view_matrix;
+		TMat4 projection_matrix_inverse = glm::inverse(projection_matrix);
+		TDMat4 view_proj_matrix = TDMat4(projection_matrix) * view_matrix;
+		TDVec4 CameraPositionFP64 = TDVec4(m_Camera.View.GetOffset(), 1.0);
 		TVec4 CameraPosition = TVec4(m_Camera.View.GetOffset(), 1.0);
 		TVec3 Sun = glm::normalize(m_SunDirection);
 		TVec2 ScreenSize = TVec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
@@ -216,12 +220,15 @@ void VulkanBase::_step(float DeltaTime)
 		UniformBuffer Uniform
 		{ 
 			view_proj_matrix,
-			projection_matrix,
 			view_matrix,
+			view_matrix_inverse,
+			projection_matrix,
+			projection_matrix_inverse,
+			CameraPositionFP64,
 			CameraPosition,
 			Sun,
 			Time,
-			ScreenSize
+			ScreenSize,
 		};
 
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
@@ -266,7 +273,7 @@ void VulkanBase::_step(float DeltaTime)
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
 		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
 		m_Volumetrics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		vkCmdDraw(cmd, 3, 1, 0, 0); 
 
 		vkCmdEndRenderPass(cmd);
 	}
@@ -482,7 +489,7 @@ void VulkanBase::_handleResize()
 
 TAuto<VulkanTexture> VulkanBase::_loadImage(const std::string& path, VkFormat format)
 {
-	TAuto< VulkanTexture> Texture = std::make_unique<VulkanTexture>();
+	TAuto<VulkanTexture> Texture = std::make_unique<VulkanTexture>();
 	Texture->Image = GRVkFile::_importImage(m_Scope, path.c_str(), format, 0);
 	Texture->View = std::make_unique<VulkanImageView>(m_Scope, *Texture->Image, Texture->Image->GetSubResourceRange());
 
@@ -501,7 +508,7 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 
 void VulkanBase::render_objects(VkCommandBuffer cmd)
 {
-	auto view = m_Registry.view<PBRObject, GRComponents::Transform>();
+	auto view = m_Registry.view<PBRObject, GRComponents::Transform<float>>();
 
 	VkDeviceSize offsets[] = { 0 };
 	for (const auto& [ent, gro, world] : view.each())

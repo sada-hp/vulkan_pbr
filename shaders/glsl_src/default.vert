@@ -32,5 +32,5 @@ void main()
     WorldPosition = PushConstants.WorldMatrix * vec4(vertPosition, 1.0);
     FragUV = vertUV;
     
-    gl_Position = ubo.ViewProjectionMatrix * WorldPosition;
+    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
 }

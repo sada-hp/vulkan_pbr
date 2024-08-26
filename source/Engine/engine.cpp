@@ -18,31 +18,26 @@ namespace GR
 		ImGui::SetCurrentContext(m_GuiContext);
 #endif
 
-		m_Listener = new EventListener();
-		m_Window = new Window(Settings.ApplicationName.c_str(), Settings.WindowExtents.x, Settings.WindowExtents.y);
-		m_Renderer = new VulkanBase(m_Window->m_GlfwWindow, m_Registry);
+		m_Window._init(m_Registry, Settings);
 
-		m_Context = { m_Listener , m_Renderer, this };
+		m_Context = { &m_Listener , &GetRenderer(), this };
 
-		glfwSetWindowUserPointer(m_Window->m_GlfwWindow, &m_Context);
-		glfwSetWindowSizeCallback(m_Window->m_GlfwWindow, glfw_resize);
-		glfwSetKeyCallback(m_Window->m_GlfwWindow, glfw_key_press);
-		glfwSetMouseButtonCallback(m_Window->m_GlfwWindow, glfw_mouse_press);
-		glfwSetCursorPosCallback(m_Window->m_GlfwWindow, glfw_mouse_move);
-		glfwSetScrollCallback(m_Window->m_GlfwWindow, glfw_scroll);
+		glfwSetWindowUserPointer(m_Window._wptr(), &m_Context);
+		glfwSetWindowSizeCallback(m_Window._wptr(), glfw_resize);
+		glfwSetKeyCallback(m_Window._wptr(), glfw_key_press);
+		glfwSetMouseButtonCallback(m_Window._wptr(), glfw_mouse_press);
+		glfwSetCursorPosCallback(m_Window._wptr(), glfw_mouse_move);
+		glfwSetScrollCallback(m_Window._wptr(), glfw_scroll);
 	}
 
 	GrayEngine::~GrayEngine()
 	{
-		delete m_Listener;
-		delete m_Renderer;
-		delete m_Window;
 		m_Registry.clear();
 	}
 
 	void GrayEngine::StartGameLoop()
 	{
-		while (!glfwWindowShouldClose(m_Window->m_GlfwWindow))
+		while (!glfwWindowShouldClose(m_Window._wptr()))
 		{
 			glfwPollEvents();
 
@@ -64,7 +59,7 @@ namespace GR
 #ifdef INCLUDE_GUI
 			ImGui::Render();
 #endif
-			m_Renderer->_step(m_Delta);
+			GetRenderer()._step(m_Delta);
 		}
 	}
 
@@ -78,14 +73,14 @@ namespace GR
 		return glfwGetTime();
 	}
 
-	Entity GrayEngine::AddMesh(const std::string& MeshPath) const
+	Entity GrayEngine::AddMesh(const std::string& MeshPath)
 	{
-		return m_Renderer->AddMesh(MeshPath);
+		return GetRenderer().AddMesh(MeshPath);
 	}
 
-	Entity GrayEngine::AddShape(const GRShape::Shape& Descriptor) const
+	Entity GrayEngine::AddShape(const GRShape::Shape& Descriptor)
 	{
-		return m_Renderer->AddShape(Descriptor);
+		return GetRenderer().AddShape(Descriptor);
 	}
 
 	void GrayEngine::BindImage(GRComponents::Resource<Texture>& Resource, const std::string& path, EImageType type)
@@ -105,32 +100,32 @@ namespace GR
 			break;
 		}
 
-		Resource.Set(m_Renderer->_loadImage(path, format));
+		Resource.Set(GetRenderer()._loadImage(path, format));
 	}
 
-	Window& GrayEngine::GetWindow() const
+	Window& GrayEngine::GetWindow()
 	{
-		return *m_Window;
+		return m_Window;
 	}
 
-	Camera& GrayEngine::GetMainCamera() const
+	Camera& GrayEngine::GetMainCamera()
 	{
-		return m_Renderer->m_Camera;
+		return GetRenderer().m_Camera;
 	}
 
 	EventListener& GrayEngine::GetEventListener()
 	{
-		return *m_Listener;
+		return m_Listener;
 	}
 
 	VulkanBase& GrayEngine::GetRenderer()
 	{
-		return *m_Renderer;
+		return GetWindow().GetRenderer();
 	}
 
 	void GrayEngine::ClearEntities()
 	{
-		m_Renderer->Wait();
+		GetRenderer().Wait();
 		m_Registry.clear();
 	}
 };

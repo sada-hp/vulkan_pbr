@@ -5,7 +5,8 @@
 
 vec3 sphereStart;
 vec3 sphereEnd;
-float sphereRSq;
+float outSphereRSq;
+float inSphereRSq;
 
 // used for shadow sampling
 vec3 light_kernel[] =
@@ -113,12 +114,14 @@ void AtmosphereAtPoint(vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphe
 
 float GetHeightFraction(vec3 p)
 {
-    return 1.0 - saturate((p.y - sphereStart.y) / (sphereEnd.y - sphereStart.y));
+    p = p - sphereStart;
+    return 1.0 - saturate(sqrt(dot(p, p) / inSphereRSq));
+    //return 1.0 - saturate(dot(p, p) / dot(sphereEnd, sphereEnd));
 }
 
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
-    return scale * p / Rg + vec2(ubo.Time * Clouds.WindSpeed * speed_mod, 0.0).xyx;
+    return scale * p / Rct + vec2(ubo.Time * Clouds.WindSpeed * speed_mod, 0.0).xyx;
 }
 
 float SampleCloudShape(vec3 x0, int lod)
@@ -168,7 +171,16 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     {
         pos = rs + float(i) * radius * light_kernel[i];
 
-        float sampled_density = SampleDensity(pos, 1);
+        float sampled_density = 0.0;
+
+        if (density < 0.3)
+        {
+            sampled_density = SampleDensity(pos, 1);
+        }
+        else
+        {
+            sampled_density = SampleCloudShape(pos, 1);
+        }
 
         if (sampled_density > 0.0)
         {
@@ -196,9 +208,17 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     vec4 scattering = vec4(0.0, 0.0, 0.0, 1.0);
     vec3 pos = rs;
     float sample_density = 0.0;
-    vec3 rl = normalize(ubo.SunDirection.xyz);
+
+    mat3 R;
+    R[1] = normalize(rs + vec3(0.0, Rg, 0.0));
+    R[0] = vec3(1.0, 0.0, 0.0);
+    R[2] = normalize(cross(R[0], R[1]));
+    vec3 rl = normalize(transpose(R) * ubo.SunDirection.xyz);
+
     float phase = HGDPhase(dot(rl, rd), 0.75, -0.15, 0.5, MieG);
     //float phase = DualLobeFunction(dot(rl, rd), MieG, -0.25, 0.65);
+
+    //return vec4(vec3(10.0 * vec3(smoothstep(0.25, 1.0, phase))), 0.0);
 
     // skip empty space until cloud is found
     int i = 0;
@@ -241,12 +261,12 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     if (scattering.a != 1.0)
     {
         SAtmosphere Atmosphere;
-        AtmosphereAtPoint(vec3(0, Rg, 0) + rs, distance(rs, re), normalize(re - rs), rl, Atmosphere);
+        AtmosphereAtPoint(vec3(0, Rg, 0) + rs, distance(rs, re), normalize(re - rs), ubo.SunDirection.xyz, Atmosphere);
         float CloudTr = (meanD / meanT);
         vec3 E = Atmosphere.L + Atmosphere.S;
         scattering.rgb = scattering.rgb * E;
 
-        AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), normalize(rs - ubo.CameraPosition.xyz), rl, Atmosphere);
+        AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), normalize(rs - ubo.CameraPosition.xyz), ubo.SunDirection.xyz, Atmosphere);
         scattering.rgb = scattering.rgb + Atmosphere.S * (1.0 - scattering.a);
     }
 
@@ -256,21 +276,23 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 void main()
 {
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
-    vec4 ScreenView = inverse(ubo.ProjectionMatrix) * ScreenNDC;
-    vec4 ScreenWorld = inverse(ubo.ViewMatrix) * vec4(ScreenView.xy, -1.0, 0.0);
+    vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
+    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xy, -1.0, 0.0));
     vec3 RayDirection = normalize(ScreenWorld.xyz);
-    vec3 RayOrigin = ubo.CameraPosition.xyz;
+    vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
     vec3 SphereCenter = vec3(0.0, -Rg, 0.0);
 
-    if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rg, sphereStart))
+    if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rg, sphereStart)) // length(RayOrigin + vec3(0.0, Rg, 0.0)) < Rcb && 
     {
         discard;
     }
 
     if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rcb, sphereStart)
-    && RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rct, sphereEnd)) 
+    && RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rct, sphereEnd)
+    )
     {
-        sphereRSq = dot(sphereEnd, sphereEnd);
+        outSphereRSq = dot(sphereEnd, sphereEnd);
+        inSphereRSq = dot(sphereEnd - sphereStart, sphereEnd - sphereStart);
         outColor = MarchToCloud(sphereStart, sphereEnd, RayDirection);
     }
     else 

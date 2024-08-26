@@ -12,12 +12,17 @@ namespace GR
 	private:
 		friend class GrayEngine;
 
-		GLFWwindow* m_GlfwWindow;
+		GLFWwindow* m_GlfwWindow = nullptr;
+		VulkanBase* m_Renderer = nullptr;
 
 	protected:
-		Window(const char* title, int width, int height);
+		Window();
 
 		~Window();
+
+		void _init(entt::registry& registry, ApplicationSettings& settrings);
+
+		GLFWwindow* _wptr() const { return m_GlfwWindow; };
 
 	public:
 		/*
@@ -55,6 +60,10 @@ namespace GR
 		* @return Double representing the ratio between width and height of the window
 		*/
 		GRAPI double GetAspectRatio() const;
+		/*
+		* !@brief Unsafe! Get raw renderer reference
+		*/
+		GRAPI VulkanBase& GetRenderer();
 		/*
 		* !@brief Set cursor position on the window
 		* 

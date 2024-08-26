@@ -21,5 +21,5 @@ void main()
     UVWToWorldInscatter(UVW.xy, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
 
     vec4 S = imageLoad(outImage, ivec3(gl_GlobalInvocationID.xyz));
-    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), S + vec4(texture(DeltaS, UVW).rgb / RayleighPhase(CosViewun), 0.0));
+    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), S + vec4(texelFetch(DeltaS, ivec3(gl_GlobalInvocationID.xyz), 0).rgb / RayleighPhase(CosViewun), 0.0));
 }

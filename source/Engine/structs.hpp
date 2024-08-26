@@ -13,9 +13,12 @@ struct ApplicationSettings
 */
 struct UniformBuffer
 {
-	glm::mat4 ViewProjection;
+	glm::dmat4 ViewProjection;
+	glm::dmat4 ViewMatrix;
+	glm::dmat4 ViewMatrixInverse;
+	glm::mat4 ProjectionMatrix;
 	glm::mat4 ProjectionMatrixInverse;
-	glm::mat4 ViewMatrixInverse;
+	glm::dvec4 CameraPositionFP64;
 	glm::vec4 CameraPosition;
 	glm::vec3 SunDirection;
 	float Time;
@@ -35,8 +38,8 @@ struct CloudLayerProfile
 	}
 
 	float Coverage = 0.175;
-	float VerticalSpan = 0.2;
-	float Absorption = 0.05;
+	float VerticalSpan = 0.5;
+	float Absorption = 0.025;
 	float WindSpeed = 0.25;
 };
 /*

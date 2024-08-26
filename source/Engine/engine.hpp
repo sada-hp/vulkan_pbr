@@ -27,9 +27,8 @@ namespace GR
 	private:
 		TVector<void(*)(GrayEngine*, double)> m_Inputs;
 		entt::registry m_Registry;
-		EventListener* m_Listener;
-		VulkanBase* m_Renderer;
-		Window* m_Window;
+		EventListener m_Listener;
+		Window m_Window;
 		double m_Delta = 0.0;
 		double m_Time = 0;
 
@@ -113,7 +112,7 @@ namespace GR
 		* 
 		* @return Context's window
 		*/
-		GRAPI Window& GetWindow() const;
+		GRAPI Window& GetWindow();
 		/*
 		* !@brief Load mesh from file
 		* 
@@ -121,7 +120,7 @@ namespace GR
 		* 
 		* @return New entity handle
 		*/
-		GRAPI Entity AddMesh(const std::string& MeshPath) const;
+		GRAPI Entity AddMesh(const std::string& MeshPath);
 		/*
 		* !@brief Generate mesh from shape descriptor
 		* 
@@ -129,13 +128,13 @@ namespace GR
 		* 
 		* @return New entity handle
 		*/
-		GRAPI Entity AddShape(const GRShape::Shape& Descriptor) const;
+		GRAPI Entity AddShape(const GRShape::Shape& Descriptor);
 		/*
 		* !@brief Get active viewport camera
 		* 
 		* @return Camera descriptor
 		*/
-		GRAPI Camera& GetMainCamera() const;
+		GRAPI Camera& GetMainCamera();
 		/*
 		* !@brief Get associated engine event listener
 		* 

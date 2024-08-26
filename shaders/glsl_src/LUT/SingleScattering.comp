@@ -16,10 +16,7 @@ layout (binding = 2) uniform sampler3D DeltaSM;
 void main()
 {
     vec3 UVW = vec3(0.0);
-    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
-    UVW.z = float(gl_GlobalInvocationID.z) / float(imageSize(outImage).z);
-
-    vec4 Ray = texture(DeltaSR, UVW);
-    vec4 Mie = texture(DeltaSM, UVW);
+    vec4 Ray = texelFetch(DeltaSR, ivec3(gl_GlobalInvocationID.xyz), 0);
+    vec4 Mie = texelFetch(DeltaSM, ivec3(gl_GlobalInvocationID.xyz), 0);
     imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(Ray.rgb, Mie.r));
 }

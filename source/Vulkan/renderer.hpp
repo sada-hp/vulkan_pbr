@@ -38,12 +38,12 @@ namespace GR
 	{
 	public:
 		GRComponents::Projection Projection = {};
-		GRComponents::Transform View = {};
+		GRComponents::Transform<double> View = {};
 
 	private:
 		friend class VulkanBase;
 
-		TMat4 get_view_matrix() const
+		TDMat4 get_view_matrix() const
 		{
 			return glm::lookAt(View.GetOffset(), View.GetOffset() + View.GetForward(), View.GetUp());
 		}
@@ -53,9 +53,9 @@ namespace GR
 			return Projection.matrix;
 		}
 
-		TMat4 get_view_projection() const
+		TDMat4 get_view_projection() const
 		{
-			return Projection.matrix * View.matrix;
+			return TDMat4(Projection.matrix) * View.matrix;
 		}
 	};
 };
@@ -116,11 +116,24 @@ private:
 
 	uint32_t m_SwapchainIndex = 0;
 
-	const float Rg = 6360.0 * 1e3;
-
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
 #endif
+
+	entt::registry& m_Registry;
+
+	TShared<VulkanTexture> m_DefaultWhite = {};
+	TShared<VulkanTexture> m_DefaultBlack = {};
+	TShared<VulkanTexture> m_DefaultNormal = {};
+	TShared<VulkanTexture> m_DefaultARM = {};
+
+public:
+	/*
+	* !@brief Should be modified to control the scene
+	*/
+	GR::Camera m_Camera = {};
+	TVec3 m_SunDirection = glm::normalize(TVec3(1.0));
+	const float Rg = 6360.0 * 1e3;
 
 public:
 	// !@brief Defined in renderer.cpp
@@ -171,19 +184,6 @@ public:
 	* @param[in] settings - new parameters of cloud rendering
 	*/
 	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings);
-	/*
-	* !@brief Should be modified to control the scene
-	*/
-	GR::Camera m_Camera = {};
-	TVec3 m_SunDirection = glm::normalize(TVec3(1.0));
-
-private:
-	entt::registry& m_Registry;
-
-	TShared<VulkanTexture> m_DefaultWhite = {};
-	TShared<VulkanTexture> m_DefaultBlack = {};
-	TShared<VulkanTexture> m_DefaultNormal = {};
-	TShared<VulkanTexture> m_DefaultARM = {};
 
 private:
 
