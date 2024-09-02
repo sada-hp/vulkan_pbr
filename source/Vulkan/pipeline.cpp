@@ -1,7 +1,6 @@
 #include "pch.hpp"
 #include "pipeline.hpp"
-
-extern std::string exec_path;
+#include <filesystem>
 
 Pipeline::~Pipeline()
 {
@@ -66,11 +65,11 @@ ComputePipelineDescriptor& ComputePipelineDescriptor::AddSpecializationConstant(
 	return *this;
 }
 
-TAuto<Pipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
+std::unique_ptr<Pipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
 {
 	//assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderNames[VK_SHADER_STAGE_COMPUTE_BIT] != "");
 
-	TAuto<Pipeline> out = std::make_unique<Pipeline>(Scope);
+	std::unique_ptr<Pipeline> out = std::make_unique<Pipeline>(Scope);
 	out->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 	out->type = EPipelineType::Compute;
 
@@ -84,10 +83,10 @@ TAuto<Pipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
 
 	VkShaderModule shader = VK_NULL_HANDLE;
 
-	std::ifstream shaderFile(exec_path + "shaders\\" + shaderNames[VK_SHADER_STAGE_COMPUTE_BIT] + ".spv", std::ios::ate | std::ios::binary);
+	std::ifstream shaderFile("shaders\\" + shaderNames[VK_SHADER_STAGE_COMPUTE_BIT] + ".spv", std::ios::ate | std::ios::binary);
 	std::size_t fileSize = (std::size_t)shaderFile.tellg();
 	shaderFile.seekg(0);
-	TVector<char> shaderCode(fileSize);
+	std::vector<char> shaderCode(fileSize);
 	shaderFile.read(shaderCode.data(), fileSize);
 	shaderFile.close();
 
@@ -97,11 +96,11 @@ TAuto<Pipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
 	shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
 	vkCreateShaderModule(Scope.GetDevice(), &shaderModuleCI, VK_NULL_HANDLE, &shader);
 
-	TVector<unsigned char> specialization_data;
+	std::vector<unsigned char> specialization_data;
 	size_t specialization_entry = 0ull, specialization_offset = 0ull;
-	TVector<VkSpecializationMapEntry> specialization_entries(specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT].size());
+	std::vector<VkSpecializationMapEntry> specialization_entries(specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT].size());
 	for (auto [id, val] : specializationConstants[VK_SHADER_STAGE_COMPUTE_BIT]) {
-		TVector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
+		std::vector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
 
 		specialization_data.resize(specialization_data.size() + specialization_bytes.size());
 		specialization_entries[specialization_entry].constantID = id;
@@ -266,11 +265,11 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRe
 }
 
 //TODO: Check pipeline cache?
-TAuto<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
+std::unique_ptr<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 {
 	//assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderNames.size() > 0);
 
-	TAuto<Pipeline> out = std::make_unique<Pipeline>(Scope);
+	std::unique_ptr<Pipeline> out = std::make_unique<Pipeline>(Scope);
 	out->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	out->type = EPipelineType::Graphics;
 
@@ -282,18 +281,18 @@ TAuto<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 	pipelineLayoutCI.pPushConstantRanges = pushConstants.data();
 	vkCreatePipelineLayout(Scope.GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &out->pipelineLayout);
 
-	TVector<VkShaderModule> shaders;
-	TVector<VkPipelineShaderStageCreateInfo> pipelineStagesCI{};
-	const TArray<const VkShaderStageFlagBits, 5> stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
+	std::vector<VkShaderModule> shaders;
+	std::vector<VkPipelineShaderStageCreateInfo> pipelineStagesCI{};
+	const std::array<const VkShaderStageFlagBits, 5> stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
 
 	for (size_t i = 0; i < stages.size(); i++)
 	{
 		if (shaderNames.count(stages[i]) > 0)
 		{
-			std::ifstream shaderFile(exec_path + "shaders\\" + shaderNames[stages[i]] + ".spv", std::ios::ate | std::ios::binary);
+			std::ifstream shaderFile("shaders\\" + shaderNames[stages[i]] + ".spv", std::ios::ate | std::ios::binary);
 			std::size_t fileSize = (std::size_t)shaderFile.tellg();
 			shaderFile.seekg(0);
-			TVector<char> shaderCode(fileSize);
+			std::vector<char> shaderCode(fileSize);
 			shaderFile.read(shaderCode.data(), fileSize);
 			shaderFile.close();
 
@@ -307,11 +306,11 @@ TAuto<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 
 			shaders.push_back(shaderModule);
 
-			TVector<unsigned char> specialization_data;
+			std::vector<unsigned char> specialization_data;
 			size_t specialization_entry = 0ull, specialization_offset = 0ull;
-			TVector<VkSpecializationMapEntry> specialization_entries(specializationConstants[stages[i]].size());
+			std::vector<VkSpecializationMapEntry> specialization_entries(specializationConstants[stages[i]].size());
 			for (auto [id, val] : specializationConstants[stages[i]]) {
-				TVector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
+				std::vector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
 
 				specialization_data.resize(specialization_data.size() + specialization_bytes.size());
 				specialization_entries[specialization_entry].constantID = id;

@@ -43,11 +43,11 @@ public:
 
 	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view);
 
-	TAuto<DescriptorSet> Allocate(const RenderScope& Scope);
+	std::unique_ptr<DescriptorSet> Allocate(const RenderScope& Scope);
 
 private:
-	TVector<VkDescriptorSetLayoutBinding> bindings;
-	TVector<VkWriteDescriptorSet> writes;
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	std::vector<VkWriteDescriptorSet> writes;
 
 	std::vector<VkDescriptorImageInfo> imageInfos;
 

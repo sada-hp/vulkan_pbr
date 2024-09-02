@@ -70,11 +70,11 @@ public:
 		other.specializationConstants.clear();
 	}
 
-	virtual TAuto<Pipeline> Construct(const RenderScope& Scope) = 0;
+	virtual std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) = 0;
 
 protected:
-	TVector<VkDescriptorSetLayout> descriptorLayouts{};
-	TVector<VkPushConstantRange> pushConstants{};
+	std::vector<VkDescriptorSetLayout> descriptorLayouts{};
+	std::vector<VkPushConstantRange> pushConstants{};
 	std::map<VkShaderStageFlagBits, std::map<uint32_t, std::any>> specializationConstants;
 	std::map<VkShaderStageFlagBits, std::string> shaderNames;
 };
@@ -107,7 +107,7 @@ public:
 
 	ComputePipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value);
 
-	TAuto<Pipeline> Construct(const RenderScope& Scope) override;
+	std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) override;
 };
 
 class GraphicsPipelineDescriptor : public PipelineDescriptor
@@ -160,7 +160,7 @@ public:
 
 	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass);
 
-	TAuto<Pipeline> Construct(const RenderScope& Scope) override;
+	std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) override;
 
 private:
 	uint32_t subpass = 0;
@@ -211,7 +211,7 @@ private:
 		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 	};
 
-	TVector<VkPipelineColorBlendAttachmentState> blendAttachments{ 
+	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{ 
 		defaultAttachment
 	};
 
@@ -261,7 +261,7 @@ private:
 		VK_NULL_HANDLE
 	};
 
-	const TArray<VkDynamicState, 2> dynamics{ 
+	const std::array<VkDynamicState, 2> dynamics{ 
 		VK_DYNAMIC_STATE_VIEWPORT, 
 		VK_DYNAMIC_STATE_SCISSOR 
 	};

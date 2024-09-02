@@ -128,9 +128,9 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t bindi
 	return *this;
 }
 
-TAuto<DescriptorSet> DescriptorSetDescriptor::Allocate(const RenderScope& Scope)
+std::unique_ptr<DescriptorSet> DescriptorSetDescriptor::Allocate(const RenderScope& Scope)
 {
-	TAuto<DescriptorSet> out = std::make_unique<DescriptorSet>(Scope);
+	std::unique_ptr<DescriptorSet> out = std::make_unique<DescriptorSet>(Scope);
 
 	VkDescriptorSetLayoutCreateInfo dsetInfo{};
 	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

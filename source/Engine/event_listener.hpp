@@ -16,40 +16,43 @@ namespace GREvent
 
 namespace GR
 {
-	class GrayEngine;
-
 	class EventListener
 	{
-		friend class GrayEngine;
+	private:
+		friend class Window;
 
-		EventListener();
+		std::vector<void(*)(GREvent::KeyPress, void*)> m_KeyPressEvents;
+		std::vector<void(*)(GREvent::MousePress, void*)> m_MousePressEvents;
+		std::vector<void(*)(GREvent::MousePosition, void*)> m_MouseMoveEvents;
+		std::vector<void(*)(GREvent::ScrollDelta, void*)> m_ScrollEvents;
 
-		~EventListener();
-
-		std::vector<void(*)(GrayEngine*, GREvent::KeyPress)> m_KeyPressEvents;
-		std::vector<void(*)(GrayEngine*, GREvent::MousePress)> m_MousePressEvents;
-		std::vector<void(*)(GrayEngine*, GREvent::MousePosition)> m_MouseMoveEvents;
-		std::vector<void(*)(GrayEngine*, GREvent::ScrollDelta)> m_ScrollEvents;
-
-		void Register(GrayEngine*, GREvent::KeyPress);
-
-		void Register(GrayEngine*, GREvent::MousePress);
-
-		void Register(GrayEngine*, GREvent::MousePosition);
-
-		void Register(GrayEngine*, GREvent::ScrollDelta);
+		void* m_UserPointer = nullptr;
 
 	public:
+		EventListener() = default;
+
+		~EventListener() = default;
+
+		GRAPI void SetUserPointer(void* pointer);
+
 		// !@brief Subscribe to keyboard key press events
-		GRAPI void Subscribe(void(*key_press_callback_func)(GrayEngine*, GREvent::KeyPress));
+		GRAPI void Subscribe(void(*key_press_callback_func)(GREvent::KeyPress, void*));
 
 		// !@brief Subscribe to mouse button press events
-		GRAPI void Subscribe(void(*mouse_press_callback_func)(GrayEngine*, GREvent::MousePress));
+		GRAPI void Subscribe(void(*mouse_press_callback_func)(GREvent::MousePress, void*));
 
 		// !@brief Subscribe to mouse pointer move events
-		GRAPI void Subscribe(void(*mouse_move_callback_func)(GrayEngine*, GREvent::MousePosition));
+		GRAPI void Subscribe(void(*mouse_move_callback_func)(GREvent::MousePosition, void*));
 
 		// !@brief Subscribe to mouse scroll events
-		GRAPI void Subscribe(void(*scroll_callback_fun)(GrayEngine*, GREvent::ScrollDelta));
+		GRAPI void Subscribe(void(*scroll_callback_fun)(GREvent::ScrollDelta, void*));
+
+		GRAPI void Register(GREvent::KeyPress);
+
+		GRAPI void Register(GREvent::MousePress);
+
+		GRAPI void Register(GREvent::MousePosition);
+
+		GRAPI void Register(GREvent::ScrollDelta);
 	};
 };

@@ -3,7 +3,6 @@
 #include "glm/gtx/quaternion.hpp"
 #include "glm/glm.hpp"
 #include "glm/common.hpp"
-#include "Engine/math.hpp"
 #include "Engine/structs.hpp"
 /*
 * List of engine-specific components
@@ -22,7 +21,7 @@ namespace GRComponents
 		* @param[in] flagptr - if given, specifies a bool value, 
 		* which is gonna be updated to true each time 'Set' function is called for this resource
 		*/
-		Resource(TShared<Type> resource, bool* flagptr = nullptr)
+		Resource(std::shared_ptr<Type> resource, bool* flagptr = nullptr)
 			: m_Resource(resource), m_Dirty(flagptr)
 		{
 
@@ -32,7 +31,7 @@ namespace GRComponents
 		* 
 		* @param[in] r - new pointer
 		*/
-		GRAPI void Set(TShared<Type> r)
+		GRAPI virtual void Set(std::shared_ptr<Type> r)
 		{
 			m_Resource = r;
 
@@ -44,13 +43,13 @@ namespace GRComponents
 		* 
 		* @return Shared pointer to the resource
 		*/
-		GRAPI TShared<Type> Get() const
+		GRAPI std::shared_ptr<Type> Get() const
 		{
 			return m_Resource;
 		}
 
 	private:
-		TShared<Type> m_Resource = nullptr;
+		std::shared_ptr<Type> m_Resource = nullptr;
 		bool* m_Dirty = nullptr;
 	};
 	/*
@@ -59,7 +58,7 @@ namespace GRComponents
 	struct AlbedoMap : Resource<Texture>
 	{
 	public:
-		AlbedoMap(TShared<Texture> resource, bool* flagptr = nullptr)
+		AlbedoMap(std::shared_ptr<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};
@@ -69,7 +68,7 @@ namespace GRComponents
 	struct NormalDisplacementMap : Resource<Texture>
 	{
 	public:
-		NormalDisplacementMap(TShared<Texture> resource, bool* flagptr = nullptr)
+		NormalDisplacementMap(std::shared_ptr<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};
@@ -79,7 +78,7 @@ namespace GRComponents
 	struct AORoughnessMetallicMap : Resource<Texture>
 	{
 	public:
-		AORoughnessMetallicMap(TShared<Texture> resource, bool* flagptr = nullptr)
+		AORoughnessMetallicMap(std::shared_ptr<Texture> resource, bool* flagptr = nullptr)
 			: Resource(resource, flagptr) { }
 	private:
 	};

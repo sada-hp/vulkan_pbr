@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "mesh.hpp"
 
-Mesh::Mesh(const RenderScope& InScope, Vertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices)
+VulkanMesh::VulkanMesh(const RenderScope& InScope, Vertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices)
 	: Scope(&InScope)
 {
 	VkBufferCreateInfo sbInfo{};

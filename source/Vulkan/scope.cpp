@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "scope.hpp"
 
-RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const TVector<const char*>& device_extensions)
+RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const std::vector<const char*>& device_extensions)
 {
 	assert(m_PhysicalDevice == VK_NULL_HANDLE);
 
@@ -9,7 +9,7 @@ RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const
 	return *this;
 }
 
-RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const TVector<const char*>& device_extensions, const TVector<VkQueueFlagBits>& queues)
+RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues)
 {
 	assert(m_PhysicalDevice != VK_NULL_HANDLE && m_LogicalDevice == VK_NULL_HANDLE);
 
@@ -49,7 +49,7 @@ RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 RenderScope& RenderScope::CreateDefaultRenderPass()
 {
 	VkRenderPassCreateInfo createInfo{};
-	TArray<VkAttachmentDescription, 3> attachments;
+	std::array<VkAttachmentDescription, 3> attachments;
 
 	//HDR attachment
 	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -87,7 +87,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	VkAttachmentReference depth_ref{ 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 	VkAttachmentReference input_ref{ 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 
-	TArray<VkSubpassDescription, 2> subpassDescriptions{};
+	std::array<VkSubpassDescription, 2> subpassDescriptions{};
 	subpassDescriptions[0].colorAttachmentCount = 1;
 	subpassDescriptions[0].pColorAttachments = &hdr_ref;
 	subpassDescriptions[0].pDepthStencilAttachment = &depth_ref;
@@ -99,7 +99,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	subpassDescriptions[1].pInputAttachments = &input_ref;
 	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-	TArray<VkSubpassDependency, 3> dependencies{};
+	std::array<VkSubpassDependency, 3> dependencies{};
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -140,7 +140,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 RenderScope& RenderScope::CreateLowResRenderPass()
 {
 	VkRenderPassCreateInfo createInfo{};
-	TArray<VkAttachmentDescription, 2> attachments;
+	std::array<VkAttachmentDescription, 2> attachments;
 
 	//HDR attachment
 	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -166,7 +166,7 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	VkAttachmentReference hdr_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
 	VkAttachmentReference depth_ref{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
-	TArray<VkSubpassDescription, 1> subpassDescriptions{};
+	std::array<VkSubpassDescription, 1> subpassDescriptions{};
 	subpassDescriptions[0].colorAttachmentCount = 1;
 	subpassDescriptions[0].pColorAttachments = &hdr_ref;
 	subpassDescriptions[0].pDepthStencilAttachment = &depth_ref;
@@ -185,7 +185,7 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	return *this;
 }
 
-RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const TVector<VkDescriptorPoolSize>& poolSizes)
+RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes)
 {
 	if (m_DescriptorPool != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, VK_NULL_HANDLE);

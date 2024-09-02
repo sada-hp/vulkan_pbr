@@ -3,62 +3,59 @@
 
 namespace GR
 {
-	EventListener::EventListener()
+	void EventListener::SetUserPointer(void* pointer)
 	{
+		m_UserPointer = pointer;
 	}
 
-	EventListener::~EventListener()
+	void EventListener::Register(GREvent::KeyPress e)
 	{
-	}
-
-	void EventListener::Register(GrayEngine* c, GREvent::KeyPress e)
-	{
-		std::for_each(m_KeyPressEvents.begin(), m_KeyPressEvents.end(), [=](void(*f)(GrayEngine*, GREvent::KeyPress))
+		std::for_each(m_KeyPressEvents.begin(), m_KeyPressEvents.end(), [=](void(*f)(GREvent::KeyPress, void*))
 		{
-			f(c, e);
+			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Register(GrayEngine* c, GREvent::MousePress e)
+	void EventListener::Register(GREvent::MousePress e)
 	{
-		std::for_each(m_MousePressEvents.begin(), m_MousePressEvents.end(), [=](void(*f)(GrayEngine*, GREvent::MousePress))
+		std::for_each(m_MousePressEvents.begin(), m_MousePressEvents.end(), [=](void(*f)(GREvent::MousePress, void*))
 		{
-			f(c, e);
+			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Register(GrayEngine* e, GREvent::MousePosition x)
+	void EventListener::Register(GREvent::MousePosition e)
 	{
-		std::for_each(m_MouseMoveEvents.begin(), m_MouseMoveEvents.end(), [=](void(*f)(GrayEngine*, GREvent::MousePosition))
-			{
-				f(e, x);
-			});
+		std::for_each(m_MouseMoveEvents.begin(), m_MouseMoveEvents.end(), [=](void(*f)(GREvent::MousePosition, void*))
+		{
+			f(e, m_UserPointer);
+		});
 	}
 
-	void EventListener::Register(GrayEngine* e, GREvent::ScrollDelta x)
+	void EventListener::Register(GREvent::ScrollDelta e)
 	{
-		std::for_each(m_ScrollEvents.begin(), m_ScrollEvents.end(), [=](void(*f)(GrayEngine*, GREvent::ScrollDelta))
-			{
-				f(e, x);
-			});
+		std::for_each(m_ScrollEvents.begin(), m_ScrollEvents.end(), [=](void(*f)(GREvent::ScrollDelta, void*))
+		{
+			f(e, m_UserPointer);
+		});
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::KeyPress))
+	void EventListener::Subscribe(void(*f)(GREvent::KeyPress, void*))
 	{
 		m_KeyPressEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::MousePress))
+	void EventListener::Subscribe(void(*f)(GREvent::MousePress, void*))
 	{
 		m_MousePressEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::MousePosition))
+	void EventListener::Subscribe(void(*f)(GREvent::MousePosition, void*))
 	{
 		m_MouseMoveEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GrayEngine*, GREvent::ScrollDelta))
+	void EventListener::Subscribe(void(*f)(GREvent::ScrollDelta, void*))
 	{
 		m_ScrollEvents.push_back(f);
 	}

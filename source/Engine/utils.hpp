@@ -2,8 +2,18 @@
 #include "core.hpp"
 #include <string>
 
-namespace GRConvert
+struct Vertex;
+
+namespace GR
 {
+	/*
+	* 
+	*/
+	GRAPI void CalculateNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+	/*
+	*
+	*/
+	GRAPI void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale);
 	/*
 	* !@brief Convert roughness, metallic, ao maps to more tightly packed ARM image
 	* 
@@ -21,4 +31,6 @@ namespace GRConvert
 	* @param[in] Target - local path to output file (create/override), should use .png format
 	*/
 	GRAPI void ConvertImage_NormalHeight(const std::string& Normal, const std::string& Height, const std::string& Target);
+
+	GRAPI double GetTime();
 };

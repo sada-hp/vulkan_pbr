@@ -1,19 +1,22 @@
 #pragma once
 #include "core.hpp"
 #include "entt/entt.hpp"
-#include "Vulkan/general_object.hpp"
-#include "Vulkan/pbr_object.hpp"
+#include "Vulkan/graphics_object.hpp"
 #include "Vulkan/scope.hpp"
 #include "Vulkan/queue.hpp"
 #include "Vulkan/buffer.hpp"
 #include "Vulkan/image.hpp"
 #include "Vulkan/mesh.hpp"
-#include "Engine/file_manager.hpp"
 #include "Vulkan/vulkan_api.hpp"
 #include "Vulkan/noise.hpp"
 #include "Engine/components.hpp"
 #include "Engine/structs.hpp"
 #include "Engine/shapes.hpp"
+#include "Engine/world.hpp"
+
+#ifdef INCLUDE_GUI
+#include "imgui/imgui.h"
+#endif
 
 #if DEBUG == 1
 #define VALIDATION
@@ -21,8 +24,8 @@
 
 struct VulkanTexture : Texture
 {
-	TShared<VulkanImage> Image = VK_NULL_HANDLE;
-	TAuto<VulkanImageView> View = VK_NULL_HANDLE;
+	std::shared_ptr<VulkanImage> Image = VK_NULL_HANDLE;
+	std::unique_ptr<VulkanImageView> View = VK_NULL_HANDLE;
 
 public:
 	void reset()
@@ -34,7 +37,9 @@ public:
 
 namespace GR
 {
-	struct Camera
+	class Window;
+
+	class Camera
 	{
 	public:
 		GRComponents::Projection Projection = {};
@@ -43,54 +48,85 @@ namespace GR
 	private:
 		friend class VulkanBase;
 
-		TDMat4 get_view_matrix() const
+		glm::dmat4 get_view_matrix() const
 		{
 			return glm::lookAt(View.GetOffset(), View.GetOffset() + View.GetForward(), View.GetUp());
 		}
 
-		TMat4 get_projection_matrix() const
+		glm::mat4 get_projection_matrix() const
 		{
 			return Projection.matrix;
 		}
 
-		TDMat4 get_view_projection() const
+		glm::dmat4 get_view_projection() const
 		{
-			return TDMat4(Projection.matrix) * View.matrix;
+			return glm::dmat4(Projection.matrix) * View.matrix;
 		}
+	};
+
+	class Renderer
+	{
+	protected:
+#ifdef INCLUDE_GUI
+		ImGuiContext* m_GuiContext = nullptr;
+#endif
+	public:
+		virtual ~Renderer() = default;
+
+		virtual void BeginFrame(float DeltaTime) = 0;
+
+		virtual void EndFrame() = 0;
+
+		virtual void SetCloudLayerSettings(CloudLayerProfile settings) = 0;
+
+#ifdef INCLUDE_GUI
+		ImGuiContext* GetImguiContext() const { return m_GuiContext; }
+#endif
+
+	public:
+		/*
+		* !@brief Should be modified to control the scene
+		*/
+		GR::Camera m_Camera = {};
+		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
+
+		static constexpr float Rg = 6360.0 * 1e3;
 	};
 };
 
-class VulkanBase
+class VulkanBase final : public GR::Renderer
 {
 private:
-	TVector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	TVector<VkImage> m_SwapchainImages = {};
-	TVector<VkImageView> m_SwapchainViews = {};
+	friend class GR::Window;
+
+	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	std::vector<VkImage> m_SwapchainImages = {};
+	std::vector<VkImageView> m_SwapchainViews = {};
 
 
-	TVector<TAuto<VulkanImage>> m_DepthAttachmentsHR = {};
-	TVector<TAuto<VulkanImageView>> m_DepthViewsHR = {};
+	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsHR = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsHR = {};
 	
-	TVector<TAuto<VulkanImage>> m_HdrAttachmentsHR = {};
-	TVector<TAuto<VulkanImageView>> m_HdrViewsHR = {};
+	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsHR = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsHR = {};
 
 
-	TVector<TAuto<VulkanImage>> m_HdrAttachmentsLR = {};
-	TVector<TAuto<VulkanImageView>> m_HdrViewsLR = {};
+	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsLR = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsLR = {};
 
-	TVector<TAuto<VulkanImage>> m_DepthAttachmentsLR = {};
-	TVector<TAuto<VulkanImageView>> m_DepthViewsLR = {};
+	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsLR = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
 
-	TVector<VkFramebuffer> m_FramebuffersHR = {};
-	TVector<VkFramebuffer> m_FramebuffersLR = {};
+	std::vector<VkFramebuffer> m_FramebuffersHR = {};
+	std::vector<VkFramebuffer> m_FramebuffersLR = {};
 
-	TVector<VkFence> m_PresentFences = {};
-	TVector<VkSemaphore> m_PresentSemaphores = {};
-	TVector<VkSemaphore> m_SwapchainSemaphores = {};
-	TVector<VkCommandBuffer> m_PresentBuffers = {};
-	TVector<TAuto<Pipeline>> m_HDRPipelines = {};
-	TVector<TAuto<DescriptorSet>> m_HDRDescriptors = {};
+	std::vector<VkFence> m_PresentFences = {};
+	std::vector<VkSemaphore> m_PresentSemaphores = {};
+	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
+	std::vector<VkCommandBuffer> m_PresentBuffers = {};
+	std::vector<std::unique_ptr<Pipeline>> m_HDRPipelines = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_HDRDescriptors = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
@@ -98,13 +134,13 @@ private:
 	RenderScope m_Scope = {};
 	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
-	TVector<TAuto<Buffer>> m_UBOBuffers = {};
-	TAuto<Buffer> m_CloudLayer = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
+	std::unique_ptr<Buffer> m_CloudLayer = {};
 
-	TVector<TAuto<DescriptorSet>> m_UBOSets = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
 
-	TAuto<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
-	TAuto<GraphicsObject> m_Atmospherics = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsObject> m_Atmospherics = VK_NULL_HANDLE;
 
 	VulkanTexture m_VolumeShape = {};
 	VulkanTexture m_VolumeDetail = {};
@@ -120,60 +156,31 @@ private:
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
 #endif
 
-	entt::registry& m_Registry;
+	std::shared_ptr<VulkanTexture> m_DefaultWhite = {};
+	std::shared_ptr<VulkanTexture> m_DefaultBlack = {};
+	std::shared_ptr<VulkanTexture> m_DefaultNormal = {};
+	std::shared_ptr<VulkanTexture> m_DefaultARM = {};
 
-	TShared<VulkanTexture> m_DefaultWhite = {};
-	TShared<VulkanTexture> m_DefaultBlack = {};
-	TShared<VulkanTexture> m_DefaultNormal = {};
-	TShared<VulkanTexture> m_DefaultARM = {};
-
-public:
-	/*
-	* !@brief Should be modified to control the scene
-	*/
-	GR::Camera m_Camera = {};
-	TVec3 m_SunDirection = glm::normalize(TVec3(1.0));
-	const float Rg = 6360.0 * 1e3;
+#if DEBUG == 1
+	bool m_InFrame = false;
+#endif
 
 public:
-	// !@brief Defined in renderer.cpp
-	VulkanBase(GLFWwindow* window, entt::registry& registry);
+	VulkanBase(GLFWwindow* window);
 
-	// !@brief Defined in renderer.cpp
 	~VulkanBase() noexcept;
 	/*
-	* !@brief INTERNAL. Renders the next frame of simulation. Defined in renderer.cpp.
+	* !@brief Renders the next frame of simulation. Defined in renderer.cpp.
 	*/
-	void _step(float DeltaTime);
+	GRAPI void BeginFrame(float DeltaTime) override;
 	/*
-	* !@brief INTERNAL. Handles recreation of swapchain dependant objects. Defined in renderer.cpp.
+	*
+	*/
+	GRAPI void EndFrame() override;
+	/*
+	* !@brief Handles recreation of swapchain dependant objects. Defined in renderer.cpp.
 	*/
 	void _handleResize();
-	/*
-	* !@brief Load mesh model to the scene. Defined in renderer.cpp.
-	* 
-	* @param[in] mesh_path - local path to the mesh file (for supported formats look at assimp)
-	* 
-	* @return New entity handle
-	*/
-	GRAPI entt::entity AddMesh(const std::string& mesh_path);
-	/*
-	* !@brief Generate and add a simple shape to the scene. Defined in renderer.cpp.
-	* 
-	* @param[in] descriptor - description of the shape (aka Sphere, Plane, Cube)
-	* 
-	* @return New entity handle
-	*/
-	GRAPI entt::entity AddShape(const GRShape::Shape& descriptor);
-	/*
-	* !@brief INTERNAL. Import image file into the memory using specified format
-	* 
-	* @param[in] path - path to image file
-	* @param[in] format - format to store image in
-	* 
-	* @return Vulkan image memory
-	*/
-	TAuto<VulkanTexture> _loadImage(const std::string& path, VkFormat format);
 	/*
 	* !@brief Wait on CPU for GPU to complete it's current rendering commands
 	*/
@@ -183,66 +190,65 @@ public:
 	* 
 	* @param[in] settings - new parameters of cloud rendering
 	*/
-	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings);
+	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings) override;
+	/*
+	* !@brief INTERNAL. Import image file into the memory using specified format
+	*
+	* @param[in] path - path to image file
+	* @param[in] format - format to store image in
+	*
+	* @return Vulkan image memory
+	*/
+	std::unique_ptr<VulkanTexture> _loadImage(const std::string& path, VkFormat format) const;
+	/*
+	* 
+	*/
+	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shape& shape) const;
+	/*
+	*
+	*/
+	void _drawObject(const PBRObject& gro, const PBRConstants& constants) const;
+	/*
+	*
+	*/
+	void _updateObject(entt::entity ent, entt::registry& registry) const;
 
 private:
 
-	// !@brief Defined in initialization.cpp
 	VkBool32 create_instance();
 
-	// !@brief Defined in initialization.cpp
 	VkBool32 create_swapchain_images();
 
-	// !@brief Defined in initialization.cpp
 	VkBool32 create_framebuffers();
 
-	// !@brief Defined in initialization.cpp
 	VkBool32 create_hdr_pipeline();
 
-	// !@brief Defined in initialization.cpp
 	VkBool32 prepare_renderer_resources();
 
-	// !@brief Defined in initialization.cpp
-	TVector<const char*> getRequiredExtensions();
+	std::vector<const char*> getRequiredExtensions();
 
-	// !@brief Defined in precompute.cpp
 	VkBool32 atmosphere_precompute();
 
-	// !@brief Defined in precompute.cpp
 	VkBool32 volumetric_precompute();
 
-	// !@brief Defined in pbr_controls.cpp
-	void update_pipeline(entt::entity ent);
-
-	// !@brief Defined in pbr_controls.cpp
-	TAuto<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm);
+	std::unique_ptr<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 	
-	// !@brief Defined in pbr_controls.cpp
-	TAuto<Pipeline> create_pbr_pipeline(const DescriptorSet& set);
-
-	// !@brief Defined in renderer.cpp
-	void render_objects(VkCommandBuffer cmd);
+	std::unique_ptr<Pipeline> create_pbr_pipeline(const DescriptorSet& set) const;
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
-	const TVector<const char*> m_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
+	const std::vector<const char*> m_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
 
-	// !@brief Defined in debug_layers.cpp
 	VkResult createDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
 	
-	// !@brief Defined in debug_layers.cpp
 	void destroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
 	
-	// !@brief Defined in debug_layers.cpp
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 	
-	// !@brief Defined in debug_layers.cpp
 	void setupDebugMessenger();
 	
-	// !@brief Defined in debug_layers.cpp
 	VkBool32 checkValidationLayerSupport() const;
 	
-	// !@brief Defined in debug_layers.cpp
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 #endif
 };

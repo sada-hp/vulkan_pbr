@@ -1,5 +1,6 @@
 #include "pch.hpp"
 #include "window.hpp"
+#include "event_listener.hpp"
 
 #ifdef INCLUDE_GUI
 #include "imgui/imgui.h"
@@ -9,46 +10,87 @@
 
 namespace GR
 {
-	Window::Window()
+	void Window::glfw_key_press(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
+		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
+		context->evnt->Register(GREvent::KeyPress((EKey)key, (EAction)action));
 
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+#endif
+	}
+
+	void Window::glfw_mouse_press(GLFWwindow* window, int button, int action, int mods)
+	{
+		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
+		context->evnt->Register(GREvent::MousePress((EMouse)button, (EAction)action));
+	
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+#endif
+	}
+
+	void Window::glfw_mouse_move(GLFWwindow* window, double xpos, double ypos)
+	{
+		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
+		context->evnt->Register(GREvent::MousePosition(xpos, ypos));
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
+#endif
+	}
+
+	void Window::glfw_resize(GLFWwindow* window, int width, int height)
+	{
+		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
+		context->ctx->m_Renderer->_handleResize();
+	}
+
+	void Window::glfw_scroll(GLFWwindow* window, double dx, double dy)
+	{
+		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
+		context->evnt->Register(GREvent::ScrollDelta(dx, dy));
+
+#ifdef INCLUDE_GUI
+		ImGui_ImplGlfw_ScrollCallback(window, dx, dy);
+#endif
+	}
+
+	Window::Window(int width, int height, const char* title)
+	{
+		glfwInit();
+		assert(glfwVulkanSupported());
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+		m_GlfwWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
+
+		m_WindowPointer.ctx = this;
+		glfwSetWindowUserPointer(m_GlfwWindow, &m_WindowPointer);
+		glfwSetWindowSizeCallback(m_GlfwWindow, glfw_resize);
+
+		m_Renderer = new VulkanBase(m_GlfwWindow);
 	}
 
 	Window::~Window()
 	{
 		if (m_GlfwWindow)
 		{
-			_destroy();
+			delete m_Renderer;
+			glfwDestroyWindow(m_GlfwWindow);
+			glfwTerminate();
+
+			m_GlfwWindow = nullptr;
+			m_Renderer = nullptr;
 		}
 	}
 
-	void Window::_init(entt::registry& registry, ApplicationSettings& settings)
+	void Window::SetUpEvents(EventListener& listener)
 	{
-		glfwInit();
-		assert(glfwVulkanSupported());
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-		m_GlfwWindow = glfwCreateWindow(settings.WindowExtents.x, settings.WindowExtents.y, settings.ApplicationName.c_str(), nullptr, nullptr);
-
-		m_Renderer = new VulkanBase(m_GlfwWindow, registry);
-
-#ifdef INCLUDE_GUI
-		ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
-#endif
-	}
-
-	void Window::_destroy()
-	{
-#ifdef INCLUDE_GUI
-		ImGui_ImplGlfw_Shutdown();
-#endif
-
-		delete m_Renderer;
-		glfwDestroyWindow(m_GlfwWindow);
-		glfwTerminate();
-
-		m_GlfwWindow = nullptr;
-		m_Renderer = nullptr;
+		m_WindowPointer.evnt = &listener;
+		glfwSetKeyCallback(m_GlfwWindow, glfw_key_press);
+		glfwSetMouseButtonCallback(m_GlfwWindow, glfw_mouse_press);
+		glfwSetCursorPosCallback(m_GlfwWindow, glfw_mouse_move);
+		glfwSetScrollCallback(m_GlfwWindow, glfw_scroll);
 	}
 
 	void Window::SetTitle(const char* title)
@@ -66,18 +108,18 @@ namespace GR
 		glfwIconifyWindow(m_GlfwWindow);
 	}
 
-	TIVec2 Window::GetWindowSize() const
+	glm::ivec2 Window::GetWindowSize() const
 	{
 		int width = 0, height = 0;
 		glfwGetWindowSize(m_GlfwWindow, &width, &height);
-		return TIVec2{ width, height };
+		return glm::ivec2{ width, height };
 	}
 
-	TVec2 Window::GetCursorPos() const
+	glm::vec2 Window::GetCursorPos() const
 	{
 		double xpos = 0.0, ypos = 0.0;
 		glfwGetCursorPos(m_GlfwWindow, &xpos, &ypos);
-		return TVec2{ xpos, ypos };
+		return glm::vec2{ xpos, ypos };
 	}
 
 	GRAPI double Window::GetAspectRatio() const
@@ -108,8 +150,18 @@ namespace GR
 		glfwSetWindowAttrib(m_GlfwWindow, attrib, value);
 	}
 
-	VulkanBase& Window::GetRenderer()
+	Renderer& Window::GetRenderer() const
 	{
-		return *m_Renderer;
+		return *static_cast<Renderer*>(m_Renderer);
+	}
+
+	bool Window::IsAlive() const
+	{
+		return !glfwWindowShouldClose(m_GlfwWindow);
+	}
+
+	void Window::ProcessEvents() const
+	{
+		glfwPollEvents();
 	}
 };

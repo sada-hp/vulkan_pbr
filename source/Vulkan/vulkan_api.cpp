@@ -54,11 +54,11 @@ VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize
 	return vkCreateDescriptorPool(device, &dpoolInfo, VK_NULL_HANDLE, outPool) == VK_SUCCESS;
 }
 
-TVector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const TVector<VkQueueFlagBits>& flags)
+std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const std::vector<VkQueueFlagBits>& flags)
 {
 	uint32_t familiesCount;
-	TVector<uint32_t> output(flags.size(), 0xffffu);
-	TVector<VkQueueFamilyProperties> queueFamilies;
+	std::vector<uint32_t> output(flags.size(), 0xffffu);
+	std::vector<VkQueueFamilyProperties> queueFamilies;
 
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familiesCount, VK_NULL_HANDLE);
 	queueFamilies.resize(familiesCount);
@@ -116,13 +116,13 @@ TVector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const
 	return output;
 }
 
-VkBool32 EnumerateDeviceExtensions(const VkPhysicalDevice& physicalDevice, const TVector<const char*>& desired_extensions)
+VkBool32 EnumerateDeviceExtensions(const VkPhysicalDevice& physicalDevice, const std::vector<const char*>& desired_extensions)
 {
 	uint32_t extensionCount;
 
 	vkEnumerateDeviceExtensionProperties(physicalDevice, VK_NULL_HANDLE, &extensionCount, VK_NULL_HANDLE);
 
-	TVector<VkExtensionProperties> availableExtensions(extensionCount);
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 	vkEnumerateDeviceExtensionProperties(physicalDevice, VK_NULL_HANDLE, &extensionCount, availableExtensions.data());
 
 	std::set<std::string> requiredExtensions(desired_extensions.begin(), desired_extensions.end());
@@ -144,7 +144,7 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
 	VkSurfaceFormatKHR surfaceFormat = GetSurfaceFormat(physicalDevice, surface, desired_format);
 
-	TVector<uint32_t> queueFamilies(FindDeviceQueues(physicalDevice, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT }));
+	std::vector<uint32_t> queueFamilies(FindDeviceQueues(physicalDevice, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT }));
 	uint32_t desiredImageCount = glm::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
 
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -175,8 +175,8 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 VkSurfaceFormatKHR GetSurfaceFormat(const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface, const VkSurfaceFormatKHR& desired_format)
 {
 	VkSurfaceCapabilitiesKHR capabilities{};
-	TVector<VkSurfaceFormatKHR> formats;
-	TVector<VkPresentModeKHR> presentModes;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
 
 	uint32_t temp = 0;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
@@ -208,7 +208,7 @@ VkBool32 CreateCommandPool(const VkDevice& device, const uint32_t targetQueueInd
 	return vkCreateCommandPool(device, &createInfo, VK_NULL_HANDLE, outPool) == VK_SUCCESS;
 }
 
-VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const TVector<VkImageView>& attachments, VkFramebuffer* outFramebuffer)
+VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer)
 {
 	VkFramebufferCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -232,10 +232,10 @@ VkBool32 CreateAllocator(const VkInstance& instance, const VkPhysicalDevice& phy
 	return vmaCreateAllocator(&createInfo, outAllocator) == VK_SUCCESS;
 }
 
-VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const TVector<const char*>& device_extensions, VkPhysicalDevice* outPhysicalDevice)
+VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const std::vector<const char*>& device_extensions, VkPhysicalDevice* outPhysicalDevice)
 {
 	uint32_t devicesCount;
-	TVector<VkPhysicalDevice> devicesArray;
+	std::vector<VkPhysicalDevice> devicesArray;
 
 	vkEnumeratePhysicalDevices(instance, &devicesCount, VK_NULL_HANDLE);
 	devicesArray.resize(devicesCount);
@@ -253,11 +253,11 @@ VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const TVector<cons
 	return VK_FALSE;
 }
 
-VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const TVector<const char*>& device_extensions, const TVector<uint32_t>& queues, VkDevice* outDevice)
+VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice)
 {
 	assert(physicalDevice != VK_NULL_HANDLE);
 
-	TVector<VkDeviceQueueCreateInfo> queueInfos;
+	std::vector<VkDeviceQueueCreateInfo> queueInfos;
 
 	float queuePriority = 1.0f;
 	for (uint32_t queueFamily : queues) {
@@ -298,9 +298,9 @@ VkBool32 EndCommandBuffer(VkCommandBuffer& cmd)
 	return vkEndCommandBuffer(cmd) == VK_SUCCESS;
 }
 
-TVector<unsigned char> AnyTypeToBytes(std::any target)
+std::vector<unsigned char> AnyTypeToBytes(std::any target)
 {
-	TVector<unsigned char> buf;
+	std::vector<unsigned char> buf;
 
 	if (target.type().name() == typeid(int).name()) {
 		int value = std::any_cast<int>(target);

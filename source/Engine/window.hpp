@@ -1,32 +1,42 @@
 #pragma once
 #include "core.hpp"
-#include "Engine/math.hpp"
 #include "Vulkan/renderer.hpp"
-
-class GrayEnigne;
 
 namespace GR
 {
+	class EventListener;
+
 	class Window
 	{
 	private:
-		friend class GrayEngine;
-
 		GLFWwindow* m_GlfwWindow = nullptr;
 		VulkanBase* m_Renderer = nullptr;
 
-	protected:
-		Window();
+		struct EventContext
+		{
+			Window* ctx;
+			EventListener* evnt;
+		} m_WindowPointer;
 
-		~Window();
+	private:
+		static void glfw_key_press(GLFWwindow* window, int, int, int, int);
 
-		void _init(entt::registry& registry, ApplicationSettings& settrings);
+		static void glfw_mouse_press(GLFWwindow* window, int, int, int);
 
-		void _destroy();
+		static void glfw_mouse_move(GLFWwindow* window, double, double);
 
-		GLFWwindow* _wptr() const { return m_GlfwWindow; };
+		static void glfw_resize(GLFWwindow* window, int, int);
+
+		static void glfw_scroll(GLFWwindow* window, double, double);
 
 	public:
+		GRAPI Window(int width, int height, const char* title);
+
+		GRAPI ~Window();
+		/*
+		* !@brief Connect this window to in-engine event listener
+		*/
+		GRAPI void SetUpEvents(EventListener& listener);
 		/*
 		* !@brief Sets the title of the window
 		* 
@@ -49,23 +59,19 @@ namespace GR
 		* 
 		* @return Vector containing integer width, height of the window
 		*/
-		GRAPI TIVec2 GetWindowSize() const;
+		GRAPI glm::ivec2 GetWindowSize() const;
 		/*
 		* !@brief Get the curent position of the cursor, relative to window
 		* 
 		* @return Vector containing x, y coordinate of cursor
 		*/
-		GRAPI TVec2 GetCursorPos() const;
+		GRAPI glm::vec2 GetCursorPos() const;
 		/*
 		* !@brief Get aspect ration of the window
 		* 
 		* @return Double representing the ratio between width and height of the window
 		*/
 		GRAPI double GetAspectRatio() const;
-		/*
-		* !@brief Unsafe! Get raw renderer reference
-		*/
-		GRAPI VulkanBase& GetRenderer();
 		/*
 		* !@brief Set cursor position on the window
 		* 
@@ -92,5 +98,17 @@ namespace GR
 		* @param[in] value - value of the attribute
 		*/
 		GRAPI void SetAttribute(int attrib, int value);
+		/*
+		* !@brief Get renderer interface reference
+		*/
+		inline GRAPI Renderer& GetRenderer() const;
+		/*
+		* !@brief Check if window was queued for closure
+		*/
+		GRAPI bool IsAlive() const;
+		/*
+		* !@brief Process window event queue
+		*/
+		GRAPI void ProcessEvents() const;
 	};
-}
+};
