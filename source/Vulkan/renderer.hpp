@@ -22,6 +22,14 @@
 #define VALIDATION
 #endif
 
+#ifndef PLANET_RADIUS
+#define PLANET_RADIUS 6360.0 * 1e3
+#endif
+
+#ifndef ATMOSPHERE_RADIUS
+#define ATMOSPHERE_RADIUS 6420.0 * 1e3
+#endif
+
 struct VulkanTexture : Texture
 {
 	std::shared_ptr<VulkanImage> Image = VK_NULL_HANDLE;
@@ -42,8 +50,8 @@ namespace GR
 	class Camera
 	{
 	public:
-		GRComponents::Projection Projection = {};
-		GRComponents::Transform<double> View = {};
+		Components::ProjectionMatrix Projection = {};
+		Components::ViewMatrix View = {};
 
 	private:
 		friend class VulkanBase;
@@ -73,7 +81,7 @@ namespace GR
 	public:
 		virtual ~Renderer() = default;
 
-		virtual void BeginFrame(float DeltaTime) = 0;
+		virtual void BeginFrame() = 0;
 
 		virtual void EndFrame() = 0;
 
@@ -90,7 +98,7 @@ namespace GR
 		GR::Camera m_Camera = {};
 		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
 
-		static constexpr float Rg = 6360.0 * 1e3;
+		static constexpr float Rg = PLANET_RADIUS;
 	};
 };
 
@@ -172,7 +180,7 @@ public:
 	/*
 	* !@brief Renders the next frame of simulation. Defined in renderer.cpp.
 	*/
-	GRAPI void BeginFrame(float DeltaTime) override;
+	GRAPI void BeginFrame() override;
 	/*
 	*
 	*/
@@ -203,7 +211,7 @@ public:
 	/*
 	* 
 	*/
-	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shape& shape) const;
+	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const;
 	/*
 	*
 	*/

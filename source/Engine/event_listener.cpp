@@ -8,54 +8,54 @@ namespace GR
 		m_UserPointer = pointer;
 	}
 
-	void EventListener::Register(GREvent::KeyPress e)
+	void EventListener::Register(Events::KeyPress e) const
 	{
-		std::for_each(m_KeyPressEvents.begin(), m_KeyPressEvents.end(), [=](void(*f)(GREvent::KeyPress, void*))
+		std::for_each(m_KeyPressEvents.begin(), m_KeyPressEvents.end(), [=](void(*f)(Events::KeyPress, void*))
 		{
 			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Register(GREvent::MousePress e)
+	void EventListener::Register(Events::MousePress e) const
 	{
-		std::for_each(m_MousePressEvents.begin(), m_MousePressEvents.end(), [=](void(*f)(GREvent::MousePress, void*))
+		std::for_each(m_MousePressEvents.begin(), m_MousePressEvents.end(), [=](void(*f)(Events::MousePress, void*))
 		{
 			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Register(GREvent::MousePosition e)
+	void EventListener::Register(Events::MousePosition e) const
 	{
-		std::for_each(m_MouseMoveEvents.begin(), m_MouseMoveEvents.end(), [=](void(*f)(GREvent::MousePosition, void*))
+		std::for_each(m_MouseMoveEvents.begin(), m_MouseMoveEvents.end(), [=](void(*f)(Events::MousePosition, void*))
 		{
 			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Register(GREvent::ScrollDelta e)
+	void EventListener::Register(Events::ScrollDelta e) const
 	{
-		std::for_each(m_ScrollEvents.begin(), m_ScrollEvents.end(), [=](void(*f)(GREvent::ScrollDelta, void*))
+		std::for_each(m_ScrollEvents.begin(), m_ScrollEvents.end(), [=](void(*f)(Events::ScrollDelta, void*))
 		{
 			f(e, m_UserPointer);
 		});
 	}
 
-	void EventListener::Subscribe(void(*f)(GREvent::KeyPress, void*))
+	void EventListener::Subscribe(void(*f)(Events::KeyPress, void*))
 	{
 		m_KeyPressEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GREvent::MousePress, void*))
+	void EventListener::Subscribe(void(*f)(Events::MousePress, void*))
 	{
 		m_MousePressEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GREvent::MousePosition, void*))
+	void EventListener::Subscribe(void(*f)(Events::MousePosition, void*))
 	{
 		m_MouseMoveEvents.push_back(f);
 	}
 
-	void EventListener::Subscribe(void(*f)(GREvent::ScrollDelta, void*))
+	void EventListener::Subscribe(void(*f)(Events::ScrollDelta, void*))
 	{
 		m_ScrollEvents.push_back(f);
 	}

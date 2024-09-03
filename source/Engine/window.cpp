@@ -13,7 +13,7 @@ namespace GR
 	void Window::glfw_key_press(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
 		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
-		context->evnt->Register(GREvent::KeyPress((EKey)key, (EAction)action));
+		context->evnt->Register(Events::KeyPress((Enums::EKey)key, (Enums::EAction)action));
 
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
@@ -23,7 +23,7 @@ namespace GR
 	void Window::glfw_mouse_press(GLFWwindow* window, int button, int action, int mods)
 	{
 		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
-		context->evnt->Register(GREvent::MousePress((EMouse)button, (EAction)action));
+		context->evnt->Register(Events::MousePress((Enums::EMouse)button, (Enums::EAction)action));
 	
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
@@ -33,7 +33,7 @@ namespace GR
 	void Window::glfw_mouse_move(GLFWwindow* window, double xpos, double ypos)
 	{
 		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
-		context->evnt->Register(GREvent::MousePosition(xpos, ypos));
+		context->evnt->Register(Events::MousePosition(xpos, ypos));
 
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
@@ -49,7 +49,7 @@ namespace GR
 	void Window::glfw_scroll(GLFWwindow* window, double dx, double dy)
 	{
 		EventContext* context = static_cast<EventContext*>(glfwGetWindowUserPointer(window));
-		context->evnt->Register(GREvent::ScrollDelta(dx, dy));
+		context->evnt->Register(Events::ScrollDelta(dx, dy));
 
 #ifdef INCLUDE_GUI
 		ImGui_ImplGlfw_ScrollCallback(window, dx, dy);

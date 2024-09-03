@@ -273,7 +273,7 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyInstance(m_VkInstance, VK_NULL_HANDLE);
 }
 
-void VulkanBase::BeginFrame(float DeltaTime)
+void VulkanBase::BeginFrame()
 {
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
 		return;
@@ -851,16 +851,16 @@ std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::string& path, V
 	return Texture;
 }
 
-entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shape& shape) const
+entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const
 {
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
 	gro.mesh = shape.Generate(m_Scope);
 
-	registry.emplace_or_replace<GRComponents::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::NormalDisplacementMap>(ent, m_DefaultNormal, &gro.dirty);
-	registry.emplace_or_replace<GRComponents::AORoughnessMetallicMap>(ent, m_DefaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GR::Components::NormalDisplacementMap>(ent, m_DefaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GR::Components::AORoughnessMetallicMap>(ent, m_DefaultWhite, &gro.dirty);
 
 	return ent;
 }
@@ -888,9 +888,9 @@ void VulkanBase::_drawObject(const PBRObject& gro, const PBRConstants& constants
 
 void VulkanBase::_updateObject(entt::entity ent, entt::registry& registry) const
 {
-	VulkanTexture* albedo = static_cast<VulkanTexture*>(registry.get<GRComponents::AlbedoMap>(ent).Get().get());
-	VulkanTexture* nh = static_cast<VulkanTexture*>(registry.get<GRComponents::NormalDisplacementMap>(ent).Get().get());
-	VulkanTexture* arm = static_cast<VulkanTexture*>(registry.get<GRComponents::AORoughnessMetallicMap>(ent).Get().get());
+	VulkanTexture* albedo = static_cast<VulkanTexture*>(registry.get<GR::Components::AlbedoMap>(ent).Get().get());
+	VulkanTexture* nh = static_cast<VulkanTexture*>(registry.get<GR::Components::NormalDisplacementMap>(ent).Get().get());
+	VulkanTexture* arm = static_cast<VulkanTexture*>(registry.get<GR::Components::AORoughnessMetallicMap>(ent).Get().get());
 
 	PBRObject& gro = registry.get<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*albedo->View, *nh->View, *arm->View);

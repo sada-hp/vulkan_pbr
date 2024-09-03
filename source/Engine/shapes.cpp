@@ -5,7 +5,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
-std::unique_ptr<VulkanMesh> GR::Cube::Generate(const RenderScope& Scope) const
+std::unique_ptr<VulkanMesh> GR::Shapes::Cube::Generate(const RenderScope& Scope) const
 {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
@@ -147,13 +147,13 @@ std::unique_ptr<VulkanMesh> GR::Cube::Generate(const RenderScope& Scope) const
 		}
 	}
 
-	CalculateNormals(vertices, indices);
-	CalculateTangents(vertices, indices, 1.f, 1.f);
+	Utils::CalculateNormals(vertices, indices);
+	Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
 	return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
 }
 
-std::unique_ptr<VulkanMesh> GR::Plane::Generate(const RenderScope& Scope) const
+std::unique_ptr<VulkanMesh> GR::Shapes::Plane::Generate(const RenderScope& Scope) const
 {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
@@ -184,13 +184,13 @@ std::unique_ptr<VulkanMesh> GR::Plane::Generate(const RenderScope& Scope) const
 		}
 	}
 
-	CalculateNormals(vertices, indices);
-	CalculateTangents(vertices, indices, 1.f, 1.f);
+	Utils::CalculateNormals(vertices, indices);
+	Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
 	return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
 }
 
-std::unique_ptr<VulkanMesh> GR::Sphere::Generate(const RenderScope& Scope) const
+std::unique_ptr<VulkanMesh> GR::Shapes::Sphere::Generate(const RenderScope& Scope) const
 {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
@@ -254,13 +254,13 @@ std::unique_ptr<VulkanMesh> GR::Sphere::Generate(const RenderScope& Scope) const
 	}
 	indices.insert(indices.end(), { lastPosition, lastPosition - m_Slices, lastPosition - 1 });
 
-	CalculateNormals(vertices, indices);
-	CalculateTangents(vertices, indices, 1.0, 1.0);
+	Utils::CalculateNormals(vertices, indices);
+	Utils::CalculateTangents(vertices, indices, 1.0, 1.0);
 
 	return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
 }
 
-std::unique_ptr<VulkanMesh> GR::Mesh::Generate(const RenderScope& Scope) const
+std::unique_ptr<VulkanMesh> GR::Shapes::Mesh::Generate(const RenderScope& Scope) const
 {
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 	std::vector<uint32_t> indices;

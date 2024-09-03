@@ -9,7 +9,7 @@
 
 namespace GR
 {
-	void CalculateNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
+	void Utils::CalculateNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
 	{
 		for (int i = 0; i < indices.size(); i += 3)
 		{
@@ -31,7 +31,7 @@ namespace GR
 		}
 	}
 
-	void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale)
+	void Utils::CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale)
 	{
 		for (int i = 0; i < indices.size(); i += 3)
 		{
@@ -67,7 +67,7 @@ namespace GR
 		}
 	}
 
-	void ConvertImage_ARM(const std::string& Roughness, const std::string& Metallic, const std::string& Ambient, const std::string& Target)
+	void Utils::ConvertImage_ARM(const std::string& Roughness, const std::string& Metallic, const std::string& Ambient, const std::string& Target)
 	{
 		assert(Target != "");
 
@@ -136,7 +136,7 @@ namespace GR
 		free(pixels);
 	}
 
-	void ConvertImage_NormalHeight(const std::string& Normal, const std::string& Height, const std::string& Target)
+	void Utils::ConvertImage_NormalHeight(const std::string& Normal, const std::string& Height, const std::string& Target)
 	{
 		assert(Target != "");
 
@@ -195,7 +195,7 @@ namespace GR
 		free(pixels);
 	}
 
-	double GetTime()
+	double Utils::GetTime()
 	{
 		return glfwGetTime();
 	}

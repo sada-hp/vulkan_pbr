@@ -13,7 +13,7 @@ namespace GR
 
 	class World
 	{
-	private:
+	protected:
 		const Renderer& m_Scope;
 
 	public:
@@ -22,15 +22,15 @@ namespace GR
 		World(const Renderer& Context) 
 			: m_Scope(Context) {};
 
-		~World() = default;
+		virtual ~World() { Clear(); };
 
-		GRAPI GR::Entity AddShape(const GR::Shape& Descriptor);
+		GRAPI virtual Entity AddShape(const Shapes::Shape& Descriptor);
 
-		GRAPI void BindTexture(GRComponents::Resource<Texture>& Resource, const std::string& path);
+		GRAPI virtual void DrawScene(double Delta);
 
-		GRAPI void DrawScene();
+		GRAPI virtual void Clear();
 
-		GRAPI void Clear();
+		GRAPI void BindTexture(Components::Resource<Texture>& Resource, const std::string& path);
 
 		template<typename Type, typename... Args>
 		GRAPI decltype(auto) EmplaceComponent(Entity ent, Args&& ...args)
