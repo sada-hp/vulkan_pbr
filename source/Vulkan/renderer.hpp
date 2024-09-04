@@ -51,10 +51,7 @@ namespace GR
 	{
 	public:
 		Components::ProjectionMatrix Projection = {};
-		Components::ViewMatrix View = {};
-
-	private:
-		friend class VulkanBase;
+		Components::TransformMatrix<double> View = {};
 
 		glm::dmat4 get_view_matrix() const
 		{
@@ -70,6 +67,9 @@ namespace GR
 		{
 			return glm::dmat4(Projection.matrix) * View.matrix;
 		}
+
+	private:
+		friend class VulkanBase;
 	};
 
 	class Renderer
