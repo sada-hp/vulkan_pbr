@@ -38,7 +38,7 @@ struct CloudLayerProfile
 	}
 
 	float Coverage = 0.175;
-	float VerticalSpan = 0.5;
+	float VerticalSpan = 0.25;
 	float Absorption = 0.025;
 	float WindSpeed = 0.25;
 };

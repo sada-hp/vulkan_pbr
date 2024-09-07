@@ -8,8 +8,8 @@ namespace GR
 	namespace Shapes
 	{
 		/*
-* !@brief This is a base class, use one of the specifications
-*/
+		* !@brief This is a base class, use one of the specifications
+		*/
 		class Shape
 		{
 		protected:
@@ -86,6 +86,24 @@ namespace GR
 
 		public:
 			std::string path;
+		};
+
+		class GeoClipmap : public Shape
+		{
+		protected:
+			friend class VulkanBase;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+
+		public:
+			glm::vec3 GetDimensions() const override
+			{
+				return glm::vec3(0.0);
+			}
+
+		public:
+			uint32_t m_Rings = 8;
+			uint32_t m_VerPerRing = 255;
+			float m_Scale = 1.f;
 		};
 	};
 }

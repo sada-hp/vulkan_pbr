@@ -2,7 +2,7 @@
 #include "core.hpp"
 #include <string>
 
-struct Vertex;
+struct MeshVertex;
 
 namespace GR
 {
@@ -11,11 +11,11 @@ namespace GR
 		/*
 		*
 		*/
-		GRAPI void CalculateNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+		GRAPI void CalculateNormals(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& indices);
 		/*
 		*
 		*/
-		GRAPI void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale);
+		GRAPI void CalculateTangents(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale);
 		/*
 		* !@brief Convert roughness, metallic, ao maps to more tightly packed ARM image
 		*

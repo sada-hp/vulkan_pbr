@@ -99,6 +99,7 @@ namespace GR
 		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
 
 		static constexpr float Rg = PLANET_RADIUS;
+		static constexpr float Rt = ATMOSPHERE_RADIUS;
 	};
 };
 
@@ -209,6 +210,10 @@ public:
 	*/
 	std::unique_ptr<VulkanTexture> _loadImage(const std::string& path, VkFormat format) const;
 	/*
+	*
+	*/
+	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const;
+	/*
 	* 
 	*/
 	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const;
@@ -242,6 +247,8 @@ private:
 	std::unique_ptr<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 	
 	std::unique_ptr<Pipeline> create_pbr_pipeline(const DescriptorSet& set) const;
+
+	std::unique_ptr<Pipeline> create_terrain_pipeline(const DescriptorSet& set) const;
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;

@@ -282,6 +282,10 @@ std::unique_ptr<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScop
 	vkCreatePipelineLayout(Scope.GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &out->pipelineLayout);
 
 	std::vector<VkShaderModule> shaders;
+	std::vector<VkSpecializationInfo> specInfos;
+	std::vector<VkSpecializationMapEntry> specialization_entries;
+	std::vector<unsigned char> specialization_data;
+
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStagesCI{};
 	const std::array<const VkShaderStageFlagBits, 5> stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
 
@@ -306,9 +310,9 @@ std::unique_ptr<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScop
 
 			shaders.push_back(shaderModule);
 
-			std::vector<unsigned char> specialization_data;
-			size_t specialization_entry = 0ull, specialization_offset = 0ull;
-			std::vector<VkSpecializationMapEntry> specialization_entries(specializationConstants[stages[i]].size());
+			size_t specialization_entry = 0ull, specialization_offset = 0ull, data_offset = specialization_data.size(), entry_offset = specialization_entries.size();
+			specialization_entries.resize(specialization_entries.size() + specializationConstants[stages[i]].size());
+
 			for (auto [id, val] : specializationConstants[stages[i]]) {
 				std::vector<unsigned char> specialization_bytes(std::move(AnyTypeToBytes(val)));
 
@@ -318,17 +322,26 @@ std::unique_ptr<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScop
 				specialization_entries[specialization_entry].size = specialization_bytes.size();
 				memcpy(&specialization_data[specialization_offset], specialization_bytes.data(), specialization_bytes.size());
 
-				specialization_entry++;
 				specialization_offset += specialization_bytes.size();
+				specialization_entry++;
 			}
 
-			VkSpecializationInfo specializationInfo;
-			specializationInfo.mapEntryCount = specialization_entries.size();
-			specializationInfo.pMapEntries = specialization_entries.data();
-			specializationInfo.dataSize = specialization_data.size();
-			specializationInfo.pData = specialization_data.data();
+			if (specializationConstants[stages[i]].size() > 0)
+			{
+				VkSpecializationInfo specializationInfo;
+				specializationInfo.mapEntryCount = specialization_entries.size();
+				specializationInfo.pMapEntries = specialization_entries.data() + entry_offset;
+				specializationInfo.dataSize = specialization_data.size();
+				specializationInfo.pData = specialization_data.data() + data_offset;
 
-			pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, stages[i], shaderModule, "main", &specializationInfo);
+				specInfos.push_back(specializationInfo);
+
+				pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, stages[i], shaderModule, "main", &specInfos[specInfos.size() - 1]);
+			}
+			else
+			{
+				pipelineStagesCI.emplace_back(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VK_NULL_HANDLE, 0, stages[i], shaderModule, "main", nullptr);
+			}
 		}
 	}
 

@@ -9,13 +9,13 @@
 
 namespace GR
 {
-	void Utils::CalculateNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
+	void Utils::CalculateNormals(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& indices)
 	{
 		for (int i = 0; i < indices.size(); i += 3)
 		{
-			Vertex& A = vertices[indices[i]];
-			Vertex& B = vertices[indices[i + 1]];
-			Vertex& C = vertices[indices[i + 2]];
+			MeshVertex& A = vertices[indices[i]];
+			MeshVertex& B = vertices[indices[i + 1]];
+			MeshVertex& C = vertices[indices[i + 2]];
 			glm::vec3 contributingNormal = glm::cross(glm::vec3(B.position) - glm::vec3(A.position), glm::vec3(C.position) - glm::vec3(A.position));
 			float area = glm::length(contributingNormal) / 2.f;
 			glm::vec3 contributingNormal2 = glm::normalize(contributingNormal) * area;
@@ -31,13 +31,13 @@ namespace GR
 		}
 	}
 
-	void Utils::CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale)
+	void Utils::CalculateTangents(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& indices, float u_scale, float v_scale)
 	{
 		for (int i = 0; i < indices.size(); i += 3)
 		{
-			Vertex& A = vertices[indices[i]];
-			Vertex& B = vertices[indices[i + 1]];
-			Vertex& C = vertices[indices[i + 2]];
+			MeshVertex& A = vertices[indices[i]];
+			MeshVertex& B = vertices[indices[i + 1]];
+			MeshVertex& C = vertices[indices[i + 2]];
 
 			glm::vec2 uv0 = (A.uv - 0.5f) * u_scale + (0.5f * v_scale);
 			glm::vec2 uv1 = (B.uv - 0.5f) * u_scale + (0.5f * v_scale);

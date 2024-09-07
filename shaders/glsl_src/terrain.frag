@@ -12,10 +12,6 @@ layout(push_constant) uniform constants
 } 
 PushConstants;
 
-layout(location = 0) in vec2 inUV;
-layout(location = 1) in vec4 WorldPosition;
-layout(location = 2) in mat3 TBN;
-
 layout(set = 1, binding = 1) uniform sampler2D TransmittanceLUT;
 layout(set = 1, binding = 2) uniform sampler2D IrradianceLUT;
 layout(set = 1, binding = 3) uniform sampler3D InscatteringLUT;
@@ -23,7 +19,10 @@ layout(set = 1, binding = 4) uniform sampler2D AlbedoMap;
 layout(set = 1, binding = 5) uniform sampler2D NormalHeightMap;
 layout(set = 1, binding = 6) uniform sampler2D ARMMap;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) in vec4 WorldPosition;
+layout(location = 1) in vec3 Normal;
+
+layout(location = 0) out vec4 Color;
 
 // very simplified version which skips aerial perspective and scattering
 vec3 PointRadiance(vec3 Sun, vec3 Eye, vec3 Point)
@@ -61,32 +60,6 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
     return ambient * radiance + ((specular + diffuse) / PI * NdotL) * radiance * NdotV;
 }
 
-vec2 Displace(vec2 inUV, vec3 V)
-{
-    const int steps = 64;
-    const float stepsize = 1.0 / float(steps);
-
-    vec2 UV = inUV;
-    vec2 dUV = (V.xy * 0.01 * PushConstants.HeightScale) / (V.z * float(steps));
-
-    float height = 1.0 - texture(NormalHeightMap, UV).a;
-    float depth = 0.0;
-
-    while (depth < height)
-    {
-        UV -= dUV;
-        height = 1.0 - texture(NormalHeightMap, UV).a;
-        depth += stepsize;
-    }
-
-    vec2 prevUV = UV + dUV;
-	float nextDepth = height - depth;
-	float prevDepth = 1.0 - texture(NormalHeightMap, prevUV).a - depth + stepsize;
-    float weight = nextDepth / (nextDepth - prevDepth);
-    
-	return mix(UV, prevUV, weight);
-}
-
 void main()
 {
     // these are used to sample atmosphere, so we offset them to ground level
@@ -97,27 +70,24 @@ void main()
     vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
     vec3 L = normalize(ubo.SunDirection.xyz);
 
-    // parallax
-    vec2 UV = Displace(inUV, normalize(transpose(TBN) * V));
-
     // reading the normal map
-    vec3 NormalMap = normalize(texture(NormalHeightMap, UV).rgb * 2.0 - 1.0);
-    vec3 N = normalize(TBN * NormalMap);
+    vec3 N = normalize(Normal);
 
-    vec4 ARM = texture(ARMMap, UV);
+    //vec4 ARM = texture(ARMMap, UV);
+    vec4 ARM = vec4(1.0, 1.0, 0.0, 0.0);
 
     // material descriptor
     SMaterial Material;
     Material.Roughness = max(PushConstants.RoughnessMultiplier * ARM.g, 0.01);
     Material.Metallic = (PushConstants.Metallic == 0.0 ? ARM.b : PushConstants.Metallic);
     Material.AO = ARM.r;
-    Material.Albedo = texture(AlbedoMap, UV);
-    Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
-
-    if (UV.x < 0.0 || UV.x > 1.0 || UV.y < 0.0 || UV.y > 1.0)
-        discard;
+    //Material.Albedo = texture(AlbedoMap, UV);
+    //Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
+    Material.Albedo = PushConstants.ColorMask.rgba;
+    Material.Albedo.rgb = pow(Material.Albedo.rgb, vec3(2.2));
 
     // getting the color
     vec3 Lo = DirectSunlight(Eye, Point, V, L, N, Material);
-    outColor = vec4(Lo, PushConstants.ColorMask.a * Material.Albedo.a);
+    //Color = vec4(Lo, PushConstants.ColorMask.a * Material.Albedo.a);
+    Color = vec4(Lo, 1.0);
 }

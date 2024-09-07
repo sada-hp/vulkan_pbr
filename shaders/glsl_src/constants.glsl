@@ -1,3 +1,6 @@
+layout (constant_id = 0) const float planet_radius = 6360.0 * 1e3;
+layout (constant_id = 1) const float atmosphere_radius = 6420.0 * 1e3;
+
 #define PI 3.14159265359
 #define ONE_OVER_PI 1.0 / PI
 #define ONE_OVER_4PI 1.0 / (4.0 * PI)
@@ -11,12 +14,13 @@
 const float Rg = 6360.0;
 const float Rt = 6420.0;
 #else
-const float Rg = 6360.0 * 1e3;
-const float Rt = 6420.0 * 1e3;
+const float Rg = planet_radius;
+const float Rt = atmosphere_radius;
 #endif
 
-const float Rcb = 6370.0 * 1e3;
-const float Rct = 6385.0 * 1e3;
+float Rdelta = atmosphere_radius - planet_radius;
+float Rcb = Rg + 0.15 * Rdelta;
+float Rct = Rg + 0.55 * Rdelta;
 
 const float HR = 8.0;
 const vec3 BetaR = vec3(5.8e-3, 1.35e-2, 3.31e-2);

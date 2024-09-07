@@ -24,6 +24,8 @@ namespace GR
 
 		virtual ~World() { Clear(); };
 
+		GRAPI virtual Entity AddShape(const Shapes::GeoClipmap& Descriptor);
+
 		GRAPI virtual Entity AddShape(const Shapes::Shape& Descriptor);
 
 		GRAPI virtual void DrawScene(double Delta);

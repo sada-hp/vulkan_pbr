@@ -7,46 +7,46 @@
 #include "Vulkan/scope.hpp"
 #include <glm/gtx/hash.hpp>
 
-struct Vertex
+struct MeshVertex
 {
 	static const VkVertexInputBindingDescription getBindingDescription()
 	{
 		VkVertexInputBindingDescription bindingDescription{};
 		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.stride = sizeof(MeshVertex);
 		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 		return bindingDescription;
 	}
 
-	static const std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions()
+	static const std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions()
 	{
-		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
 		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, position);
+		attributeDescriptions[0].offset = offsetof(MeshVertex, position);
 
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, normal);
+		attributeDescriptions[1].offset = offsetof(MeshVertex, normal);
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, tangent);
+		attributeDescriptions[2].offset = offsetof(MeshVertex, tangent);
 
 		attributeDescriptions[3].binding = 0;
 		attributeDescriptions[3].location = 3;
 		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[3].offset = offsetof(Vertex, uv);
+		attributeDescriptions[3].offset = offsetof(MeshVertex, uv);
 
 		return attributeDescriptions;
 	}
 
-	bool operator==(const Vertex& other) const
+	bool operator==(const MeshVertex& other) const
 	{
 		return position == other.position
 			&& normal == other.normal
@@ -62,10 +62,42 @@ struct Vertex
 	glm::vec2 uv;
 };
 
-template<>
-struct std::hash<Vertex>
+struct TerrainVertex
 {
-	size_t operator()(Vertex const& vertex) const
+	static const VkVertexInputBindingDescription getBindingDescription()
+	{
+		VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(TerrainVertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
+	static const std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions()
+	{
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(1);
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(TerrainVertex, position);
+
+		return attributeDescriptions;
+	}
+
+	bool operator==(const TerrainVertex& other) const
+	{
+		return position == other.position;
+	}
+
+	glm::vec3 position;
+};
+
+template<>
+struct std::hash<MeshVertex>
+{
+	size_t operator()(MeshVertex const& vertex) const
 	{
 		return ((std::hash<glm::vec3>()(vertex.position)
 			^ (std::hash<glm::vec3>()(vertex.normal))
@@ -75,9 +107,20 @@ struct std::hash<Vertex>
 	}
 };
 
+template<>
+struct std::hash<TerrainVertex>
+{
+	size_t operator()(TerrainVertex const& vertex) const
+	{
+		return ((std::hash<glm::vec3>()(vertex.position)) >> 1);
+	}
+};
+
 struct VulkanMesh
 {
-	VulkanMesh(const RenderScope& Scope, Vertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices);
+	VulkanMesh(const RenderScope& Scope, MeshVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices);
+
+	VulkanMesh(const RenderScope& Scope, TerrainVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices);
 
 	VulkanMesh(const VulkanMesh& other) = delete;
 

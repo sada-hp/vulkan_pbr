@@ -5,6 +5,18 @@
 
 namespace GR
 {
+	Entity World::AddShape(const Shapes::GeoClipmap& Descriptor)
+	{
+		Entity ent = Registry.create();
+		Registry.emplace<Components::RGBColor>(ent);
+		Registry.emplace<Components::MetallicOverride>(ent);
+		Registry.emplace<Components::WorldMatrix>(ent);
+		Registry.emplace<Components::DisplacementScale>(ent);
+		Registry.emplace<Components::RoughnessMultiplier>(ent);
+
+		return static_cast<const ::VulkanBase*>(&m_Scope)->_constructShape(ent, Registry, Descriptor);
+	}
+
 	Entity World::AddShape(const Shapes::Shape& Descriptor)
 	{
 		Entity ent = Registry.create();

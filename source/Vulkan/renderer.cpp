@@ -793,8 +793,6 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 VkBool32 VulkanBase::prepare_renderer_resources()
 {
 	VkBool32 res = 1;
-	auto vertAttributes = Vertex::getAttributeDescriptions();
-	auto vertBindings = Vertex::getBindingDescription();
 
 	VkBufferCreateInfo uboInfo{};
 	uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -849,6 +847,20 @@ std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::string& path, V
 	free(pixels);
 
 	return Texture;
+}
+
+entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const
+{
+	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
+	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet);
+	gro.mesh = shape.Generate(m_Scope);
+
+	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
+	registry.emplace_or_replace<GR::Components::NormalDisplacementMap>(ent, m_DefaultNormal, &gro.dirty);
+	registry.emplace_or_replace<GR::Components::AORoughnessMetallicMap>(ent, m_DefaultWhite, &gro.dirty);
+
+	return ent;
 }
 
 entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const
@@ -917,8 +929,8 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImageView&
 
 std::unique_ptr<Pipeline> VulkanBase::create_pbr_pipeline(const DescriptorSet& set) const
 {
-	auto vertAttributes = Vertex::getAttributeDescriptions();
-	auto vertBindings = Vertex::getBindingDescription();
+	auto vertAttributes = MeshVertex::getAttributeDescriptions();
+	auto vertBindings = MeshVertex::getBindingDescription();
 
 	return GraphicsPipelineDescriptor()
 		.SetCullMode(VK_CULL_MODE_BACK_BIT)
@@ -930,6 +942,28 @@ std::unique_ptr<Pipeline> VulkanBase::create_pbr_pipeline(const DescriptorSet& s
 		.AddDescriptorLayout(set.GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PBRConstants::World) })
 		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PBRConstants::World),  sizeof(PBRConstants) - sizeof(PBRConstants::World) })
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.Construct(m_Scope);
+}
+
+std::unique_ptr<Pipeline> VulkanBase::create_terrain_pipeline(const DescriptorSet& set) const
+{
+	auto vertAttributes = TerrainVertex::getAttributeDescriptions();
+	auto vertBindings = TerrainVertex::getBindingDescription();
+
+	return GraphicsPipelineDescriptor()
+		.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetVertexInputBindings(1, &vertBindings)
+		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
+		.SetShaderStage("terrain_vert", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("terrain_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+		.AddDescriptorLayout(set.GetLayout())
+		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PBRConstants::World) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PBRConstants::World),  sizeof(PBRConstants) - sizeof(PBRConstants::World) })
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.Construct(m_Scope);
 }
 #pragma endregion
@@ -1221,6 +1255,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.SetCullMode(VK_CULL_MODE_NONE)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Atmospherics->descriptorSet->GetLayout())
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetRenderPass(m_Scope.GetLowResRenderPass())
 		.Construct(m_Scope);
 
@@ -1282,6 +1318,8 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.SetBlendAttachments(1, &blendState)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Volumetrics->descriptorSet->GetLayout())
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.SetRenderPass(m_Scope.GetLowResRenderPass())
 		.Construct(m_Scope);
