@@ -20,9 +20,12 @@ struct UniformBuffer
 	glm::mat4 ProjectionMatrixInverse;
 	glm::dvec4 CameraPositionFP64;
 	glm::vec4 CameraPosition;
-	glm::vec3 SunDirection;
-	float Time;
+	glm::vec4 SunDirection;
+	glm::vec4 CamerUp;
+	glm::vec4 CameraRight;
+	glm::vec4 CameraForward;
 	glm::vec2 Resolution;
+	float Time;
 };
 /*
 * !@brief Struct describing the coverage of volumetric clouds

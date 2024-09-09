@@ -24,16 +24,6 @@ layout(location = 1) in vec3 Normal;
 
 layout(location = 0) out vec4 Color;
 
-// very simplified version which skips aerial perspective and scattering
-vec3 PointRadiance(vec3 Sun, vec3 Eye, vec3 Point)
-{
-    vec3 View = normalize(Point - Eye);
-    const float Rp = length(Point);
-    const float DotPL = dot(Point, Sun) / Rp;
-
-    return GetTransmittanceWithShadow(TransmittanceLUT, Rp, DotPL) * MaxLightIntensity;
-}
-
 // get specular and ambient part from sunlight
 vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial Material)
 {
@@ -55,9 +45,8 @@ vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial M
     vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     //vec3 diffuse = kD * Material.Albedo.rgb;
     vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
-    vec3 radiance = PointRadiance(L, Eye, Point);
 
-    return ambient * radiance + ((specular + diffuse) / PI * NdotL) * radiance * NdotV;
+    return ambient + ((specular + diffuse) / PI * NdotL) * NdotV;
 }
 
 void main()
@@ -88,6 +77,9 @@ void main()
 
     // getting the color
     vec3 Lo = DirectSunlight(Eye, Point, V, L, N, Material);
-    //Color = vec4(Lo, PushConstants.ColorMask.a * Material.Albedo.a);
+
+    SAtmosphere Atmosphere;
+    PointRadiance(TransmittanceLUT, InscatteringLUT, L, Eye, Point, Atmosphere);
+    Lo = Lo * Atmosphere.L + Atmosphere.S;
     Color = vec4(Lo, 1.0);
 }

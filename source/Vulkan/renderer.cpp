@@ -300,7 +300,10 @@ void VulkanBase::BeginFrame()
 		glm::dmat4 view_proj_matrix = glm::dmat4(projection_matrix) * view_matrix;
 		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.View.GetOffset(), 1.0);
 		glm::vec4 CameraPosition = glm::vec4(m_Camera.View.GetOffset(), 1.0);
-		glm::vec3 Sun = glm::normalize(m_SunDirection);
+		glm::vec4 Sun = glm::vec4(glm::normalize(m_SunDirection), 0.0);
+		glm::vec4 CameraUp = glm::vec4(m_Camera.View.GetUp(), 0.0);
+		glm::vec4 CameraRight = glm::vec4(m_Camera.View.GetRight(), 0.0);
+		glm::vec4 CameraForward = glm::vec4(m_Camera.View.GetForward(), 0.0);
 		glm::vec2 ScreenSize = glm::vec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
 		float Time = glfwGetTime();
 
@@ -314,8 +317,11 @@ void VulkanBase::BeginFrame()
 			CameraPositionFP64,
 			CameraPosition,
 			Sun,
-			Time,
+			CameraUp,
+			CameraRight,
+			CameraForward,
 			ScreenSize,
+			Time,
 		};
 
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));

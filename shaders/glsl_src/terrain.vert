@@ -14,7 +14,14 @@ layout(location = 1) out vec3 Normal;
 
 void main()
 {
-    Normal = vec3(normalize(dvec3(ubo.CameraPositionFP64.xyz + vertPosition + vec3(0.0, Rg, 0.0))));
-    WorldPosition = vec4((Rg - 10.0) * Normal - vec3(0.0, Rg, 0.0), 1.0); // this is used in FS, radius is offset a little, to avoid radiance sampling artifacts
+    dmat3 Orientation;
+    Orientation[0] = ubo.CameraRight.xyz;
+    Orientation[1] = normalize(ubo.CameraPositionFP64.xyz + vec3(0.0, Rg, 0.0));
+    Orientation[2] = cross(Orientation[0], Orientation[1]);
+
+    vec3 ObjectPosition = vec3(vertPosition.x, Rg, vertPosition.z);
+
+    Normal = vec3(normalize(Orientation * ObjectPosition));
+    WorldPosition = vec4((Rg + 5.01) * Normal - vec3(0.0, Rg, 0.0), 1.0); // this is used in FS, radius is offset a little, to avoid radiance sampling artifacts
     gl_Position = vec4(ubo.ViewProjectionMatrix * vec4(Rg * Normal - vec3(0.0, Rg, 0.0), 1.0)); // this is actual position (at 0 height)
 }
