@@ -152,10 +152,10 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	});
 
 	res = prepare_renderer_resources() & res;
-	res = create_hdr_pipeline()   & res;
 	res = atmosphere_precompute() & res;
 	res = volumetric_precompute() & res;
-	
+	res = create_hdr_pipeline()   & res;
+
 #ifdef INCLUDE_GUI
 	m_GuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(m_GuiContext);
@@ -759,6 +759,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_DeferredAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_DeferredViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DeferredAttachments[i]);
 
+		hdrInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		m_NormalAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_NormalViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_NormalAttachments[i]);
 
@@ -792,7 +793,7 @@ VkBool32 VulkanBase::create_framebuffers()
 	VkBool32 res = 1;
 	for (size_t i = 0; i < m_SwapchainImages.size(); ++i)
 	{
-		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_DeferredViews[i]->GetImageView(), m_NormalViews[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView()}, &m_FramebuffersHR[i]) & res;
+		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView()}, &m_FramebuffersHR[i]) & res;
 		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView() }, &m_FramebuffersLR[i]) & res;
 	}
 
@@ -804,6 +805,7 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 	VkBool32 res = 1;
 	m_HDRPipelines.resize(m_SwapchainImages.size());
 	m_HDRDescriptors.resize(m_SwapchainImages.size());
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	for (size_t i = 0; i < m_HDRDescriptors.size(); ++i)
 	{
@@ -813,6 +815,9 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 			.AddSubpassAttachment(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_NormalViews[i]->GetImageView())
 			.AddSubpassAttachment(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_DeferredViews[i]->GetImageView())
 			.AddSubpassAttachment(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthViewsHR[i]->GetImageView())
+			.AddImageSampler(5, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
+			.AddImageSampler(6, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
+			.AddImageSampler(7, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 			.Allocate(m_Scope);
 
 		m_HDRPipelines[i] = GraphicsPipelineDescriptor()
@@ -951,15 +956,11 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImageView&
 	, const VulkanImageView& arm) const
 {
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
-	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	return DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
 

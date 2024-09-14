@@ -200,7 +200,7 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 // Unoptimized and expensive
 vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
 {
-    const int steps = int(mix(512, 128, abs(dot(rd, vec3(0.0, 1.0, 0.0)))));
+    const int steps = int(mix(256, 64, abs(dot(rd, vec3(0.0, 1.0, 0.0)))));
 
     const float len = distance(rs, re);
     const float stepsize = len / float(steps);

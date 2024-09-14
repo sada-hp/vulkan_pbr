@@ -8,6 +8,10 @@ layout(input_attachment_index = 1, binding = 2) uniform subpassInput HDRNormals;
 layout(input_attachment_index = 2, binding = 3) uniform subpassInput HDRDeferred;
 layout(input_attachment_index = 3, binding = 4) uniform subpassInput Depth;
 
+layout(binding = 5) uniform sampler2D TransmittanceLUT;
+layout(binding = 6) uniform sampler2D IrradianceLUT;
+layout(binding = 7) uniform sampler3D InscatteringLUT;
+
 layout(location = 0) in vec2 UV;
 
 layout(location = 0) out vec4 outColor;
@@ -68,7 +72,7 @@ vec3 GetWorldPosition()
 void main()
 {
     vec4 Color = subpassLoad(HDRColor);
-    vec3 Normal = normalize(subpassLoad(HDRNormals).rgb);
+    vec3 Normal = normalize(2.0 * subpassLoad(HDRNormals).rgb - 1.0);
     vec3 Deferred = subpassLoad(HDRDeferred).rgb;
  
     if (Deferred != vec3(0.0))
@@ -79,12 +83,19 @@ void main()
         vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
 
         SMaterial Material;
-        Material.Roughness = 1.0;
-        Material.Metallic = 0.0;
-        Material.AO = 1.0;
+        Material.Roughness = Deferred.r;
+        Material.Metallic = Deferred.g;
+        Material.AO = Deferred.b;
         Material.Albedo = Color;
 
         Color.rgb = DirectSunlight(V, L, Normal, Material);
+
+        vec3 Point = WorldPosition.xyz + vec3(0.0, Rg, 0.0);
+        vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
+
+        SAtmosphere Atmosphere;
+        PointRadiance(TransmittanceLUT, InscatteringLUT, L, Eye, Point, Atmosphere);
+        Color.rgb = Color.rgb * Atmosphere.L + Atmosphere.S;
     }
 
     outColor = vec4(Tonemap(Color.rgb), 1.0);
