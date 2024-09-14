@@ -1,10 +1,41 @@
 #version 460
+#include "ubo.glsl"
+#include "lighting.glsl"
+#include "brdf.glsl"
 
-layout(input_attachment_index = 0,binding = 0) uniform subpassInput HDRColor;
+layout(input_attachment_index = 0, binding = 1) uniform subpassInput HDRColor;
+layout(input_attachment_index = 1, binding = 2) uniform subpassInput HDRNormals;
+layout(input_attachment_index = 2, binding = 3) uniform subpassInput HDRDeferred;
+layout(input_attachment_index = 3, binding = 4) uniform subpassInput Depth;
 
 layout(location = 0) in vec2 UV;
 
-layout(location = 0) out vec4 Color;
+layout(location = 0) out vec4 outColor;
+
+// get specular and ambient part from sunlight
+vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material)
+{
+    vec3 H = normalize(V + L);
+
+    float NdotV = saturate(dot(N, V));
+    float NdotL = saturate(dot(N, L));
+    float NdotH = saturate(dot(N, H));
+    float LdotH = saturate(dot(L, H));
+    float HdotV = saturate(dot(H, V));
+
+    vec3 F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
+    vec3 F = FresnelSchlick(HdotV, F0);
+    float G = GeometrySmith(NdotV, NdotL, Material.Roughness);
+    float D = DistributionGGX(NdotH, Material.Roughness);
+
+    vec3 kD = vec3(1.0 - Material.Metallic);
+    vec3 specular = vec3(max((D * G * F) / (4.0 * NdotV * NdotL), 0.001));
+    vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
+    //vec3 diffuse = kD * Material.Albedo.rgb;
+    vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
+
+    return ambient + ((specular + diffuse) / PI * NdotL) * NdotV;
+}
 
 // snatched from precomputed-atmospheric-scattering code
 vec3 Tonemap(vec3 L) 
@@ -26,8 +57,35 @@ vec3 Tonemap2(vec3 L)
     return pow(L, vec3(1.0 / gamma));
 }
 
+vec3 GetWorldPosition()
+{
+    vec4 ClipSpace = vec4(2.0 * UV - 1.0, subpassLoad(Depth).r, 1.0);
+    vec4 WorldPosition = vec4(ubo.ViewMatrixInverse * (ubo.ProjectionMatrixInverse * ClipSpace));
+    WorldPosition = WorldPosition / WorldPosition.w;
+
+    return WorldPosition.xyz;
+}
 void main()
 {
-    vec3 c = subpassLoad(HDRColor).rgb;
-    Color = vec4(Tonemap(c), 1.0);
+    vec4 Color = subpassLoad(HDRColor);
+    vec3 Normal = normalize(subpassLoad(HDRNormals).rgb);
+    vec3 Deferred = subpassLoad(HDRDeferred).rgb;
+ 
+    if (Deferred != vec3(0.0))
+    {
+        vec3 WorldPosition = GetWorldPosition();
+        vec3 L = normalize(ubo.SunDirection.xyz);
+        //vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
+        vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
+
+        SMaterial Material;
+        Material.Roughness = 1.0;
+        Material.Metallic = 0.0;
+        Material.AO = 1.0;
+        Material.Albedo = Color;
+
+        Color.rgb = DirectSunlight(V, L, Normal, Material);
+    }
+
+    outColor = vec4(Tonemap(Color.rgb), 1.0);
 }

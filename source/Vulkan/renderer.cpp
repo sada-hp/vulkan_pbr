@@ -127,7 +127,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
-	res = create_hdr_pipeline() & res;
 
 	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
 		.SetDepthRange(1e-2f, 1e4f);
@@ -153,6 +152,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	});
 
 	res = prepare_renderer_resources() & res;
+	res = create_hdr_pipeline()   & res;
 	res = atmosphere_precompute() & res;
 	res = volumetric_precompute() & res;
 	
@@ -253,6 +253,12 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
+
+	m_NormalAttachments.resize(0);
+	m_NormalViews.resize(0);
+
+	m_DeferredAttachments.resize(0);
+	m_DeferredViews.resize(0);
 
 	m_HdrAttachmentsHR.resize(0);
 	m_HdrViewsHR.resize(0);
@@ -446,10 +452,12 @@ void VulkanBase::BeginFrame()
 		ImGui::NewFrame();
 #endif
 
-		VkClearValue clearValues[3];
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // HDR Attachment loads and doesn't use clear
+		std::array<VkClearValue, 5> clearValues;
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // HDR Color Attachment loads and doesn't use clear
 		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[2].depthStencil = { 1.0f, 0 };
+		clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[3].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[4].depthStencil = { 1.0f, 0 };
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -457,8 +465,8 @@ void VulkanBase::BeginFrame()
 		renderPassInfo.renderPass = m_Scope.GetRenderPass();
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
-		renderPassInfo.clearValueCount = 3;
-		renderPassInfo.pClearValues = clearValues;
+		renderPassInfo.clearValueCount = clearValues.size();
+		renderPassInfo.pClearValues = clearValues.data();
 
 		VkViewport viewport{};
 		viewport.x = 0;
@@ -561,6 +569,12 @@ void VulkanBase::_handleResize()
 
 	m_HdrAttachmentsHR.resize(0);
 	m_HdrViewsHR.resize(0);
+
+	m_DeferredAttachments.resize(0);
+	m_DeferredViews.resize(0);
+
+	m_NormalAttachments.resize(0);
+	m_NormalViews.resize(0);
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
@@ -675,7 +689,11 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 	m_DepthAttachmentsHR.resize(imagesCount);
 	m_HdrAttachmentsHR.resize(imagesCount);
+	m_DeferredAttachments.resize(imagesCount);
+	m_NormalAttachments.resize(imagesCount);
 	m_HdrViewsHR.resize(imagesCount);
+	m_DeferredViews.resize(imagesCount);
+	m_NormalViews.resize(imagesCount);
 	m_DepthViewsHR.resize(imagesCount);
 
 	m_DepthAttachmentsLR.resize(imagesCount);
@@ -727,7 +745,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		depthInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		depthInfo.mipLevels = 1;
-		depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 		depthInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 		depthInfo.queueFamilyIndexCount = queueIndices.size();
 		depthInfo.pQueueFamilyIndices = queueIndices.data();
@@ -737,6 +755,13 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_HdrAttachmentsHR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsHR[i]);
 
+		hdrInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+		m_DeferredAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_DeferredViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DeferredAttachments[i]);
+
+		m_NormalAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_NormalViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_NormalAttachments[i]);
+
 		m_DepthAttachmentsHR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
 		m_DepthViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsHR[i]);
 
@@ -744,6 +769,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		hdrInfo.extent.height /= 2;
 		hdrInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		hdrInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
 		m_HdrAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_HdrViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsLR[i]);
 
@@ -766,7 +792,7 @@ VkBool32 VulkanBase::create_framebuffers()
 	VkBool32 res = 1;
 	for (size_t i = 0; i < m_SwapchainImages.size(); ++i)
 	{
-		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView() }, &m_FramebuffersHR[i]) & res;
+		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_DeferredViews[i]->GetImageView(), m_NormalViews[i]->GetImageView(), m_SwapchainViews[i], m_DepthViewsHR[i]->GetImageView()}, &m_FramebuffersHR[i]) & res;
 		res = CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView() }, &m_FramebuffersLR[i]) & res;
 	}
 
@@ -782,7 +808,11 @@ VkBool32 VulkanBase::create_hdr_pipeline()
 	for (size_t i = 0; i < m_HDRDescriptors.size(); ++i)
 	{
 		m_HDRDescriptors[i] = DescriptorSetDescriptor()
-			.AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView())
+			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
+			.AddSubpassAttachment(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView())
+			.AddSubpassAttachment(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_NormalViews[i]->GetImageView())
+			.AddSubpassAttachment(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_DeferredViews[i]->GetImageView())
+			.AddSubpassAttachment(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthViewsHR[i]->GetImageView())
 			.Allocate(m_Scope);
 
 		m_HDRPipelines[i] = GraphicsPipelineDescriptor()
@@ -938,8 +968,26 @@ std::unique_ptr<Pipeline> VulkanBase::create_pbr_pipeline(const DescriptorSet& s
 	auto vertAttributes = MeshVertex::getAttributeDescriptions();
 	auto vertBindings = MeshVertex::getBindingDescription();
 
+	const VkPipelineColorBlendAttachmentState attachment{
+		VK_FALSE,
+		VK_BLEND_FACTOR_ONE,
+		VK_BLEND_FACTOR_ZERO,
+		VK_BLEND_OP_ADD,
+		VK_BLEND_FACTOR_ONE,
+		VK_BLEND_FACTOR_ZERO,
+		VK_BLEND_OP_ADD,
+		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+	};
+
+	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{
+		attachment,
+		attachment,
+		attachment
+	};
+
 	return GraphicsPipelineDescriptor()
 		.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetBlendAttachments(blendAttachments.size(), blendAttachments.data())
 		.SetVertexInputBindings(1, &vertBindings)
 		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
 		.SetShaderStage("default_vert", VK_SHADER_STAGE_VERTEX_BIT)
@@ -958,8 +1006,26 @@ std::unique_ptr<Pipeline> VulkanBase::create_terrain_pipeline(const DescriptorSe
 	auto vertAttributes = TerrainVertex::getAttributeDescriptions();
 	auto vertBindings = TerrainVertex::getBindingDescription();
 
+	const VkPipelineColorBlendAttachmentState attachment{
+		VK_FALSE,
+		VK_BLEND_FACTOR_ONE,
+		VK_BLEND_FACTOR_ZERO,
+		VK_BLEND_OP_ADD,
+		VK_BLEND_FACTOR_ONE,
+		VK_BLEND_FACTOR_ZERO,
+		VK_BLEND_OP_ADD,
+		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+	};
+
+	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{
+		attachment,
+		attachment,
+		attachment
+	};
+
 	return GraphicsPipelineDescriptor()
 		.SetCullMode(VK_CULL_MODE_BACK_BIT)
+		.SetBlendAttachments(blendAttachments.size(), blendAttachments.data())
 		.SetVertexInputBindings(1, &vertBindings)
 		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
 		.SetShaderStage("terrain_vert", VK_SHADER_STAGE_VERTEX_BIT)

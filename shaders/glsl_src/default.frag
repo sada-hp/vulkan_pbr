@@ -24,9 +24,11 @@ layout(set = 1, binding = 5) uniform sampler2D NormalHeightMap;
 layout(set = 1, binding = 6) uniform sampler2D ARMMap;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outDeferred;
 
 // get specular and ambient part from sunlight
-vec3 DirectSunlight(vec3 Eye, vec3 Point, vec3 V, vec3 L, vec3 N, in SMaterial Material)
+vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material)
 {
     vec3 H = normalize(V + L);
 
@@ -107,11 +109,13 @@ void main()
         discard;
 
     // getting the color
-    vec3 Lo = DirectSunlight(Eye, Point, V, L, N, Material);
+    //vec3 Lo = DirectSunlight(V, L, N, Material);
 
-    SAtmosphere Atmosphere;
-    PointRadiance(TransmittanceLUT, InscatteringLUT, L, Eye, Point, Atmosphere);
-    Lo = Lo * Atmosphere.L + Atmosphere.S;
+    //SAtmosphere Atmosphere;
+    //PointRadiance(TransmittanceLUT, InscatteringLUT, L, Eye, Point, Atmosphere);
+    //Lo = Lo * Atmosphere.L + Atmosphere.S;
 
-    outColor = vec4(Lo, PushConstants.ColorMask.a * Material.Albedo.a);
+    outColor = vec4(Material.Albedo.rgb, PushConstants.ColorMask.a * Material.Albedo.a);
+    outNormal = vec4(N, 0.0);
+    outDeferred = vec4(vec3(Material.Roughness, Material.Metallic, Material.AO), 0.0);
 }

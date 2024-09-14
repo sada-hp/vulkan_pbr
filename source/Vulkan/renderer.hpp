@@ -119,6 +119,12 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsHR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsHR = {};
 
+	std::vector<std::unique_ptr<VulkanImage>> m_DeferredAttachments = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_DeferredViews = {};
+
+	std::vector<std::unique_ptr<VulkanImage>> m_NormalAttachments = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_NormalViews = {};
+
 
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsLR = {};
