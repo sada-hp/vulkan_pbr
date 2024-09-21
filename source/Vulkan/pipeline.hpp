@@ -144,7 +144,7 @@ public:
 
 	GraphicsPipelineDescriptor& SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments);
 
-	GraphicsPipelineDescriptor& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL);
+	GraphicsPipelineDescriptor& SetDepthState(VkBool32 depthTestEnable, VkBool32 depthWriteEnable = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	GraphicsPipelineDescriptor& SetSampling(VkSampleCountFlagBits samples);
 	
@@ -242,7 +242,7 @@ private:
 		0u,
 		VK_TRUE,
 		VK_TRUE,
-		VK_COMPARE_OP_LESS_OR_EQUAL,
+		VK_COMPARE_OP_GREATER_OR_EQUAL,
 		VK_FALSE,
 		VK_FALSE,
 		defaultStencil,

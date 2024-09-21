@@ -22,6 +22,6 @@ void main()
     vec3 ObjectPosition = vec3(vertPosition.x, Rg, vertPosition.z);
 
     Normal = vec3(normalize(Orientation * ObjectPosition));
-    WorldPosition = vec4((Rg + 5.01) * Normal - vec3(0.0, Rg, 0.0), 1.0); // this is used in FS, radius is offset a little, to avoid radiance sampling artifacts
-    gl_Position = vec4(ubo.ViewProjectionMatrix * vec4(Rg * Normal - vec3(0.0, Rg, 0.0), 1.0)); // this is actual position (at 0 height)
+    WorldPosition = vec4(Rg * Normal - vec3(0.0, Rg, 0.0), 1.0);
+    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
 }

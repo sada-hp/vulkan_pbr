@@ -58,5 +58,5 @@ void main()
     vec3 L = SkyColor + SunColor;
     outColor = vec4(L, 0.0);
 
-    gl_FragDepth = 1.0;
+    gl_FragDepth = 0.0;
 }

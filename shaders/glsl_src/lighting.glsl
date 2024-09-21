@@ -194,7 +194,8 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
 
 void PointRadiance(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 Sun, vec3 Eye, vec3 Point, out SAtmosphere Atmosphere)
 {
-    Eye += 50.0;
+    Point = vec3(0.0, Rg + 10.0, 0.0) + Point;
+    Eye = vec3(0.0, Rg + 10.0, 0.0) + Eye;
 
     vec3 V = normalize(Point - Eye);
 

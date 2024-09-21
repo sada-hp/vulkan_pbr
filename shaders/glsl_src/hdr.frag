@@ -90,12 +90,13 @@ void main()
 
         Color.rgb = DirectSunlight(V, L, Normal, Material);
 
-        vec3 Point = WorldPosition.xyz + vec3(0.0, Rg, 0.0);
-        vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
+        vec3 Point = WorldPosition.xyz;
+        vec3 Eye = ubo.CameraPosition.xyz;
 
         SAtmosphere Atmosphere;
         PointRadiance(TransmittanceLUT, InscatteringLUT, L, Eye, Point, Atmosphere);
         Color.rgb = Color.rgb * Atmosphere.L + Atmosphere.S;
+        //Color.rgb = Color.rgb * Atmosphere.L;
     }
 
     outColor = vec4(Tonemap(Color.rgb), 1.0);

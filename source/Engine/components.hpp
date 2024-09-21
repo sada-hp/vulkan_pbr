@@ -129,9 +129,14 @@ namespace GR
 
 			GRAPI ProjectionMatrix& SetDepthRange(float Near, float Far)
 			{
-				matrix[2][2] = -(Far + Near) / (Far - Near);
-				matrix[3][2] = -2.f * (Far * Near) / (Far - Near);
-
+				// Reverse depth
+#if 0
+				matrix[2][2] = -Far / (Far - Near);
+				matrix[3][2] = -(Far * Near) / (Far - Near);
+#else
+				matrix[2][2] = -Near / (Near - Far);
+				matrix[3][2] = -(Far * Near) / (Near - Far);
+#endif
 				return *this;
 			}
 
