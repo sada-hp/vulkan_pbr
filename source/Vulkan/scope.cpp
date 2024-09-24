@@ -49,7 +49,7 @@ RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 RenderScope& RenderScope::CreateDefaultRenderPass()
 {
 	VkRenderPassCreateInfo createInfo{};
-	std::array<VkAttachmentDescription, 5> attachments;
+	std::array<VkAttachmentDescription, 4> attachments;
 
 	// HDR attachment
 	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -62,7 +62,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].flags = 0;
 
-	// Deferred attachment
+	// Normal attachment
 	attachments[1].format = VK_FORMAT_R8G8B8A8_UNORM;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -84,27 +84,16 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[2].flags = 0;
 
-	// Color attachment
-	attachments[3].format = swapchainFormat;
-	attachments[3].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[3].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	// Depth attachment
+	attachments[3].format = depthFormat;
+	attachments[3].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachments[3].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[3].flags = 0;
-
-	// Depth attachment
-	attachments[4].format = depthFormat;
-	attachments[4].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[4].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	attachments[4].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[4].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[4].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[4].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[4].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[4].flags = 0;
 
 	std::array<VkAttachmentReference, 3> hdr_ref
 	{ 
@@ -113,38 +102,75 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 		VkAttachmentReference{2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL} 
 	};
 
-	std::array<VkAttachmentReference, 1> color_ref
-	{ 
-		VkAttachmentReference{3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL} 
-	};
-
 	std::array<VkAttachmentReference, 1> depth_ref
 	{ 
-		VkAttachmentReference{4, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} 
+		VkAttachmentReference{3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} 
 	};
 
-	std::array<VkAttachmentReference, 4> input_ref
-	{ 
-		VkAttachmentReference{0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}, 
-		VkAttachmentReference{1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}, 
-		VkAttachmentReference{2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}, 
-		VkAttachmentReference{4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL} 
-	};
-
-	std::array<VkSubpassDescription, 2> subpassDescriptions{};
+	std::array<VkSubpassDescription, 1> subpassDescriptions{};
 	subpassDescriptions[0].colorAttachmentCount = hdr_ref.size();
 	subpassDescriptions[0].pColorAttachments = hdr_ref.data();
 	subpassDescriptions[0].pDepthStencilAttachment = depth_ref.data();
 	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-	subpassDescriptions[1].colorAttachmentCount = color_ref.size();
-	subpassDescriptions[1].pColorAttachments = color_ref.data();
-	subpassDescriptions[1].pDepthStencilAttachment = nullptr;
-	subpassDescriptions[1].inputAttachmentCount = input_ref.size();
-	subpassDescriptions[1].pInputAttachments = input_ref.data();
-	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = attachments.size();
+	createInfo.pAttachments = attachments.data();
+	createInfo.dependencyCount = 0;
+	createInfo.pDependencies = VK_NULL_HANDLE;
+	createInfo.subpassCount = subpassDescriptions.size();
+	createInfo.pSubpasses = subpassDescriptions.data();
 
-	std::array<VkSubpassDependency, 3> dependencies{};
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_RenderPass);
+
+	return *this;
+}
+
+RenderScope& RenderScope::CreatePostProcessRenderPass()
+{
+	VkRenderPassCreateInfo createInfo{};
+	std::array<VkAttachmentDescription, 2> attachments;
+
+	// Intermidiate attachment
+	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].flags = 0;
+
+	// Output attachment
+	attachments[1].format = swapchainFormat;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].flags = 0;
+
+	VkAttachmentReference inter_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	VkAttachmentReference input_ref{ 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	VkAttachmentReference color_ref{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+	std::array<VkSubpassDescription, 2> subpassDescriptions{};
+	subpassDescriptions[0].colorAttachmentCount = 1;
+	subpassDescriptions[0].pColorAttachments = &inter_ref;
+	subpassDescriptions[0].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	subpassDescriptions[1].colorAttachmentCount = 1;
+	subpassDescriptions[1].pColorAttachments = &color_ref;
+	subpassDescriptions[1].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassDescriptions[1].inputAttachmentCount = 1;
+	subpassDescriptions[1].pInputAttachments = &input_ref;
+
+	std::array<VkSubpassDependency, 3> dependencies;
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -177,7 +203,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	createInfo.subpassCount = subpassDescriptions.size();
 	createInfo.pSubpasses = subpassDescriptions.data();
 
-	::CreateRenderPass(m_LogicalDevice, createInfo, &m_RenderPass);
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_PostProcessPass);
 
 	return *this;
 }
@@ -204,7 +230,7 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[1].flags = 0;
@@ -264,6 +290,8 @@ void RenderScope::Destroy()
 		vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, VK_NULL_HANDLE);
 	if (m_RenderPassLR != VK_NULL_HANDLE)
 		vkDestroyRenderPass(m_LogicalDevice, m_RenderPassLR, VK_NULL_HANDLE);
+	if (m_PostProcessPass != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_PostProcessPass, VK_NULL_HANDLE);
 	if (m_Swapchain != VK_NULL_HANDLE)
 		vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, VK_NULL_HANDLE);
 	if (m_Allocator != VK_NULL_HANDLE)
@@ -274,6 +302,7 @@ void RenderScope::Destroy()
 	m_DescriptorPool = VK_NULL_HANDLE;
 	m_RenderPass = VK_NULL_HANDLE;
 	m_RenderPassLR = VK_NULL_HANDLE;
+	m_PostProcessPass = VK_NULL_HANDLE;
 	m_Swapchain = VK_NULL_HANDLE;
 	m_Allocator = VK_NULL_HANDLE;
 	m_LogicalDevice = VK_NULL_HANDLE;
@@ -287,6 +316,8 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& m_Allocator != VK_NULL_HANDLE
 		&& m_Swapchain != VK_NULL_HANDLE
 		&& m_RenderPass != VK_NULL_HANDLE
+		&& m_RenderPassLR != VK_NULL_HANDLE
+		&& m_PostProcessPass != VK_NULL_HANDLE
 		&& m_DescriptorPool != VK_NULL_HANDLE;
 }
 

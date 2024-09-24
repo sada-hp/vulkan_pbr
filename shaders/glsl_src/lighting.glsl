@@ -192,67 +192,79 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
     }
 }
 
-void PointRadiance(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 Sun, vec3 Eye, vec3 Point, out SAtmosphere Atmosphere)
+// precomputed-atmospheric-scattering
+void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
 {
-    Point = vec3(0.0, Rg + 10.0, 0.0) + Point;
-    Eye = vec3(0.0, Rg + 10.0, 0.0) + Eye;
+    x += vec3(0.0, Rg, 0.0);
 
-    vec3 V = normalize(Point - Eye);
+    vec3 result;
+    float r = max(length(x), Rg + 1.0);
 
-    float Re = length(Eye);
-    float Rp = max(length(Point), Rg);
-
-    float DotEV = dot(Eye, V) / Re;
-    float DotPV = dot(Point, V) / Rp;
-
-    float DotEL = dot(Eye, Sun) / Re;
-    float DotPL = dot(Point, Sun) / Rp;
-
-    float DotVL = dot(V, Sun);
-
-    float Rl = RayleighPhase(DotVL);
-    float Rm = MiePhase(DotVL);
-
-    vec4 Inscattering = vec4(0.0);
-    Atmosphere.T = GetTransmittance(TransmittanceLUT, Re, DotEV, V, Point);
-    Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, Rp, DotPL);
-
-    const float Eps = 0.005f;
-    float MuHorizon = -sqrt(1.0 - pow(Rg / Re, 2.0));
-    if (abs(DotEV - MuHorizon) < Eps)
+    float mu = dot(x, v) / r;
+    float d = -r * mu - sqrt(r * r * (mu * mu - 1.0) + Rt * Rt);
+    
+    if (d > 0.0) 
     {
-        float Mu = MuHorizon - Eps;
-        float Rpe = distance(Eye, Point);
-        float H = sqrt(Re * Re + Rpe * Rpe + 2.0f * Re * Rpe * Mu);
-        float MuSample = (Re * Mu + Rpe) / H;
-
-        vec4 InscatteringAL = GetInscattering(InscatteringLUT, Re, Mu, DotEL, DotVL);
-        vec4 InscatteringBL = GetInscattering(InscatteringLUT, H, MuSample, DotPL, DotVL);
-        vec4 Inscattering0 = max(InscatteringAL - Atmosphere.T.rgbr * InscatteringBL, 0.0);
-
-        Mu = MuHorizon + Eps;
-        H = sqrt(Re * Re + Rpe * Rpe + 2.0f * Re * Rpe * Mu);
-        MuSample = (Re * Mu + Rpe) / H;
-
-        InscatteringAL = GetInscattering(InscatteringLUT, Re, Mu, DotEL, DotVL);
-        InscatteringBL = GetInscattering(InscatteringLUT, H, MuSample, DotPL, DotVL);
-        vec4 Inscattering1 = max(InscatteringAL - Atmosphere.T.rgbr * InscatteringBL, 0.0f);
-
-        float t = ((DotEV - MuHorizon) + Eps) / (2.0 * Eps);
-        Inscattering = mix(Inscattering0, Inscattering1, t);
-    }
-    else
-    {
-        vec4 InscatteringAL = GetInscattering(InscatteringLUT, Re, DotEV, DotEL, DotVL);
-        vec4 InscatteringBL = GetInscattering(InscatteringLUT, Rp, DotPV, DotPL, DotVL);
-        Inscattering = max(max(InscatteringAL, 0.0) - Atmosphere.T.rgbr * max(InscatteringBL, 0.0), 0.0);
+        x += d * v;
+        t -= d;
+        mu = (r * mu + d) / Rt;
+        r = Rt;
     }
 
-    // avoids imprecision problems in Mie scattering when Sun is below horizon
-    Inscattering.w *= smoothstep(0.00, 0.02, DotEL);
-    Atmosphere.S = max(Inscattering.rgb * Rl + GetMie(Inscattering) * Rm, 0.0) * MaxLightIntensity;
+    if (r <= Rt)
+    {
+        float nu = dot(v, s);
+        float muS = dot(x, s) / r;
+        float phaseR = RayleighPhase(nu);
+        float phaseM = MiePhase(nu);
+        vec4 inscatter = max(GetInscattering(InscatteringLUT, r, mu, muS, nu), 0.0);
 
-    const float LightInstensity = MaxLightIntensity / PI;
+        if (t > 0.0) 
+        {
+            vec3 x0 = x + t * v;
+            float r0 = length(x0);
+            float rMu0 = dot(x0, v);
+            float mu0 = rMu0 / r0;
+            float muS0 = dot(x0, s) / r0;
+            Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
+            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
 
-    Atmosphere.L *= Atmosphere.T * LightInstensity;
+            if (r0 > Rg + 0.01) 
+            {
+                inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
+                
+                const float EPS = 0.004;
+                float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
+                if (abs(mu - muHoriz) < EPS) 
+                {
+                    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
+
+                    mu = muHoriz - EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    mu = muHoriz + EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    inscatter = mix(inScatterA, inScatterB, a);
+                }
+            }
+        }
+        inscatter.w *= smoothstep(0.00, 0.02, muS);
+
+        result = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
+    } 
+    else 
+    {
+        Atmosphere.S = vec3(1.0);
+    }
+
+    Atmosphere.S = result * MaxLightIntensity;
 }

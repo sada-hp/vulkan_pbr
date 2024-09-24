@@ -113,6 +113,7 @@ private:
 	std::vector<VkImageView> m_SwapchainViews = {};
 
 
+
 	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsHR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsHR = {};
 	
@@ -125,6 +126,8 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_NormalAttachments = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_NormalViews = {};
 
+	std::vector<std::unique_ptr<VulkanImage>> m_PostProcessAttachments = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_PostProcessViews = {};
 
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsLR = {};
@@ -133,13 +136,17 @@ private:
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
 
+
 	std::vector<VkFramebuffer> m_FramebuffersHR = {};
 	std::vector<VkFramebuffer> m_FramebuffersLR = {};
+	std::vector<VkFramebuffer> m_FramebuffersPP = {};
 
 	std::vector<VkFence> m_PresentFences = {};
 	std::vector<VkSemaphore> m_PresentSemaphores = {};
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
+	std::vector<std::unique_ptr<Pipeline>> m_CompositionPipelines = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<Pipeline>> m_HDRPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_HDRDescriptors = {};
 
@@ -216,7 +223,7 @@ public:
 	*/
 	std::unique_ptr<VulkanTexture> _loadImage(const std::string& path, VkFormat format) const;
 	/*
-	*
+	* 
 	*/
 	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const;
 	/*
@@ -224,11 +231,11 @@ public:
 	*/
 	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const;
 	/*
-	*
+	* 
 	*/
 	void _drawObject(const PBRObject& gro, const PBRConstants& constants) const;
 	/*
-	*
+	* 
 	*/
 	void _updateObject(entt::entity ent, entt::registry& registry) const;
 
@@ -240,7 +247,7 @@ private:
 
 	VkBool32 create_framebuffers();
 
-	VkBool32 create_hdr_pipeline();
+	VkBool32 create_frame_pipelines();
 
 	VkBool32 prepare_renderer_resources();
 

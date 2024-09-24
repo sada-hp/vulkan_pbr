@@ -150,15 +150,13 @@ public:
 	
 	GraphicsPipelineDescriptor& SetShaderStage(const std::string& shaderName, VkShaderStageFlagBits stage);
 
-	GraphicsPipelineDescriptor& SetSubpass(uint32_t subpass);
-
 	GraphicsPipelineDescriptor& AddDescriptorLayout(VkDescriptorSetLayout layout);
 
 	GraphicsPipelineDescriptor& AddPushConstant(VkPushConstantRange constantRange);
 
 	GraphicsPipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage);
 
-	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass);
+	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass, uint32_t Subpass);
 
 	std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) override;
 

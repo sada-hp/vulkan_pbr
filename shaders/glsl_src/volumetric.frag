@@ -37,81 +37,6 @@ layout(set = 1, binding = 5) uniform sampler2D TransmittanceLUT;
 layout(set = 1, binding = 6) uniform sampler2D IrradianceLUT;
 layout(set = 1, binding = 7) uniform sampler3D InscatteringLUT;
 
-// precomputed-atmospheric-scattering
-void AtmosphereAtPoint(vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
-{
-    vec3 result;
-    float r = max(length(x), Rg);
-
-    float mu = dot(x, v) / r;
-    float d = -r * mu - sqrt(r * r * (mu * mu - 1.0) + Rt * Rt);
-    
-    if (d > 0.0) 
-    {
-        x += d * v;
-        t -= d;
-        mu = (r * mu + d) / Rt;
-        r = Rt;
-    }
-
-    if (r <= Rt)
-    {
-        float nu = dot(v, s);
-        float muS = dot(x, s) / r;
-        float phaseR = RayleighPhase(nu);
-        float phaseM = HenyeyGreensteinPhase(nu, MieG);
-        vec4 inscatter = max(GetInscattering(InscatteringLUT, r, mu, muS, nu), 0.0);
-
-        if (t > 0.0) 
-        {
-            vec3 x0 = x + t * v;
-            float r0 = length(x0);
-            float rMu0 = dot(x0, v);
-            float mu0 = rMu0 / r0;
-            float muS0 = dot(x0, s) / r0;
-            Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
-            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
-
-            if (r0 > Rg + 0.01) 
-            {
-                inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
-                
-                const float EPS = 0.004;
-                float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
-                if (abs(mu - muHoriz) < EPS) 
-                {
-                    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
-
-                    mu = muHoriz - EPS;
-                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                    mu0 = (r * mu + t) / r0;
-                    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
-
-                    mu = muHoriz + EPS;
-                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                    mu0 = (r * mu + t) / r0;
-                    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
-
-                    inscatter = mix(inScatterA, inScatterB, a);
-                }
-            }
-        }
-        inscatter.w *= smoothstep(0.00, 0.02, muS);
-
-        result = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
-    } 
-    else 
-    {
-        Atmosphere.S = vec3(0.0);
-    }
-
-    Atmosphere.S = result * MaxLightIntensity;
-}
-
 float GetHeightFraction(vec3 p)
 {
     p = p - sphereStart;
@@ -261,12 +186,12 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     if (scattering.a != 1.0)
     {
         SAtmosphere Atmosphere;
-        AtmosphereAtPoint(vec3(0, Rg, 0) + rs, distance(rs, re), normalize(re - rs), ubo.SunDirection.xyz, Atmosphere);
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, rs, distance(rs, re), normalize(re - rs), ubo.SunDirection.xyz, Atmosphere);
         float CloudTr = (meanD / meanT);
         vec3 E = Atmosphere.L + Atmosphere.S;
         scattering.rgb = scattering.rgb * E;
-
-        AtmosphereAtPoint(vec3(0, Rg, 0) + ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), normalize(rs - ubo.CameraPosition.xyz), ubo.SunDirection.xyz, Atmosphere);
+    
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), normalize(rs - ubo.CameraPosition.xyz), ubo.SunDirection.xyz, Atmosphere);
         scattering.rgb = scattering.rgb + Atmosphere.S * (1.0 - scattering.a);
     }
 

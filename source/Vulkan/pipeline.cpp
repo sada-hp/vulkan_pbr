@@ -250,16 +250,10 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::AddSpecializationConstan
 	return *this;
 }
 
-GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetSubpass(uint32_t inSubpass)
-{
-	subpass = inSubpass;
-
-	return *this;
-}
-
-GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRenderPass& RenderPass)
+GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRenderPass& RenderPass, uint32_t Subpass)
 {
 	renderPass = RenderPass;
+	subpass = Subpass;
 
 	return *this;
 }
