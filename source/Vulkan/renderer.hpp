@@ -81,7 +81,7 @@ namespace GR
 	public:
 		virtual ~Renderer() = default;
 
-		virtual void BeginFrame() = 0;
+		virtual bool BeginFrame() = 0;
 
 		virtual void EndFrame() = 0;
 
@@ -194,7 +194,7 @@ public:
 	/*
 	* !@brief Renders the next frame of simulation. Defined in renderer.cpp.
 	*/
-	GRAPI void BeginFrame() override;
+	GRAPI bool BeginFrame() override;
 	/*
 	*
 	*/

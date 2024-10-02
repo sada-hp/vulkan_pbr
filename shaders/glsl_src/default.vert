@@ -4,7 +4,7 @@
 
 layout(push_constant) uniform constants
 {
-    mat4 WorldMatrix;
+    dmat4 WorldMatrix;
 } PushConstants;
 
 layout(location = 0) in vec3 vertPosition;
@@ -29,8 +29,9 @@ void main()
 
     TBN = mat3(Tangent, Bitangent, Normal);
 
-    WorldPosition = PushConstants.WorldMatrix * vec4(vertPosition, 1.0);
+    dvec4 WorldPositionFP64 = PushConstants.WorldMatrix * dvec4(vertPosition, 1.0); 
+    WorldPosition = vec4(WorldPositionFP64);
     FragUV = vertUV;
     
-    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
+    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPositionFP64);
 }

@@ -195,6 +195,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	ImGui_ImplVulkan_Init(&init_info);
 #endif
 
+	m_Camera.View.SetOffset({ 0.0, GR::Renderer::Rg, 0.0 });
+
 	assert(res != 0);
 }
 
@@ -298,10 +300,10 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyInstance(m_VkInstance, VK_NULL_HANDLE);
 }
 
-void VulkanBase::BeginFrame()
+bool VulkanBase::BeginFrame()
 {
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
-		return;
+		return false;
 
 	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex]);
@@ -568,6 +570,8 @@ void VulkanBase::BeginFrame()
 #if DEBUG == 1
 		m_InFrame = true;
 #endif
+
+		return true;
 	}
 }
 
@@ -575,6 +579,8 @@ void VulkanBase::EndFrame()
 {
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
 		return;
+
+	assert(m_InFrame);
 
 	const VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
 

@@ -135,7 +135,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
     float sample_density = 0.0;
 
     mat3 R;
-    R[1] = normalize(rs + vec3(0.0, Rg, 0.0));
+    R[1] = normalize(rs);
     R[0] = vec3(1.0, 0.0, 0.0);
     R[2] = normalize(cross(R[0], R[1]));
     vec3 rl = normalize(transpose(R) * ubo.SunDirection.xyz);
@@ -205,9 +205,9 @@ void main()
     vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xy, -1.0, 0.0));
     vec3 RayDirection = normalize(ScreenWorld.xyz);
     vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
-    vec3 SphereCenter = vec3(0.0, -Rg, 0.0);
+    vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
 
-    if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rg, sphereStart)) // length(RayOrigin + vec3(0.0, Rg, 0.0)) < Rcb && 
+    if (RaySphereintersection(RayOrigin, RayDirection, SphereCenter, Rg, sphereStart))
     {
         discard;
     }

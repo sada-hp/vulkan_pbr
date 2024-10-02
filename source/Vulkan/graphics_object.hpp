@@ -15,7 +15,7 @@ private:
 
 struct PBRConstants
 {
-	glm::mat4 World;
+	glm::dmat4 World;
 	glm::vec4 Color;
 	float RoughnessMultiplier = 1.0;
 	float Metallic = 0.0;

@@ -47,6 +47,30 @@ bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius, out vec3 p1)
 	return true;
 }
 
+bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius)
+{
+	vec3 sphereCenter = so;
+
+	float radius2 = radius*radius;
+
+	vec3 L = ro - sphereCenter;
+	float a = dot(rd, rd);
+	float b = 2.0 * dot(rd, L);
+	float c = dot(L, L) - radius2;
+
+	float discr = b * b - 4.0 * a * c;
+
+	if (discr < 0.0) 
+        return false;
+
+	float t1 = max(0.0, (-b + sqrt(discr))/2);
+	if(t1 == 0.0){
+		return false;
+	}
+
+	return true;
+}
+
 float HenyeyGreensteinPhase(float a, float g)
 {
     return ONE_OVER_4PI * ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * a), 1.5));
@@ -195,8 +219,6 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
 // precomputed-atmospheric-scattering
 void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
 {
-    x += vec3(0.0, Rg, 0.0);
-
     vec3 result;
     float r = max(length(x), Rg + 1.0);
 
@@ -233,28 +255,29 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
             {
                 inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
                 
-                const float EPS = 0.004;
-                float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
-                if (abs(mu - muHoriz) < EPS) 
-                {
-                    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
+                // don't need to account for that due to the "fix" applied in composition stage
+                //const float EPS = 0.004;
+                //float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
+                //if (abs(mu - muHoriz) < EPS) 
+                //{
+                //    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
 
-                    mu = muHoriz - EPS;
-                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                    mu0 = (r * mu + t) / r0;
-                    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+                //    mu = muHoriz - EPS;
+                //    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                //    mu0 = (r * mu + t) / r0;
+                //    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                //    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                //    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
-                    mu = muHoriz + EPS;
-                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                    mu0 = (r * mu + t) / r0;
-                    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+                //    mu = muHoriz + EPS;
+                //    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                //    mu0 = (r * mu + t) / r0;
+                //    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                //    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                //    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
-                    inscatter = mix(inScatterA, inScatterB, a);
-                }
+                //    inscatter = mix(inScatterA, inScatterB, a);
+                //}
             }
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);

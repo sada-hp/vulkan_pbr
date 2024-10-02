@@ -75,8 +75,11 @@ void main()
             Color.rgb = DirectSunlight(V, L, Normal, Material);
         }
 
+        // treat it as if we were always looking at the ground, saves from horizon artifacts
+        V = normalize(normalize(WorldPosition.xyz) * Rg - ubo.CameraPosition.xyz);
+
         SAtmosphere Atmosphere;
-        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, WorldPosition), -V, L, Atmosphere);
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, WorldPosition), V, L, Atmosphere);
         Color.rgb = Color.rgb * Atmosphere.L + Atmosphere.S;
     }
 

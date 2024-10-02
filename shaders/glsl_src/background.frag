@@ -50,7 +50,7 @@ void main()
 
     vec3 V = normalize(ScreenWorld.xyz);
     vec3 S = normalize(ubo.SunDirection.xyz);
-    vec3 Eye = ubo.CameraPosition.xyz + vec3(0.0, Rg, 0.0);
+    vec3 Eye = ubo.CameraPosition.xyz;
     
     vec3 SkyColor = SkyRadiance(S, Eye, V);
     vec3 SunColor = GetSunColor(Eye, V, S);

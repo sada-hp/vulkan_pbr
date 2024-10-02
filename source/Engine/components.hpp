@@ -259,7 +259,7 @@ namespace GR
 			}
 		};
 
-		using WorldMatrix = TransformMatrix<float>;
+		using WorldMatrix = TransformMatrix<double>;
 		using ViewMatrix = TransformMatrix<double>;
 	};
 };

@@ -4,7 +4,7 @@
 
 layout(push_constant) uniform constants
 {
-    mat4 WorldMatrix;
+    dmat4 WorldMatrix;
 } PushConstants;
 
 layout(location = 0) in vec3 vertPosition;
@@ -22,6 +22,6 @@ void main()
     vec3 ObjectPosition = vec3(vertPosition.x, Rg, vertPosition.z);
 
     Normal = vec3(normalize(Orientation * ObjectPosition));
-    WorldPosition = vec4(Rg * Normal - vec3(0.0, Rg, 0.0), 1.0);
+    WorldPosition = vec4(Rg * Normal, 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
 }
