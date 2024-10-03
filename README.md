@@ -7,6 +7,7 @@ Feature list:
 - PBR shading
 - Deferred rendering
 - Reversed Z-buffer
+- FXAA
 
 Features in work:
 - Geoclipmap terrain
