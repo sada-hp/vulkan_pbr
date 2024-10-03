@@ -123,6 +123,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		.CreateSwapchain(m_Surface)
 		.CreateDefaultRenderPass()
 		.CreateLowResRenderPass()
+		.CreateCompositionRenderPass()
 		.CreatePostProcessRenderPass()
 		.CreateDescriptorPool(100u, poolSizes);
 	
@@ -252,6 +253,11 @@ VulkanBase::~VulkanBase() noexcept
 		return true;
 	});
 
+	std::erase_if(m_FramebuffersCP, [&, this](VkFramebuffer& fb) {
+		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
+		return true;
+	});
+
 	std::erase_if(m_FramebuffersPP, [&, this](VkFramebuffer& fb) {
 		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 		return true;
@@ -283,14 +289,17 @@ VulkanBase::~VulkanBase() noexcept
 	m_HdrAttachmentsLR.resize(0);
 	m_HdrViewsLR.resize(0);
 
-	m_PostProcessAttachments.resize(0);
-	m_PostProcessViews.resize(0);
+	m_CompositionAttachments.resize(0);
+	m_CompositionViews.resize(0);
 
 	m_HDRDescriptors.resize(0);
 	m_HDRPipelines.resize(0);
 
 	m_CompositionDescriptors.resize(0);
 	m_CompositionPipelines.resize(0);
+
+	m_PostProcessDescriptors.resize(0);
+	m_PostProcessPipelines.resize(0);
 
 	m_UBOSets.resize(0);
 
@@ -596,8 +605,8 @@ void VulkanBase::EndFrame()
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.framebuffer = m_FramebuffersPP[m_SwapchainIndex];
-		renderPassInfo.renderPass = m_Scope.GetPostProcessPass();
+		renderPassInfo.framebuffer = m_FramebuffersCP[m_SwapchainIndex];
+		renderPassInfo.renderPass = m_Scope.GetCompositionPass();
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
 		renderPassInfo.clearValueCount = clearValues.size();
@@ -628,6 +637,44 @@ void VulkanBase::EndFrame()
 		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_HDRPipelines[m_SwapchainIndex]);
 		m_HDRPipelines[m_SwapchainIndex]->BindPipeline(cmd);
 		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		vkCmdEndRenderPass(cmd);
+	}
+
+	{
+		std::array<VkClearValue, 1> clearValues;
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.framebuffer = m_FramebuffersPP[m_SwapchainIndex];
+		renderPassInfo.renderPass = m_Scope.GetPostProcessPass();
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
+		renderPassInfo.clearValueCount = clearValues.size();
+		renderPassInfo.pClearValues = clearValues.data();
+
+		VkViewport viewport{};
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = (float)m_Scope.GetSwapchainExtent().width;
+		viewport.height = (float)m_Scope.GetSwapchainExtent().height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = m_Scope.GetSwapchainExtent();
+		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		m_PostProcessDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_PostProcessPipelines[m_SwapchainIndex]);
+		m_PostProcessPipelines[m_SwapchainIndex]->BindPipeline(cmd);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
 #ifdef INCLUDE_GUI
 		ImGui::Render();
@@ -688,6 +735,11 @@ void VulkanBase::_handleResize()
 		return true;
 	});
 
+	std::erase_if(m_FramebuffersCP, [&, this](VkFramebuffer& fb) {
+		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
+		return true;
+	});
+
 	std::erase_if(m_FramebuffersPP, [&, this](VkFramebuffer& fb) {
 		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
 		return true;
@@ -710,8 +762,8 @@ void VulkanBase::_handleResize()
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
 
-	m_PostProcessAttachments.resize(0);
-	m_PostProcessViews.resize(0);
+	m_CompositionAttachments.resize(0);
+	m_CompositionViews.resize(0);
 
 	m_HdrAttachmentsLR.resize(0);
 	m_HdrViewsLR.resize(0);
@@ -840,8 +892,8 @@ VkBool32 VulkanBase::create_swapchain_images()
 	m_HdrAttachmentsLR.resize(imagesCount);
 	m_HdrViewsLR.resize(imagesCount);
 
-	m_PostProcessAttachments.resize(imagesCount);
-	m_PostProcessViews.resize(imagesCount);
+	m_CompositionAttachments.resize(imagesCount);
+	m_CompositionViews.resize(imagesCount);
 
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
@@ -898,8 +950,8 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsHR[i]);
 
 		hdrInfo.usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-		m_PostProcessAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_PostProcessViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_PostProcessAttachments[i]);
+		m_CompositionAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_CompositionViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_CompositionAttachments[i]);
 
 		hdrInfo.usage &= ~VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 		hdrInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -939,6 +991,7 @@ VkBool32 VulkanBase::create_framebuffers()
 
 	m_FramebuffersHR.resize(m_SwapchainImages.size());
 	m_FramebuffersLR.resize(m_SwapchainImages.size());
+	m_FramebuffersCP.resize(m_SwapchainImages.size());
 	m_FramebuffersPP.resize(m_SwapchainImages.size());
 
 	VkBool32 res = 1;
@@ -946,7 +999,8 @@ VkBool32 VulkanBase::create_framebuffers()
 	{
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), m_Scope.GetSwapchainExtent(), { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthViewsHR[i]->GetImageView()}, &m_FramebuffersHR[i]) & res;
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView() }, &m_FramebuffersLR[i]) & res;
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetPostProcessPass(), m_Scope.GetSwapchainExtent(), { m_PostProcessViews[i]->GetImageView(), m_SwapchainViews[i] }, &m_FramebuffersPP[i]);
+		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCompositionPass(), m_Scope.GetSwapchainExtent(), { m_CompositionViews[i]->GetImageView() }, &m_FramebuffersCP[i]);
+		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetPostProcessPass(), m_Scope.GetSwapchainExtent(), { m_SwapchainViews[i] }, &m_FramebuffersPP[i]);
 	}
 
 	return res;
@@ -961,6 +1015,9 @@ VkBool32 VulkanBase::create_frame_pipelines()
 
 	m_CompositionPipelines.resize(m_SwapchainImages.size());
 	m_CompositionDescriptors.resize(m_SwapchainImages.size());
+
+	m_PostProcessPipelines.resize(m_SwapchainImages.size());
+	m_PostProcessDescriptors.resize(m_SwapchainImages.size());
 
 	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler SamplerBillinear = m_Scope.GetSampler(ESamplerType::BillinearClamp);
@@ -982,19 +1039,31 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 			.SetShaderStage("composition_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.AddDescriptorLayout(m_CompositionDescriptors[i]->GetLayout())
-			.SetRenderPass(m_Scope.GetPostProcessPass(), 0)
+			.SetRenderPass(m_Scope.GetCompositionPass(), 0)
 			.Construct(m_Scope);
 
 		m_HDRDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
-			.AddSubpassAttachment(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_PostProcessViews[i]->GetImageView())
+			.AddSubpassAttachment(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_CompositionViews[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
 			.Allocate(m_Scope);
 
 		m_HDRPipelines[i] = GraphicsPipelineDescriptor()
 			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 			.SetShaderStage("hdr_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.AddDescriptorLayout(m_HDRDescriptors[i]->GetLayout())
-			.SetRenderPass(m_Scope.GetPostProcessPass(), 1)
+			.SetRenderPass(m_Scope.GetCompositionPass(), 1)
+			.Construct(m_Scope);
+
+		m_PostProcessDescriptors[i] = DescriptorSetDescriptor()
+			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
+			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_CompositionViews[i]->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.Allocate(m_Scope);
+
+		m_PostProcessPipelines[i] = GraphicsPipelineDescriptor()
+			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
+			.SetShaderStage("post_process_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+			.AddDescriptorLayout(m_PostProcessDescriptors[i]->GetLayout())
+			.SetRenderPass(m_Scope.GetPostProcessPass(), 0)
 			.Construct(m_Scope);
 	}
 
@@ -1432,7 +1501,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
 		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (uint32_t Sample = 2; Sample <= 15; ++Sample)
+	for (uint32_t Sample = 2; Sample <= 5; ++Sample)
 	{
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 

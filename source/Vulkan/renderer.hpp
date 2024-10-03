@@ -126,8 +126,8 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_NormalAttachments = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_NormalViews = {};
 
-	std::vector<std::unique_ptr<VulkanImage>> m_PostProcessAttachments = {};
-	std::vector<std::unique_ptr<VulkanImageView>> m_PostProcessViews = {};
+	std::vector<std::unique_ptr<VulkanImage>> m_CompositionAttachments = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_CompositionViews = {};
 
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsLR = {};
@@ -139,16 +139,22 @@ private:
 
 	std::vector<VkFramebuffer> m_FramebuffersHR = {};
 	std::vector<VkFramebuffer> m_FramebuffersLR = {};
+	std::vector<VkFramebuffer> m_FramebuffersCP = {};
 	std::vector<VkFramebuffer> m_FramebuffersPP = {};
 
 	std::vector<VkFence> m_PresentFences = {};
 	std::vector<VkSemaphore> m_PresentSemaphores = {};
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
+
 	std::vector<std::unique_ptr<Pipeline>> m_CompositionPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
+
 	std::vector<std::unique_ptr<Pipeline>> m_HDRPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_HDRDescriptors = {};
+
+	std::vector<std::unique_ptr<Pipeline>> m_PostProcessPipelines = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;

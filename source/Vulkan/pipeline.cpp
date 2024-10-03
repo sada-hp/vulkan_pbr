@@ -1,6 +1,5 @@
 #include "pch.hpp"
 #include "pipeline.hpp"
-#include <filesystem>
 
 Pipeline::~Pipeline()
 {
@@ -188,7 +187,7 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetCullMode(VkCullModeFl
 
 GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetDepthBias(float depthBiasConstantFactor, float depthBiasClamp, float depthBiasSlopeFactor)
 {
-	rasterizationState.depthBiasEnable = depthBiasConstantFactor != 0.f && depthBiasClamp != 0.f && depthBiasSlopeFactor != 0.f;
+	rasterizationState.depthBiasEnable = depthBiasConstantFactor != 0.f || depthBiasClamp != 0.f || depthBiasSlopeFactor != 0.f;
 	rasterizationState.depthBiasConstantFactor = depthBiasConstantFactor;
 	rasterizationState.depthBiasClamp = depthBiasClamp;
 	rasterizationState.depthBiasSlopeFactor = depthBiasSlopeFactor;

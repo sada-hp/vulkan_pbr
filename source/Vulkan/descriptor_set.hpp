@@ -37,11 +37,11 @@ public:
 
 	DescriptorSetDescriptor& AddStorageBuffer(uint32_t binding, VkShaderStageFlags stages, const Buffer& buffer);
 
-	DescriptorSetDescriptor& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler);
+	DescriptorSetDescriptor& AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler, VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	DescriptorSetDescriptor& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view);
+	DescriptorSetDescriptor& AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view);
+	DescriptorSetDescriptor& AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL);
 
 	std::unique_ptr<DescriptorSet> Allocate(const RenderScope& Scope);
 

@@ -126,12 +126,11 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	return *this;
 }
 
-RenderScope& RenderScope::CreatePostProcessRenderPass()
+RenderScope& RenderScope::CreateCompositionRenderPass()
 {
 	VkRenderPassCreateInfo createInfo{};
-	std::array<VkAttachmentDescription, 2> attachments;
+	std::array<VkAttachmentDescription, 1> attachments;
 
-	// Intermidiate attachment
 	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -142,24 +141,11 @@ RenderScope& RenderScope::CreatePostProcessRenderPass()
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].flags = 0;
 
-	// Output attachment
-	attachments[1].format = swapchainFormat;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].flags = 0;
-
-	VkAttachmentReference inter_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-	VkAttachmentReference input_ref{ 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-	VkAttachmentReference color_ref{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	VkAttachmentReference color_ref{ 0, VK_IMAGE_LAYOUT_GENERAL };
 
 	std::array<VkSubpassDescription, 2> subpassDescriptions{};
 	subpassDescriptions[0].colorAttachmentCount = 1;
-	subpassDescriptions[0].pColorAttachments = &inter_ref;
+	subpassDescriptions[0].pColorAttachments = &color_ref;
 	subpassDescriptions[0].pDepthStencilAttachment = nullptr;
 	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
@@ -168,7 +154,7 @@ RenderScope& RenderScope::CreatePostProcessRenderPass()
 	subpassDescriptions[1].pDepthStencilAttachment = nullptr;
 	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpassDescriptions[1].inputAttachmentCount = 1;
-	subpassDescriptions[1].pInputAttachments = &input_ref;
+	subpassDescriptions[1].pInputAttachments = &color_ref;
 
 	std::array<VkSubpassDependency, 3> dependencies;
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -203,7 +189,7 @@ RenderScope& RenderScope::CreatePostProcessRenderPass()
 	createInfo.subpassCount = subpassDescriptions.size();
 	createInfo.pSubpasses = subpassDescriptions.data();
 
-	::CreateRenderPass(m_LogicalDevice, createInfo, &m_PostProcessPass);
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_CompositionPass);
 
 	return *this;
 }
@@ -257,6 +243,72 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	return *this;
 }
 
+RenderScope& RenderScope::CreatePostProcessRenderPass()
+{
+	VkRenderPassCreateInfo createInfo{};
+	std::array<VkAttachmentDescription, 1> attachments;
+
+	attachments[0].format = swapchainFormat;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].flags = 0;
+
+	VkAttachmentReference color_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+	std::array<VkSubpassDescription, 2> subpassDescriptions{};
+	subpassDescriptions[0].colorAttachmentCount = 1;
+	subpassDescriptions[0].pColorAttachments = &color_ref;
+	subpassDescriptions[0].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	subpassDescriptions[1].colorAttachmentCount = 1;
+	subpassDescriptions[1].pColorAttachments = &color_ref;
+	subpassDescriptions[1].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	std::array<VkSubpassDependency, 3> dependencies;
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = 1;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[2].srcSubpass = 1;
+	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = attachments.size();
+	createInfo.pAttachments = attachments.data();
+	createInfo.dependencyCount = dependencies.size();
+	createInfo.pDependencies = dependencies.data();
+	createInfo.subpassCount = subpassDescriptions.size();
+	createInfo.pSubpasses = subpassDescriptions.data();
+
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_PostProcessPass);
+
+	return *this;
+}
+
 RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes)
 {
 	if (m_DescriptorPool != VK_NULL_HANDLE) {
@@ -290,6 +342,8 @@ void RenderScope::Destroy()
 		vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, VK_NULL_HANDLE);
 	if (m_RenderPassLR != VK_NULL_HANDLE)
 		vkDestroyRenderPass(m_LogicalDevice, m_RenderPassLR, VK_NULL_HANDLE);
+	if (m_CompositionPass != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_CompositionPass, VK_NULL_HANDLE);
 	if (m_PostProcessPass != VK_NULL_HANDLE)
 		vkDestroyRenderPass(m_LogicalDevice, m_PostProcessPass, VK_NULL_HANDLE);
 	if (m_Swapchain != VK_NULL_HANDLE)
@@ -302,6 +356,7 @@ void RenderScope::Destroy()
 	m_DescriptorPool = VK_NULL_HANDLE;
 	m_RenderPass = VK_NULL_HANDLE;
 	m_RenderPassLR = VK_NULL_HANDLE;
+	m_CompositionPass = VK_NULL_HANDLE;
 	m_PostProcessPass = VK_NULL_HANDLE;
 	m_Swapchain = VK_NULL_HANDLE;
 	m_Allocator = VK_NULL_HANDLE;
@@ -317,7 +372,7 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& m_Swapchain != VK_NULL_HANDLE
 		&& m_RenderPass != VK_NULL_HANDLE
 		&& m_RenderPassLR != VK_NULL_HANDLE
-		&& m_PostProcessPass != VK_NULL_HANDLE
+		&& m_CompositionPass != VK_NULL_HANDLE
 		&& m_DescriptorPool != VK_NULL_HANDLE;
 }
 

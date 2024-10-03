@@ -59,7 +59,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageBuffer(uint32_t bind
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, const VkSampler& sampler, VkImageLayout layout)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -73,7 +73,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t bindi
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
 
-	imageInfos.emplace_back(sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	imageInfos.emplace_back(sampler, view, layout);
 	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
@@ -82,7 +82,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddImageSampler(uint32_t bindi
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, VkImageLayout layout)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -96,7 +96,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t 
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
 
-	imageInfos.emplace_back(VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	imageInfos.emplace_back(VK_NULL_HANDLE, view, layout);
 	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
@@ -105,7 +105,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddSubpassAttachment(uint32_t 
 	return *this;
 }
 
-DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view)
+DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t binding, VkShaderStageFlags stages, const VkImageView& view, VkImageLayout layout)
 {
 	VkDescriptorSetLayoutBinding DSBinding{};
 	DSBinding.binding = binding;
@@ -119,7 +119,7 @@ DescriptorSetDescriptor& DescriptorSetDescriptor::AddStorageImage(uint32_t bindi
 	DSWrites.descriptorCount = 1;
 	DSWrites.dstBinding = binding;
 
-	imageInfos.emplace_back(VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_GENERAL);
+	imageInfos.emplace_back(VK_NULL_HANDLE, view, layout);
 	DSWrites.pImageInfo = &imageInfos.back();
 
 	bindings.push_back(DSBinding);
