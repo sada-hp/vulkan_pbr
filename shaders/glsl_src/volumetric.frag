@@ -188,7 +188,7 @@ vec4 MarchToCloud(vec3 rs, vec3 re, vec3 rd)
         SAtmosphere Atmosphere;
         AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, rs, distance(rs, re), normalize(re - rs), ubo.SunDirection.xyz, Atmosphere);
         float CloudTr = (meanD / meanT);
-        vec3 E = Atmosphere.L + Atmosphere.S;
+        vec3 E = CloudTr * Atmosphere.L + Atmosphere.S;
         scattering.rgb = scattering.rgb * E;
     
         AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, rs), normalize(rs - ubo.CameraPosition.xyz), ubo.SunDirection.xyz, Atmosphere);
