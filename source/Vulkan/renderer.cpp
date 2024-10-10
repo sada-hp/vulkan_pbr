@@ -1,6 +1,6 @@
-#define GLFW_INCLUDE_VULKAN
-#define VMA_IMPLEMENTATION
 #define VK_KHR_swapchain
+#define VMA_IMPLEMENTATION
+#define GLFW_INCLUDE_VULKAN
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "pch.hpp"
@@ -9,8 +9,8 @@
 
 #ifdef INCLUDE_GUI
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_vulkan.h"
 #endif
 
 #pragma region Utils
@@ -403,7 +403,7 @@ bool VulkanBase::BeginFrame()
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Atmospherics->pipeline);
 		m_Atmospherics->descriptorSet->BindSet(1, cmd, *m_Atmospherics->pipeline);
 		m_Atmospherics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 36, 1, 0, 0);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
 		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
@@ -554,7 +554,7 @@ bool VulkanBase::BeginFrame()
 		std::array<VkClearValue, 4> clearValues;
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 		clearValues[3].depthStencil = { 0.0f, 0 };
 
 		VkRenderPassBeginInfo renderPassInfo{};

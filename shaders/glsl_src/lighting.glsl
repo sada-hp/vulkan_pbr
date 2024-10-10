@@ -138,9 +138,9 @@ float HGDPhase(float a, float ghg, float gd, float kd, float w)
     return mix(hgp, dp, w);
 }
 
-float Powder(float s, float d, float a)
+float Powder(float e, float ds)
 {
-    return 2.0 * (1.0 - exp(-d * s * 2)) * exp(-d * a * s);
+    return 2.0 * (1.0 - exp(-ds * e * 2)) * exp(-ds * e);
 }
 
 vec3 GetMie(vec4 RayMie)
@@ -266,6 +266,29 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
             if (r0 > Rg + 0.01) 
             {
                 inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
+
+                const float EPS = 0.004;
+                float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
+                if (abs(mu - muHoriz) < EPS) 
+                {
+                    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
+
+                    mu = muHoriz - EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    mu = muHoriz + EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    inscatter = mix(inScatterA, inScatterB, a);
+                }
             }
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);
@@ -274,7 +297,10 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
     } 
     else 
     {
-        Atmosphere.S = vec3(1.0);
+        Atmosphere.S = vec3(0.0);
+        Atmosphere.L = vec3(0.0);
+        Atmosphere.T = vec3(0.0);
+        return;
     }
 
     Atmosphere.S = result * MaxLightIntensity;
@@ -317,6 +343,29 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
             if (r0 > Rg + 0.01) 
             {
                 inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
+
+                const float EPS = 0.004;
+                float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
+                if (abs(mu - muHoriz) < EPS) 
+                {
+                    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
+
+                    mu = muHoriz - EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    mu = muHoriz + EPS;
+                    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
+                    mu0 = (r * mu + t) / r0;
+                    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
+                    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
+                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+
+                    inscatter = mix(inScatterA, inScatterB, a);
+                }
             }
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);
@@ -325,7 +374,10 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
     } 
     else 
     {
-        Atmosphere.S = vec3(1.0);
+        Atmosphere.S = vec3(0.0);
+        Atmosphere.L = vec3(0.0);
+        Atmosphere.T = vec3(0.0);
+        return;
     }
 
     Atmosphere.S = result * MaxLightIntensity;

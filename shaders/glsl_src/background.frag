@@ -8,35 +8,6 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 1) uniform sampler2D TransmittanceLUT;
 layout(set = 1, binding = 2) uniform sampler3D InscatteringLUT;
 
-vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View)
-{
-    const float Re = length(Eye);
-    float DotEV = dot(Eye, View) / Re;
-    float d = -Re * DotEV - sqrt(Re * Re * (DotEV * DotEV - 1.0) + Rt * Rt);
-
-    if (d > 0.0) 
-    {
-        Eye += d * View;
-        DotEV = (Re * DotEV + d) / Rt;
-    }
-
-    if (Re <= Rt) 
-    {
-        const float DotEL = dot(Eye, Sun) / Re;
-        const float DotVL = dot(View, Sun);
-
-        const float PhaseR = RayleighPhase(DotVL);
-        const float PhaseM = HGDPhase(DotVL, MieG);
-        
-        vec4 Inscattering = max(GetInscattering(InscatteringLUT, Re, DotEV, DotEL, DotVL), 0.0);
-        return max(Inscattering.rgb * PhaseR + GetMie(Inscattering) * PhaseM, 0.0) * MaxLightIntensity;
-    } 
-    else 
-    {
-        return vec3(0.0);
-    }
-}
-
 vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
 {
     vec3 p;
@@ -54,6 +25,11 @@ void main()
     vec3 Eye = ubo.CameraPosition.xyz;
     
     float t = SphereDistance(Eye, V, vec3(0.0), Rt, false);
+
+    if (length(Eye) > Rt)
+    {
+        discard;
+    }
 
     SAtmosphere Atmosphere;
     AtmosphereAtPointHGD(TransmittanceLUT, InscatteringLUT, Eye, t, V, S, Atmosphere);

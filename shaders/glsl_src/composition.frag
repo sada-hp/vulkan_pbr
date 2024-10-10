@@ -54,26 +54,21 @@ void main()
     float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Color = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
     vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
-    vec3 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgb;
+    vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
  
-    if (Depth != 0.0)
+    if (Deferred.a != 0.0)
     {
         vec3 Eye = ubo.CameraPosition.xyz;
-        vec3 WorldPosition = GetWorldPosition(Depth);
-
         vec3 L = normalize(ubo.SunDirection.xyz);
+        vec3 WorldPosition = GetWorldPosition(Depth);
         vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
 
-        if (Deferred != vec3(0.0))
-        {
-            SMaterial Material;
-            Material.Roughness = Deferred.r;
-            Material.Metallic = Deferred.g;
-            Material.AO = Deferred.b;
-            Material.Albedo = Color;
-
-            Color.rgb = DirectSunlight(V, L, Normal, Material);
-        }
+        SMaterial Material;
+        Material.Roughness = Deferred.r;
+        Material.Metallic = Deferred.g;
+        Material.AO = Deferred.b;
+        Material.Albedo = Color;
+        Color.rgb = DirectSunlight(V, L, Normal, Material);
 
         // treat it as if we were always looking at the ground, saves from horizon artifacts
         V = normalize(normalize(WorldPosition.xyz) * Rg - ubo.CameraPosition.xyz);
