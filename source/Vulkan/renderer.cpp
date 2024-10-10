@@ -20,6 +20,7 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 
 	int resolution = w * h * 4;
 	uint32_t familyIndex = Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex();
+
 	VkBufferCreateInfo sbInfo{};
 	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	sbInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -27,9 +28,11 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	sbInfo.pQueueFamilyIndices = &familyIndex;
 	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	sbInfo.size = resolution * count;
+
 	VmaAllocationCreateInfo sbAlloc{};
 	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
 	sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	
 	Buffer stagingBuffer(Scope, sbInfo, sbAlloc);
 	stagingBuffer.Update(pixels);
 
@@ -40,6 +43,7 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	subRes.baseMipLevel = 0;
 	subRes.layerCount = count;
 	subRes.levelCount = mipLevels;
+	
 	VkImageCreateInfo imageCI{};
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageCI.arrayLayers = count;
@@ -62,8 +66,10 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 
 	VmaAllocationCreateInfo skyAlloc{};
 	skyAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+	
 	VkPhysicalDeviceProperties properties{};
 	vkGetPhysicalDeviceProperties(Scope.GetPhysicalDevice(), &properties);
+	
 	std::unique_ptr<VulkanImage> target = std::make_unique<VulkanImage>(Scope);
 	target->CreateImage(imageCI, skyAlloc);
 
@@ -784,8 +790,7 @@ void VulkanBase::_handleResize()
 	create_framebuffers();
 	create_frame_pipelines();
 
-	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
-		.SetDepthRange(1e-2f, 1e4f);
+	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height));
 
 	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
 		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -1558,7 +1563,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 
 	m_Atmospherics = std::make_unique<GraphicsObject>();
 	m_Atmospherics->descriptorSet = DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
 		.Allocate(m_Scope);
 
 	m_Atmospherics->pipeline = GraphicsPipelineDescriptor()
@@ -1589,7 +1595,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_CloudLayer = std::make_unique<Buffer>(m_Scope, cloudInfo, allocCreateInfo);
 
 	CloudLayerProfile defaultClouds{};
-	m_CloudLayer->Update(&defaultClouds, sizeof(CloudLayerProfile));
+	m_CloudLayer->Update(&defaultClouds, sizeof (CloudLayerProfile));
 
 	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
@@ -1610,8 +1616,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
 		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
 		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 		.Allocate(m_Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};

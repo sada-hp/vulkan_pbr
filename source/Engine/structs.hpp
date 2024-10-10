@@ -40,8 +40,8 @@ struct CloudLayerProfile
 			&& WindSpeed == other.WindSpeed;
 	}
 
-	float Coverage = 0.175;
-	float VerticalSpan = 0.25;
+	float Coverage = 0.5;
+	float VerticalSpan = 0.5;
 	float Absorption = 0.025;
 	float WindSpeed = 0.25;
 };

@@ -15,14 +15,15 @@ layout (constant_id = 1) const uint octaves = 1;
 void main()
 {
     vec4 temp = vec4(0.0);
+    int mult[4] = { 1, 2, 4, 6 };
     for (uint i = 0; i < 4; i++)
     {
 #if local_size_z == 1
         const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-        temp[i] = fbm_worley(cell_loc, frequency * (i + 1), octaves);
+        temp[i] = fbm_worley(cell_loc, frequency * mult[i], octaves);
 #else
         const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
-        temp[i] = fbm_worley(cell_loc, frequency * (i + 1), octaves);
+        temp[i] = fbm_worley(cell_loc, frequency * mult[i], octaves);
 #endif
     }
 

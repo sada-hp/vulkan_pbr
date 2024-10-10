@@ -74,7 +74,7 @@ float worley(vec2 p0, float freq)
         }
     }
 
-    return 1.0 - min_d;
+    return min_d;
 }
 
 float worley(vec3 p0, float freq)
@@ -93,7 +93,7 @@ float worley(vec3 p0, float freq)
         }
     }
 
-    return 1.0 - min_d;
+    return min_d;
 }
 
 float perlin(vec2 x0, float freq) 

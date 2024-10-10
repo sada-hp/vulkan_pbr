@@ -1,7 +1,7 @@
 #include "common.glsl"
 #include "constants.glsl"
 
-float SphereDistance(vec3 ro, vec3 rd, vec3 so, float radius)
+float SphereDistance(vec3 ro, vec3 rd, vec3 so, float radius, bool get_max)
 {
 	vec3 sphereCenter = so;
 
@@ -17,7 +17,19 @@ float SphereDistance(vec3 ro, vec3 rd, vec3 so, float radius)
 	if (discr < 0.0) 
         return 0.0;
 
-	return max(0.0, (-b + sqrt(discr))/2);
+    float t1 = max((-b - sqrt(discr))/2, 0.0);
+    float t2 = max((-b + sqrt(discr))/2, 0.0);
+
+    if (t1 > 0.0 && t2 > 0.0)
+    {
+        return get_max ? max(t1, t2) : min(t1, t2);
+    }
+    else if (t1 > 0.0)
+    {
+        return t1;
+    }
+    
+    return t2;
 }
 
 bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius, out vec3 p1)
@@ -86,9 +98,9 @@ float MiePhase(float a)
     return 1.5 * ONE_OVER_4PI * (1.0 - MieG * MieG) * pow(1.0 + (MieG * MieG) - 2.0 * MieG * a, -3.0/2.0) * (1.0 + a * a) / (2.0 + MieG * MieG);
 }
 
-float BeerLambert(float d)
+float BeerLambert(float e, float ds)
 {
-    return exp(-d);
+    return exp(-e * ds);
 }
 
 float DualLobeFunction(float a, float g1, float g2, float w)
@@ -254,30 +266,57 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
             if (r0 > Rg + 0.01) 
             {
                 inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
-                
-                // don't need to account for that due to the "fix" applied in composition stage
-                //const float EPS = 0.004;
-                //float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
-                //if (abs(mu - muHoriz) < EPS) 
-                //{
-                //    float a = ((mu - muHoriz) + EPS) / (2.0 * EPS);
+            }
+        }
+        inscatter.w *= smoothstep(0.00, 0.02, muS);
 
-                //    mu = muHoriz - EPS;
-                //    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                //    mu0 = (r * mu + t) / r0;
-                //    vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                //    vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                //    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+        result = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
+    } 
+    else 
+    {
+        Atmosphere.S = vec3(1.0);
+    }
 
-                //    mu = muHoriz + EPS;
-                //    r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
-                //    mu0 = (r * mu + t) / r0;
-                //    inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
-                //    inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                //    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+    Atmosphere.S = result * MaxLightIntensity;
+}
 
-                //    inscatter = mix(inScatterA, inScatterB, a);
-                //}
+void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
+{
+    vec3 result;
+    float r = max(length(x), Rg + 1.0);
+
+    float mu = dot(x, v) / r;
+    float d = -r * mu - sqrt(r * r * (mu * mu - 1.0) + Rt * Rt);
+    
+    if (d > 0.0) 
+    {
+        x += d * v;
+        t -= d;
+        mu = (r * mu + d) / Rt;
+        r = Rt;
+    }
+
+    if (r <= Rt)
+    {
+        float nu = dot(v, s);
+        float muS = dot(x, s) / r;
+        float phaseR = RayleighPhase(nu);
+        float phaseM = HGDPhase(nu, MieG);
+        vec4 inscatter = max(GetInscattering(InscatteringLUT, r, mu, muS, nu), 0.0);
+
+        if (t > 0.0) 
+        {
+            vec3 x0 = x + t * v;
+            float r0 = length(x0);
+            float rMu0 = dot(x0, v);
+            float mu0 = rMu0 / r0;
+            float muS0 = dot(x0, s) / r0;
+            Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
+            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
+
+            if (r0 > Rg + 0.01) 
+            {
+                inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
             }
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);

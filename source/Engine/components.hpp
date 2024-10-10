@@ -1,9 +1,9 @@
 #pragma once
 #include "core.hpp"
-#include "glm/gtx/quaternion.hpp"
 #include "glm/glm.hpp"
 #include "glm/common.hpp"
 #include "Engine/structs.hpp"
+#include "glm/gtx/quaternion.hpp"
 /*
 * List of engine-specific components
 */

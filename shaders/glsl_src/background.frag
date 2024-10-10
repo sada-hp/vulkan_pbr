@@ -5,7 +5,8 @@
 layout(location = 0) in vec2 ScreenUV;
 layout(location = 0) out vec4 outColor;
 
-layout(set = 1, binding = 1) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 1) uniform sampler2D TransmittanceLUT;
+layout(set = 1, binding = 2) uniform sampler3D InscatteringLUT;
 
 vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View)
 {
@@ -39,7 +40,7 @@ vec3 SkyRadiance(vec3 Sun, vec3 Eye, vec3 View)
 vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
 {
     vec3 p;
-    return RaySphereintersection(Eye, V, vec3(0.0), Rg, p) ? vec3(0.0) : 10.0 * vec3(smoothstep(0.9998, 1.0, max(dot(V, S), 0.0)));
+    return RaySphereintersection(Eye, V, vec3(0.0), Rg, p) ? vec3(0.0) : vec3(smoothstep(0.9998, 1.0, max(dot(V, S), 0.0)));
 }
 
 void main()
@@ -52,10 +53,12 @@ void main()
     vec3 S = normalize(ubo.SunDirection.xyz);
     vec3 Eye = ubo.CameraPosition.xyz;
     
-    vec3 SkyColor = SkyRadiance(S, Eye, V);
-    vec3 SunColor = GetSunColor(Eye, V, S);
+    float t = SphereDistance(Eye, V, vec3(0.0), Rt, false);
 
-    vec3 L = SkyColor + SunColor;
+    SAtmosphere Atmosphere;
+    AtmosphereAtPointHGD(TransmittanceLUT, InscatteringLUT, Eye, t, V, S, Atmosphere);
+
+    vec3 L = Atmosphere.S + Atmosphere.L * GetSunColor(Eye, V, S);
     outColor = vec4(L, 0.0);
 
     gl_FragDepth = 0.0;
