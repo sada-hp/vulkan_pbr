@@ -1,4 +1,4 @@
-#define VK_KHR_swapchain
+#define VK_KHR_swapchain 
 #define VMA_IMPLEMENTATION
 #define GLFW_INCLUDE_VULKAN
 #define STB_IMAGE_IMPLEMENTATION
@@ -216,7 +216,6 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
-	m_Atmospherics.reset();
 	m_Volumetrics.reset();
 	m_UBOBuffers.resize(0);
 
@@ -399,11 +398,6 @@ bool VulkanBase::BeginFrame()
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Atmospherics->pipeline);
-		m_Atmospherics->descriptorSet->BindSet(1, cmd, *m_Atmospherics->pipeline);
-		m_Atmospherics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
 		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
@@ -1561,23 +1555,6 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	m_ScatteringLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_IrradianceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	m_Atmospherics = std::make_unique<GraphicsObject>();
-	m_Atmospherics->descriptorSet = DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
-		.Allocate(m_Scope);
-
-	m_Atmospherics->pipeline = GraphicsPipelineDescriptor()
-		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
-		.SetShaderStage("background_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
-		.SetCullMode(VK_CULL_MODE_NONE)
-		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_Atmospherics->descriptorSet->GetLayout())
-		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
-		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
-		.SetRenderPass(m_Scope.GetLowResRenderPass(), 0)
-		.Construct(m_Scope);
-
 	return 1;
 }
 
@@ -1597,7 +1574,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	CloudLayerProfile defaultClouds{};
 	m_CloudLayer->Update(&defaultClouds, sizeof (CloudLayerProfile));
 
-	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
+	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 8u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
 	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 6u, 3u);

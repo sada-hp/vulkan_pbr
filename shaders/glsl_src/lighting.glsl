@@ -306,9 +306,10 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
     Atmosphere.S = result * MaxLightIntensity;
 }
 
-void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
+void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere1, out SAtmosphere Atmosphere2) 
 {
-    vec3 result;
+    vec3 resultHG;
+    vec3 resultHGD;
     float r = max(length(x), Rg + 1.0);
 
     float mu = dot(x, v) / r;
@@ -327,7 +328,8 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
         float nu = dot(v, s);
         float muS = dot(x, s) / r;
         float phaseR = RayleighPhase(nu);
-        float phaseM = HGDPhase(nu, MieG);
+        float phaseM = MiePhase(nu);
+        float phaseHGD = HGDPhase(nu, MieG);
         vec4 inscatter = max(GetInscattering(InscatteringLUT, r, mu, muS, nu), 0.0);
 
         if (t > 0.0) 
@@ -337,12 +339,12 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
             float rMu0 = dot(x0, v);
             float mu0 = rMu0 / r0;
             float muS0 = dot(x0, s) / r0;
-            Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
-            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
+            Atmosphere1.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
+            Atmosphere1.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
 
             if (r0 > Rg + 0.01) 
             {
-                inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
+                inscatter = max(inscatter - Atmosphere1.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
 
                 const float EPS = 0.004;
                 float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
@@ -355,14 +357,14 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
                     mu0 = (r * mu + t) / r0;
                     vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
                     vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+                    vec4 inScatterA = max(inScatter0 - Atmosphere1.T.rgbr * inScatter1, 0.0);
 
                     mu = muHoriz + EPS;
                     r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
                     mu0 = (r * mu + t) / r0;
                     inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
                     inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
+                    vec4 inScatterB = max(inScatter0 - Atmosphere1.T.rgbr * inScatter1, 0.0);
 
                     inscatter = mix(inScatterA, inScatterB, a);
                 }
@@ -370,15 +372,25 @@ void AtmosphereAtPointHGD(sampler2D TransmittanceLUT, sampler3D InscatteringLUT,
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);
 
-        result = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
+        resultHG = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
+        resultHGD = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseHGD, 0.0);
     } 
     else 
     {
-        Atmosphere.S = vec3(0.0);
-        Atmosphere.L = vec3(0.0);
-        Atmosphere.T = vec3(0.0);
+        Atmosphere1.S = vec3(0.0);
+        Atmosphere1.L = vec3(0.0);
+        Atmosphere1.T = vec3(0.0);
+
+        Atmosphere2.S = vec3(0.0);
+        Atmosphere2.L = vec3(0.0);
+        Atmosphere2.T = vec3(0.0);
+
         return;
     }
 
-    Atmosphere.S = result * MaxLightIntensity;
+    Atmosphere1.S = resultHG * MaxLightIntensity;
+
+    Atmosphere2.L = Atmosphere1.L;
+    Atmosphere2.T = Atmosphere1.T;
+    Atmosphere2.S = resultHGD * MaxLightIntensity;
 }

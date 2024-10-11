@@ -168,7 +168,6 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
 
 	std::unique_ptr<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
-	std::unique_ptr<GraphicsObject> m_Atmospherics = VK_NULL_HANDLE;
 
 	VulkanTexture m_VolumeShape = {};
 	VulkanTexture m_VolumeDetail = {};
