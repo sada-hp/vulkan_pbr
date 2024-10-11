@@ -13,7 +13,7 @@ layout(push_constant) uniform constants
 PushConstants;
 
 layout(location = 0) in vec2 inUV;
-layout(location = 1) in vec4 WorldPosition;
+layout(location = 1) in vec3 WorldPosition;
 layout(location = 2) in mat3 TBN;
 
 layout(set = 1, binding = 1) uniform sampler2D AlbedoMap;
@@ -52,7 +52,7 @@ vec2 Displace(vec2 inUV, vec3 V)
 
 void main()
 {
-    vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
+    vec3 V = -normalize(WorldPosition.xyz);
 
     // parallax
     vec2 UV = Displace(inUV, normalize(transpose(TBN) * V));

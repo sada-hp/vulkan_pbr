@@ -13,7 +13,7 @@ layout(location = 2) in vec3 vertTangent;
 layout(location = 3) in vec2 vertUV;
 
 layout(location = 0) out vec2 FragUV;
-layout(location = 1) out vec4 WorldPosition;
+layout(location = 1) out vec3 WorldPosition;
 layout(location = 2) out mat3 TBN;
 
 layout(set = 1, binding = 1) uniform sampler2D TransmittanceLUT;
@@ -22,15 +22,15 @@ layout(set = 1, binding = 3) uniform sampler3D InscatteringLUT;
 
 void main()
 {
-    mat3 mNormal = transpose(mat3(inverse(PushConstants.WorldMatrix))); // for non-uniform scaled objects, strips the scale information and leaves the rotation vectors
-    vec3 Tangent = normalize((mNormal * vertTangent).xyz);
-    vec3 Normal = normalize((mNormal * vertNormal).xyz);
-    vec3 Bitangent = normalize(cross(Normal, Tangent));
+    dmat3 mNormal = transpose(dmat3(inverse(PushConstants.WorldMatrix))); // for non-uniform scaled objects, strips the scale information and leaves the rotation vectors
+    vec3 Tangent = normalize(vec3(mNormal * vertTangent).xyz);
+    vec3 Normal = normalize(vec3(mNormal * vertNormal));
+    vec3 Bitangent = normalize(vec3(cross(Normal, Tangent)));
 
     TBN = mat3(Tangent, Bitangent, Normal);
 
     dvec4 WorldPositionFP64 = PushConstants.WorldMatrix * dvec4(vertPosition, 1.0); 
-    WorldPosition = vec4(WorldPositionFP64);
+    WorldPosition = vec3(WorldPositionFP64.xyz - ubo.CameraPositionFP64.xyz);
     FragUV = vertUV;
     
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPositionFP64);
