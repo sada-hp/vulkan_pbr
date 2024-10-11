@@ -38,7 +38,7 @@ RenderScope& RenderScope::CreateSwapchain(const VkSurfaceKHR& surface)
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, surface, &surfaceCapabilities);
 
-	if (::CreateSwapchain(m_LogicalDevice, m_PhysicalDevice, surface, { swapchainFormat , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }, surfaceCapabilities.currentExtent, &m_Swapchain)) {
+	if (::CreateSwapchain(m_LogicalDevice, m_PhysicalDevice, surface, { GetColorFormat() , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}, surfaceCapabilities.currentExtent, &m_Swapchain)) {
 		vkGetSwapchainImagesKHR(m_LogicalDevice, m_Swapchain, &m_FramesInFlight, VK_NULL_HANDLE);
 	}
 	m_SwapchainExtent = surfaceCapabilities.currentExtent;
@@ -52,7 +52,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	std::array<VkAttachmentDescription, 4> attachments;
 
 	// HDR attachment
-	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -85,7 +85,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[2].flags = 0;
 
 	// Depth attachment
-	attachments[3].format = depthFormat;
+	attachments[3].format = GetDepthFormat();
 	attachments[3].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachments[3].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -131,7 +131,7 @@ RenderScope& RenderScope::CreateCompositionRenderPass()
 	VkRenderPassCreateInfo createInfo{};
 	std::array<VkAttachmentDescription, 1> attachments;
 
-	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -200,7 +200,7 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	std::array<VkAttachmentDescription, 2> attachments;
 
 	//HDR attachment
-	attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -211,7 +211,7 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	attachments[0].flags = 0;
 
 	// Depth attachment
-	attachments[1].format = depthFormat;
+	attachments[1].format = GetDepthFormat();
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -248,7 +248,7 @@ RenderScope& RenderScope::CreatePostProcessRenderPass()
 	VkRenderPassCreateInfo createInfo{};
 	std::array<VkAttachmentDescription, 1> attachments;
 
-	attachments[0].format = swapchainFormat;
+	attachments[0].format = GetColorFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;

@@ -915,7 +915,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 		VkImageCreateInfo hdrInfo{};
 		hdrInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		hdrInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+		hdrInfo.format = m_Scope.GetHDRFormat();
 		hdrInfo.arrayLayers = 1;
 		hdrInfo.extent = { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 };
 		hdrInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -968,7 +968,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		hdrInfo.extent.height /= 2;
 		hdrInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		hdrInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+		hdrInfo.format = m_Scope.GetHDRFormat();
 		m_HdrAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_HdrViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsLR[i]);
 
@@ -1577,13 +1577,13 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 8u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
-	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 6u, 3u);
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 3u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
 	m_VolumeWeather.Image = GRNoise::GeneratePerlin(m_Scope, { 128u, 128u, 1u }, 32u, 1u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
 	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
@@ -1603,8 +1603,8 @@ VkBool32 VulkanBase::volumetric_precompute()
 	blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	blendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 	blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 
 	m_Volumetrics->pipeline = GraphicsPipelineDescriptor()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)

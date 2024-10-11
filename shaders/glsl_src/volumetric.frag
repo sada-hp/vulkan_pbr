@@ -83,13 +83,13 @@ float SampleDensity(vec3 x0, int lod)
     base *= Clouds.Coverage;
 
     uv =  GetUV(x0, 800.0, 0.2);
-    height = 1.0 - GetHeightFraction(x0);
+    height = 1.0 - height;
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 65.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    base = remap(base, high_frequency_modifier * 0.5, 1.0, 0.0, 1.0);
+    base = remap(base, high_frequency_modifier * 0.6, 1.0, 0.0, 1.0);
     return saturate(base);
 }
 
@@ -243,6 +243,11 @@ void main()
     topBound = Rcb + Rcdelta * max(Clouds.VerticalSpan, 0.0075);
     float ground = SphereDistance(RayOrigin, marchDirection, SphereCenter, Rg, false);
     distanceCamera = length(RayOrigin);
+
+    if (distanceCamera > Rt)
+    {
+        discard;
+    }
 
     if (distanceCamera < Rcb && ground == 0.0)
     {

@@ -19,12 +19,12 @@ void main()
     float worley02 = 1.0 - worley(cell_loc, frequency_worley * 8.0);
     float worley03 = 1.0 - worley(cell_loc, frequency_worley * 12.0);
     
-    float perlin = fbm_perlin(cell_loc, frequency_perlin, 3);
+    float perlin = pow(1.0 - fbm_perlin(cell_loc, frequency_perlin, 3), 0.75);
     float perlin_worley = remap(perlin, 0.0, 1.0, worley01 * 0.625 + worley02 * 0.25 + worley03 * 0.125, 1.0);
 
     worley01 = 1.0 - worley(cell_loc, frequency_worley);
     worley02 = 1.0 - worley(cell_loc, frequency_worley * 2.0);
-    worley03 = 1.0 - worley(cell_loc, frequency_worley * 4.0);
+    worley03 = worley(cell_loc, frequency_worley * 4.0);
     float worley04 = 1.0 - worley(cell_loc, frequency_worley * 8.0);
     float worley05 = 1.0 - worley(cell_loc, frequency_worley * 16.0);
 

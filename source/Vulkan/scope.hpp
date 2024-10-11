@@ -66,9 +66,11 @@ public:
 
 	inline const VkDescriptorPool& GetDescriptorPool() const { return m_DescriptorPool; };
 
-	inline const VkFormat& GetColorFormat() const { return swapchainFormat; };
+	inline const VkFormat GetHDRFormat() const { return VK_FORMAT_R32G32B32A32_SFLOAT; };
 
-	inline const VkFormat& GetDepthFormat() const { return depthFormat; };
+	inline const VkFormat GetColorFormat() const { return VK_FORMAT_B8G8R8A8_SRGB; };
+
+	inline const VkFormat GetDepthFormat() const { return VK_FORMAT_D32_SFLOAT; };
 
 	inline const uint32_t& GetMaxFramesInFlight() const { return m_FramesInFlight; };
 
@@ -97,7 +99,5 @@ private:
 	VkRenderPass m_CompositionPass = VK_NULL_HANDLE;
 	VkRenderPass m_PostProcessPass = VK_NULL_HANDLE;
 
-	const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
-	const VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkExtent2D m_SwapchainExtent = { 0, 0 };
 };
