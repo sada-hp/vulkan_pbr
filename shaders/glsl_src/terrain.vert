@@ -4,7 +4,8 @@
 
 layout(push_constant) uniform constants
 {
-    dmat4 WorldMatrix;
+    layout(offset = 0) dvec3 Offset;
+    layout(offset = 32) mat3x4 Orientation;
 } PushConstants;
 
 layout(location = 0) in vec3 vertPosition;

@@ -169,6 +169,26 @@ namespace GR
 			glm::mat<3, 3, TM> orientation = glm::mat<3, 3, TM>(1.0);
 			glm::vec<3, TV> offset = glm::vec<3, TV>(0.0);
 
+			template<typename Type>
+			GRAPI void SetFromMatrix(const glm::mat<4, 4, Type>& M)
+			{
+				orientation[0][0] = M[0][0];
+				orientation[0][1] = M[0][1];
+				orientation[0][2] = M[0][2];
+
+				orientation[1][0] = M[1][0];
+				orientation[1][1] = M[1][1];
+				orientation[1][2] = M[1][2];
+
+				orientation[2][0] = M[2][0];
+				orientation[2][1] = M[2][1];
+				orientation[2][2] = M[2][2];
+
+				offset[0] = M[3][0];
+				offset[1] = M[3][1];
+				offset[2] = M[3][2];
+			}
+
 			GRAPI glm::dmat4 GetMatrix()
 			{
 				return glm::dmat4(
