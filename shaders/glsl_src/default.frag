@@ -5,10 +5,10 @@
 
 layout(push_constant) uniform constants
 {
-    layout(offset = 128) vec4 ColorMask;
-    layout(offset = 144) float RoughnessMultiplier;
-    layout(offset = 148) float Metallic;
-    layout(offset = 152) float HeightScale;
+    layout(offset = 80) vec4 ColorMask;
+    layout(offset = 96) float RoughnessMultiplier;
+    layout(offset = 100) float Metallic;
+    layout(offset = 104) float HeightScale;
 } 
 PushConstants;
 

@@ -55,7 +55,8 @@ namespace GR
 		for (const auto& [ent, gro, world] : view.each())
 		{
 			PBRConstants constants{};
-			constants.World = world.matrix;
+			constants.Offset = world.GetOffset();
+			constants.Orientation = glm::mat3x4(world.GetRotation());
 			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
 			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
 			constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;

@@ -51,11 +51,11 @@ namespace GR
 	{
 	public:
 		Components::ProjectionMatrix Projection = {};
-		Components::TransformMatrix<double> View = {};
+		Components::WorldMatrix Transform = {};
 
 		glm::dmat4 get_view_matrix() const
 		{
-			return glm::lookAt(View.GetOffset(), View.GetOffset() + View.GetForward(), View.GetUp());
+			return glm::lookAt(Transform.GetOffset(), Transform.GetOffset() + glm::dvec3(Transform.GetForward()), glm::dvec3(Transform.GetUp()));
 		}
 
 		glm::mat4 get_projection_matrix() const
@@ -65,7 +65,7 @@ namespace GR
 
 		glm::dmat4 get_view_projection() const
 		{
-			return glm::dmat4(Projection.matrix) * View.matrix;
+			return glm::dmat4(get_projection_matrix()) * get_view_matrix();
 		}
 
 	private:

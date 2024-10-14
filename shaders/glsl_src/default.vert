@@ -4,7 +4,8 @@
 
 layout(push_constant) uniform constants
 {
-    dmat4 WorldMatrix;
+    layout(offset = 0) dvec3 Offset;
+    layout(offset = 32) mat3x4 Orientation;
 } PushConstants;
 
 layout(location = 0) in vec3 vertPosition;
@@ -22,14 +23,16 @@ layout(set = 1, binding = 3) uniform sampler3D InscatteringLUT;
 
 void main()
 {
-    dmat3 mNormal = transpose(dmat3(inverse(PushConstants.WorldMatrix))); // for non-uniform scaled objects, strips the scale information and leaves the rotation vectors
+    dmat4 WorldMatrix = GetWorldMatrix(PushConstants.Orientation, PushConstants.Offset);
+
+    dmat3 mNormal = transpose(dmat3(inverse(WorldMatrix))); // for non-uniform scaled objects, strips the scale information and leaves the rotation vectors
     vec3 Tangent = normalize(vec3(mNormal * vertTangent).xyz);
     vec3 Normal = normalize(vec3(mNormal * vertNormal));
     vec3 Bitangent = normalize(vec3(cross(Normal, Tangent)));
 
     TBN = mat3(Tangent, Bitangent, Normal);
 
-    dvec4 WorldPositionFP64 = PushConstants.WorldMatrix * dvec4(vertPosition, 1.0); 
+    dvec4 WorldPositionFP64 = WorldMatrix * dvec4(vertPosition, 1.0); 
     WorldPosition = vec3(WorldPositionFP64.xyz - ubo.CameraPositionFP64.xyz);
     FragUV = vertUV;
     

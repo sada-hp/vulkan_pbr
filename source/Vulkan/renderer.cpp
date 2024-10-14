@@ -47,7 +47,7 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	VkImageCreateInfo imageCI{};
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageCI.arrayLayers = count;
-	imageCI.extent = { (uint32_t)w, (uint32_t)h, 1u };
+	imageCI.extent = { static_cast<uint32_t>(w), static_cast<uint32_t>(h), 1u };
 	imageCI.format = format;
 	imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCI.mipLevels = mipLevels;
@@ -79,7 +79,7 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 
 	BeginOneTimeSubmitCmd(cmd);
 	target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_TRANSFER_BIT);
-	CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, { (uint32_t)w, (uint32_t)h, 1u });
+	CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, imageCI.extent);
 	EndCommandBuffer(cmd);
 
 	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
@@ -136,7 +136,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
 
-	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
+	m_Camera.Projection.SetAspect(static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height))
+		.SetFOV(glm::radians(45.f))
 		.SetDepthRange(1e-2f, 1e4f);
 
 	m_PresentBuffers.resize(m_SwapchainImages.size());
@@ -202,7 +203,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	ImGui_ImplVulkan_Init(&init_info);
 #endif
 
-	m_Camera.View.SetOffset({ 0.0, GR::Renderer::Rg, 0.0 });
+	m_Camera.Transform.SetOffset({ 0.0, GR::Renderer::Rg, 0.0 });
 
 	assert(res != 0);
 }
@@ -338,13 +339,13 @@ bool VulkanBase::BeginFrame()
 		glm::dmat4 view_matrix_inverse = glm::inverse(view_matrix);
 		glm::mat4 projection_matrix = m_Camera.get_projection_matrix();
 		glm::mat4 projection_matrix_inverse = glm::inverse(projection_matrix);
-		glm::dmat4 view_proj_matrix = glm::dmat4(projection_matrix) * view_matrix;
-		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.View.GetOffset(), 1.0);
-		glm::vec4 CameraPosition = glm::vec4(m_Camera.View.GetOffset(), 1.0);
+		glm::dmat4 view_proj_matrix = static_cast<glm::dmat4>(projection_matrix) * view_matrix;
+		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.Transform.GetOffset(), 1.0);
+		glm::vec4 CameraPosition = glm::vec4(m_Camera.Transform.GetOffset(), 1.0);
 		glm::vec4 Sun = glm::vec4(glm::normalize(m_SunDirection), 0.0);
-		glm::vec4 CameraUp = glm::vec4(m_Camera.View.GetUp(), 0.0);
-		glm::vec4 CameraRight = glm::vec4(m_Camera.View.GetRight(), 0.0);
-		glm::vec4 CameraForward = glm::vec4(m_Camera.View.GetForward(), 0.0);
+		glm::vec4 CameraUp = glm::vec4(m_Camera.Transform.GetUp(), 0.0);
+		glm::vec4 CameraRight = glm::vec4(m_Camera.Transform.GetRight(), 0.0);
+		glm::vec4 CameraForward = glm::vec4(m_Camera.Transform.GetForward(), 0.0);
 		glm::vec2 ScreenSize = glm::vec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
 		float Time = glfwGetTime();
 
@@ -386,8 +387,8 @@ bool VulkanBase::BeginFrame()
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = (float)(m_Scope.GetSwapchainExtent().width / 2);
-		viewport.height = (float)(m_Scope.GetSwapchainExtent().height / 2);
+		viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width / 2);
+		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height / 2);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -474,14 +475,14 @@ bool VulkanBase::BeginFrame()
 		ColorRegion.dstSubresource.mipLevel = 0;
 		ColorRegion.dstSubresource.layerCount = 1;
 		ColorRegion.dstOffsets[0] = { 0, 0, 0 };
-		ColorRegion.dstOffsets[1] = { int(m_Scope.GetSwapchainExtent().width), int(m_Scope.GetSwapchainExtent().height), 1 };
+		ColorRegion.dstOffsets[1] = { static_cast<int>(m_Scope.GetSwapchainExtent().width), static_cast<int>(m_Scope.GetSwapchainExtent().height), 1 };
 
 		ColorRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		ColorRegion.srcSubresource.baseArrayLayer = 0;
 		ColorRegion.srcSubresource.mipLevel = 0;
 		ColorRegion.srcSubresource.layerCount = 1;
 		ColorRegion.srcOffsets[0] = { 0, 0, 0 };
-		ColorRegion.srcOffsets[1] = { int(m_Scope.GetSwapchainExtent().width / 2), int(m_Scope.GetSwapchainExtent().height / 2), 1 };
+		ColorRegion.srcOffsets[1] = { static_cast<int>(m_Scope.GetSwapchainExtent().width / 2), static_cast<int>(m_Scope.GetSwapchainExtent().height / 2), 1 };
 		
 		vkCmdBlitImage(cmd, m_HdrAttachmentsLR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			m_HdrAttachmentsHR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -493,14 +494,14 @@ bool VulkanBase::BeginFrame()
 		DepthRegion.dstSubresource.mipLevel = 0;
 		DepthRegion.dstSubresource.layerCount = 1;
 		DepthRegion.dstOffsets[0] = { 0, 0, 0 };
-		DepthRegion.dstOffsets[1] = { int(m_Scope.GetSwapchainExtent().width), int(m_Scope.GetSwapchainExtent().height), 1 };
+		DepthRegion.dstOffsets[1] = { static_cast<int>(m_Scope.GetSwapchainExtent().width), static_cast<int>(m_Scope.GetSwapchainExtent().height), 1 };
 
 		DepthRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		DepthRegion.srcSubresource.baseArrayLayer = 0;
 		DepthRegion.srcSubresource.mipLevel = 0;
 		DepthRegion.srcSubresource.layerCount = 1;
 		DepthRegion.srcOffsets[0] = { 0, 0, 0 };
-		DepthRegion.srcOffsets[1] = { int(m_Scope.GetSwapchainExtent().width / 2), int(m_Scope.GetSwapchainExtent().height / 2), 1 };
+		DepthRegion.srcOffsets[1] = { static_cast<int>(m_Scope.GetSwapchainExtent().width / 2), static_cast<int>(m_Scope.GetSwapchainExtent().height / 2), 1 };
 
 		vkCmdBlitImage(cmd, m_DepthAttachmentsLR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			m_DepthAttachmentsHR[m_SwapchainIndex]->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -563,8 +564,8 @@ bool VulkanBase::BeginFrame()
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = (float)m_Scope.GetSwapchainExtent().width;
-		viewport.height = (float)m_Scope.GetSwapchainExtent().height;
+		viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width);
+		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -615,8 +616,8 @@ void VulkanBase::EndFrame()
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = (float)m_Scope.GetSwapchainExtent().width;
-		viewport.height = (float)m_Scope.GetSwapchainExtent().height;
+		viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width);
+		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -657,8 +658,8 @@ void VulkanBase::EndFrame()
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = (float)m_Scope.GetSwapchainExtent().width;
-		viewport.height = (float)m_Scope.GetSwapchainExtent().height;
+		viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width);
+		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -784,7 +785,7 @@ void VulkanBase::_handleResize()
 	create_framebuffers();
 	create_frame_pipelines();
 
-	m_Camera.Projection.SetFOV(glm::radians(45.f), static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height));
+	m_Camera.Projection.SetAspect(static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height));
 
 	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
 		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -1168,8 +1169,8 @@ void VulkanBase::_drawObject(const PBRObject& gro, const PBRConstants& constants
 
 	m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *gro.pipeline);
 	gro.descriptorSet->BindSet(1, cmd, *gro.pipeline);
-	gro.pipeline->PushConstants(cmd, &constants.World, sizeof(PBRConstants::World), 0u, VK_SHADER_STAGE_VERTEX_BIT);
-	gro.pipeline->PushConstants(cmd, &constants.Color, sizeof(PBRConstants) - sizeof(PBRConstants::World), offsetof(PBRConstants, Color), VK_SHADER_STAGE_FRAGMENT_BIT);
+	gro.pipeline->PushConstants(cmd, &constants.Offset, PBRConstants::VertexSize(), 0u, VK_SHADER_STAGE_VERTEX_BIT);
+	gro.pipeline->PushConstants(cmd, &constants.Color, PBRConstants::FragmentSize(), PBRConstants::VertexSize(), VK_SHADER_STAGE_FRAGMENT_BIT);
 	gro.pipeline->BindPipeline(cmd);
 
 	vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
@@ -1233,8 +1234,8 @@ std::unique_ptr<Pipeline> VulkanBase::create_pbr_pipeline(const DescriptorSet& s
 		.SetShaderStage("default_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
-		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PBRConstants::World) })
-		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PBRConstants::World),  sizeof(PBRConstants) - sizeof(PBRConstants::World) })
+		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.Construct(m_Scope);
@@ -1271,8 +1272,8 @@ std::unique_ptr<Pipeline> VulkanBase::create_terrain_pipeline(const DescriptorSe
 		.SetShaderStage("terrain_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
-		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PBRConstants::World) })
-		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PBRConstants::World),  sizeof(PBRConstants) - sizeof(PBRConstants::World) })
+		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.Construct(m_Scope);
@@ -1584,7 +1585,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
-	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::LinearClamp);
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_Volumetrics->descriptorSet = DescriptorSetDescriptor()
@@ -1597,7 +1598,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.Allocate(m_Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};
-	blendState.blendEnable = true;
+	blendState.blendEnable = VK_FALSE;
 	blendState.colorBlendOp = VK_BLEND_OP_ADD;
 	blendState.alphaBlendOp = VK_BLEND_OP_ADD;
 	blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

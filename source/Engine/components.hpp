@@ -140,12 +140,22 @@ namespace GR
 				return *this;
 			}
 
-			GRAPI ProjectionMatrix& SetFOV(float Fov, float Aspect)
+			GRAPI ProjectionMatrix& SetFOV(float Fov)
 			{
 				const float tanHalfFovy = glm::tan(Fov / 2.f);
+				float oldFov = matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1];
+				const float aspect = matrix[0][0] / oldFov;
 
-				matrix[0][0] = 1.f / (Aspect * tanHalfFovy);
-				matrix[1][1] = -1.f / (tanHalfFovy);
+				matrix[0][0] = aspect / tanHalfFovy;
+				matrix[1][1] = -1.f / tanHalfFovy;
+
+				return *this;
+			}
+
+			GRAPI ProjectionMatrix& SetAspect(float Aspect)
+			{
+				float fov = matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1];
+				matrix[0][0] = fov / Aspect;
 
 				return *this;
 			}
@@ -153,113 +163,116 @@ namespace GR
 		/*
 		* !@brief World matrix
 		*/
-		template<typename T>
+		template<typename TM, typename TV>
 		struct TransformMatrix
 		{
-			glm::mat<4, 4, T> matrix = glm::mat<4, 4, T>(1.0);
+			glm::mat<3, 3, TM> orientation = glm::mat<3, 3, TM>(1.0);
+			glm::vec<3, TV> offset = glm::vec<3, TV>(0.0);
 
-			GRAPI TransformMatrix& SetOffset(const glm::vec<3, T>& V)
+			GRAPI glm::dmat4 GetMatrix()
 			{
-				matrix[3] = glm::vec<4, T>(V, 1.0);
+				return glm::dmat4(
+					orientation[0][0], orientation[0][1], orientation[0][2], 0.0,
+					orientation[1][0], orientation[1][1], orientation[1][2], 0.0,
+					orientation[2][0], orientation[2][1], orientation[2][2], 0.0,
+					offset[0], offset[1], offset[2], 1.0
+				);
+			}
+
+			GRAPI TransformMatrix& SetOffset(const glm::vec<3, TV>& V)
+			{
+				offset = V;
 
 				return *this;
 			}
 
-			GRAPI TransformMatrix& Translate(const glm::vec<3, T>& V)
+			GRAPI TransformMatrix& Translate(const glm::vec<3, TV>& V)
 			{
-				matrix[3] += glm::vec<4, T>(GetRotation() * V, 0.0);
+				offset += GetRotation() * V;
 
 				return *this;
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::vec<3, T>& R, const glm::vec<3, T>& U, const glm::vec<3, T>& F)
+			GRAPI TransformMatrix& SetRotation(const glm::vec<3, TM>& R, const glm::vec<3, TM>& U, const glm::vec<3, TM>& F)
 			{
-				matrix[0] = glm::vec<4, T>(R, 0.0);
-				matrix[1] = glm::vec<4, T>(U, 0.0);
-				matrix[2] = glm::vec<4, T>(F, 0.0);
+				orientation[0] = R;
+				orientation[1] = U;
+				orientation[2] = F;
 
 				return *this;
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::vec<3, T>& U, const glm::vec<3, T>& F)
+			GRAPI TransformMatrix& SetRotation(const glm::vec<3, TM>& U, const glm::vec<3, TM>& F)
 			{
 				return SetRotation(glm::normalize(glm::cross(U, F)), U, F);
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::mat<3, 3, T>& M)
+			GRAPI TransformMatrix& SetRotation(const glm::mat<3, 3, TM>& M)
 			{
-				matrix[0] = glm::vec<4, T>(M[0], 0.0);
-				matrix[1] = glm::vec<4, T>(M[1], 0.0);
-				matrix[2] = glm::vec<4, T>(M[2], 0.0);
+				orientation = M;
 
 				return *this;
 			}
 
-			GRAPI TransformMatrix& SetRotation(T pitch, T yaw, T roll)
+			GRAPI TransformMatrix& SetRotation(TM pitch, TM yaw, TM roll)
 			{
-				glm::qua<T> q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
-				q = q * glm::angleAxis(roll, glm::vec<3, T>(0, 0, 1));
-				q = q * glm::angleAxis(-pitch, glm::vec<3, T>(1, 0, 0));
+				glm::qua<TM> q = glm::angleAxis(yaw, glm::vec<3, TM>(0, 1, 0));
+				q = q * glm::angleAxis(roll, glm::vec<3, TM>(0, 0, 1));
+				q = q * glm::angleAxis(-pitch, glm::vec<3, TM>(1, 0, 0));
 
-				glm::mat<3, 3, T> M = glm::mat3_cast(q);
+				glm::mat<3, 3, TM> M = glm::mat3_cast(q);
 
-				matrix[0] = glm::vec<4, T>(glm::normalize(M[0]), 0.0);
-				matrix[1] = glm::vec<4, T>(glm::normalize(M[1]), 0.0);
-				matrix[2] = glm::vec<4, T>(glm::normalize(M[2]), 0.0);
+				orientation[0] = glm::normalize(M[0]);
+				orientation[1] = glm::normalize(M[1]);
+				orientation[2] = glm::normalize(M[2]);
 
 				return *this;
 			}
 
-			GRAPI TransformMatrix& Rotate(T pitch, T yaw, T roll)
+			GRAPI TransformMatrix& Rotate(TM pitch, TM yaw, TM roll)
 			{
-				glm::qua<T> q = glm::angleAxis(yaw, glm::vec<3, T>(0, 1, 0));
-				q = q * glm::angleAxis(roll, glm::vec<3, T>(0, 0, 1));
-				q = q * glm::angleAxis(-pitch, glm::vec<3, T>(1, 0, 0));
+				glm::qua<TM> q = glm::angleAxis(yaw, glm::vec<3, TM>(0, 1, 0));
+				q = q * glm::angleAxis(roll, glm::vec<3, TM>(0, 0, 1));
+				q = q * glm::angleAxis(-pitch, glm::vec<3, TM>(1, 0, 0));
 
 				return SetRotation(glm::mat3_cast(q) * GetRotation());
 			}
 
-			GRAPI TransformMatrix& SetScale(T x, T y, T z)
+			GRAPI TransformMatrix& SetScale(TM x, TM y, TM z)
 			{
-				glm::mat<3, 3, T> mat = glm::mat<3, 3, T>(matrix);
-				mat[0] = glm::normalize(mat[0]) * x;
-				mat[1] = glm::normalize(mat[1]) * y;
-				mat[2] = glm::normalize(mat[2]) * z;
-
-				matrix[0] = glm::vec<4, T>(mat[0], 0.0);
-				matrix[1] = glm::vec<4, T>(mat[1], 0.0);
-				matrix[2] = glm::vec<4, T>(mat[2], 0.0);
+				orientation[0] = glm::normalize(orientation[0]) * x;
+				orientation[1] = glm::normalize(orientation[1]) * y;
+				orientation[2] = glm::normalize(orientation[2]) * z;
 
 				return *this;
 			}
 
-			GRAPI glm::vec<3, T> GetOffset() const
+			GRAPI glm::vec<3, TV> GetOffset() const
 			{
-				return glm::vec<3, T>(matrix[3]);
+				return offset;
 			}
 
-			GRAPI glm::mat<3, 3, T> GetRotation() const
+			GRAPI glm::mat<3, 3, TM> GetRotation() const
 			{
-				return glm::mat<3, 3, T>(matrix);
+				return orientation;
 			}
 
-			GRAPI glm::vec<3, T> GetForward() const
+			GRAPI glm::vec<3, TM> GetForward() const
 			{
-				return glm::vec<3, T>(matrix[2]);
+				return glm::vec<3, TM>(orientation[2]);
 			}
 
-			GRAPI glm::vec<3, T> GetRight() const
+			GRAPI glm::vec<3, TM> GetRight() const
 			{
-				return glm::vec<3, T>(matrix[0]);
+				return glm::vec<3, TM>(orientation[0]);
 			}
 
-			GRAPI glm::vec<3, T> GetUp() const
+			GRAPI glm::vec<3, TM> GetUp() const
 			{
-				return glm::vec<3, T>(matrix[1]);
+				return glm::vec<3, TM>(orientation[1]);
 			}
 		};
 
-		using WorldMatrix = TransformMatrix<double>;
-		using ViewMatrix = TransformMatrix<double>;
+		using WorldMatrix = TransformMatrix<float, double>;
 	};
 };
