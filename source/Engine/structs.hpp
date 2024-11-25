@@ -25,6 +25,7 @@ struct UniformBuffer
 	glm::vec4 CameraRight;
 	glm::vec4 CameraForward;
 	glm::vec2 Resolution;
+	double CameraRadius;
 	float Time;
 };
 /*
@@ -35,14 +36,12 @@ struct CloudLayerProfile
 	bool operator==(CloudLayerProfile& other)
 	{
 		return Coverage == other.Coverage
-			&& VerticalSpan == other.VerticalSpan
-			&& Absorption == other.Absorption
+			&& Density == other.Density
 			&& WindSpeed == other.WindSpeed;
 	}
 
 	float Coverage = 0.5;
-	float VerticalSpan = 0.5;
-	float Absorption = 0.025;
+	float Density = 0.01;
 	float WindSpeed = 0.25;
 };
 /*

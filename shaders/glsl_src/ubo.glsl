@@ -12,6 +12,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     vec4 CameraRight;
     vec4 CameraForward;
     vec2 Resolution;
+    double CameraRadius;
     float Time;
 } ubo;
 

@@ -21,6 +21,7 @@ VkBool32 CreateFence(const VkDevice& device, VkFence* outFence, VkBool32 signale
 	VkFenceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	createInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
+
 	return vkCreateFence(device, &createInfo, VK_NULL_HANDLE, outFence) == VK_SUCCESS;
 }
 
@@ -28,6 +29,7 @@ VkBool32 CreateSemaphore(const VkDevice& device, VkSemaphore* outSemaphore)
 {
 	VkSemaphoreCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
 	return vkCreateSemaphore(device, &createInfo, VK_NULL_HANDLE, outSemaphore) == VK_SUCCESS;
 }
 
@@ -137,6 +139,9 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 {
 	assert(surface != VK_NULL_HANDLE);
 
+	if (extent.width == 0 || extent.height == 0)
+		return VK_FALSE;
+
 	VkSwapchainCreateInfoKHR createInfo{};
 	VkSurfaceCapabilitiesKHR capabilities{};
 
@@ -156,18 +161,17 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 	createInfo.preTransform = capabilities.currentTransform;
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.clipped = VK_TRUE;
+#ifndef FORCE_VSYNC
+	createInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+#else
 	createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+#endif
 	createInfo.imageFormat = surfaceFormat.format;
 	createInfo.imageColorSpace = surfaceFormat.colorSpace;
 	createInfo.imageExtent.width = std::clamp(static_cast<uint32_t>(extent.width), capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 	createInfo.imageExtent.height = std::clamp(static_cast<uint32_t>(extent.height), capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 	createInfo.queueFamilyIndexCount = queueFamilies.size();
 	createInfo.pQueueFamilyIndices = queueFamilies.data();
-
-	extent = createInfo.imageExtent;
-
-	if (extent.width == 0 || extent.height == 0)
-		return VK_FALSE;
 
 	return vkCreateSwapchainKHR(device, &createInfo, VK_NULL_HANDLE, outSwapchain) == VK_SUCCESS;
 }
@@ -218,6 +222,7 @@ VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPas
 	createInfo.width = extents.width;
 	createInfo.height = extents.height;
 	createInfo.renderPass = renderPass;
+
 	return vkCreateFramebuffer(device, &createInfo, VK_NULL_HANDLE, outFramebuffer) == VK_SUCCESS;
 }
 
@@ -290,6 +295,7 @@ VkBool32 BeginOneTimeSubmitCmd(VkCommandBuffer& cmd)
 	VkCommandBufferBeginInfo cmdBegin{};
 	cmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	cmdBegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
 	return vkBeginCommandBuffer(cmd, &cmdBegin) == VK_SUCCESS;
 }
 
@@ -319,6 +325,12 @@ std::vector<unsigned char> AnyTypeToBytes(std::any target)
 		buf.resize(sizeof(uint32_t));
 
 		memcpy(buf.data(), &value, sizeof(uint32_t));
+	}
+	else if (target.type().name() == typeid(double).name()) {
+		double value = std::any_cast<double>(target);
+		buf.resize(sizeof(double));
+
+		memcpy(buf.data(), &value, sizeof(double));
 	}
 
 	return buf;

@@ -1,20 +1,40 @@
 #include "pch.hpp"
 #include "pipeline.hpp"
 
-Pipeline::~Pipeline()
+GraphicsPipeline::~GraphicsPipeline()
 {
 	vkDestroyPipelineLayout(scope.GetDevice(), pipelineLayout, VK_NULL_HANDLE);
 	vkDestroyPipeline(scope.GetDevice(), pipeline, VK_NULL_HANDLE);
 }
 
-Pipeline& Pipeline::BindPipeline(VkCommandBuffer cmd)
+GraphicsPipeline& GraphicsPipeline::BindPipeline(VkCommandBuffer cmd)
 {
-	vkCmdBindPipeline(cmd, bindPoint, pipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 	return *this;
 }
 
-Pipeline& Pipeline::PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages)
+GraphicsPipeline& GraphicsPipeline::PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages)
+{
+	vkCmdPushConstants(cmd, pipelineLayout, stages, offset, dataSize, data);
+
+	return *this;
+}
+
+ComputePipeline::~ComputePipeline()
+{
+	vkDestroyPipelineLayout(scope.GetDevice(), pipelineLayout, VK_NULL_HANDLE);
+	vkDestroyPipeline(scope.GetDevice(), pipeline, VK_NULL_HANDLE);
+}
+
+ComputePipeline& ComputePipeline::BindPipeline(VkCommandBuffer cmd)
+{
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+
+	return *this;
+}
+
+ComputePipeline& ComputePipeline::PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages)
 {
 	vkCmdPushConstants(cmd, pipelineLayout, stages, offset, dataSize, data);
 
@@ -64,13 +84,11 @@ ComputePipelineDescriptor& ComputePipelineDescriptor::AddSpecializationConstant(
 	return *this;
 }
 
-std::unique_ptr<Pipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
+std::unique_ptr<ComputePipeline> ComputePipelineDescriptor::Construct(const RenderScope& Scope)
 {
 	//assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderNames[VK_SHADER_STAGE_COMPUTE_BIT] != "");
 
-	std::unique_ptr<Pipeline> out = std::make_unique<Pipeline>(Scope);
-	out->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
-	out->type = EPipelineType::Compute;
+	std::unique_ptr<ComputePipeline> out = std::make_unique<ComputePipeline>(Scope);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -258,13 +276,11 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRe
 }
 
 //TODO: Check pipeline cache?
-std::unique_ptr<Pipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
+std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 {
 	//assert(pipeline == VK_NULL_HANDLE && pipelineLayout == VK_NULL_HANDLE && shaderNames.size() > 0);
 
-	std::unique_ptr<Pipeline> out = std::make_unique<Pipeline>(Scope);
-	out->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	out->type = EPipelineType::Graphics;
+	std::unique_ptr<GraphicsPipeline> out = std::make_unique<GraphicsPipeline>(Scope);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

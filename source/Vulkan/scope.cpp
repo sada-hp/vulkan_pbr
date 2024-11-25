@@ -54,9 +54,9 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	// HDR attachment
 	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -89,9 +89,9 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[3].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachments[3].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[3].flags = 0;
 
@@ -210,10 +210,10 @@ RenderScope& RenderScope::CreateLowResRenderPass()
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].flags = 0;
 
-	// Depth attachment
+	//Depth attachment
 	attachments[1].format = GetDepthFormat();
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;

@@ -17,7 +17,7 @@ void main()
 {
     dmat3 Orientation;
     Orientation[0] = ubo.CameraRight.xyz;
-    Orientation[1] = normalize(ubo.CameraPositionFP64.xyz + vec3(0.0, Rg, 0.0));
+    Orientation[1] = normalize(ubo.CameraPositionFP64.xyz);
     Orientation[2] = cross(Orientation[0], Orientation[1]);
 
     vec3 ObjectPosition = vec3(vertPosition.x, Rg, vertPosition.z);

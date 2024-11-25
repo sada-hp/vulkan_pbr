@@ -129,11 +129,12 @@ namespace GR
 
 			GRAPI ProjectionMatrix& SetDepthRange(float Near, float Far)
 			{
-				// Reverse depth
+				// From 0 to 1
 #if 0
 				matrix[2][2] = -Far / (Far - Near);
 				matrix[3][2] = -(Far * Near) / (Far - Near);
 #else
+				// Reversed depth
 				matrix[2][2] = -Near / (Near - Far);
 				matrix[3][2] = -(Far * Near) / (Near - Far);
 #endif
@@ -143,8 +144,7 @@ namespace GR
 			GRAPI ProjectionMatrix& SetFOV(float Fov)
 			{
 				const float tanHalfFovy = glm::tan(Fov / 2.f);
-				float oldFov = matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1];
-				const float aspect = matrix[0][0] / oldFov;
+				const float aspect = matrix[0][0] / (matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1]);
 
 				matrix[0][0] = aspect / tanHalfFovy;
 				matrix[1][1] = -1.f / tanHalfFovy;
@@ -154,8 +154,7 @@ namespace GR
 
 			GRAPI ProjectionMatrix& SetAspect(float Aspect)
 			{
-				float fov = matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1];
-				matrix[0][0] = fov / Aspect;
+				matrix[0][0] = (matrix[1][1] == 0.0 ? 1.0 : -matrix[1][1]) / Aspect;
 
 				return *this;
 			}
@@ -172,30 +171,32 @@ namespace GR
 			template<typename Type>
 			GRAPI void SetFromMatrix(const glm::mat<4, 4, Type>& M)
 			{
-				orientation[0][0] = M[0][0];
-				orientation[0][1] = M[0][1];
-				orientation[0][2] = M[0][2];
+				orientation[0][0] = static_cast<TM>(M[0][0]);
+				orientation[0][1] = static_cast<TM>(M[0][1]);
+				orientation[0][2] = static_cast<TM>(M[0][2]);
 
-				orientation[1][0] = M[1][0];
-				orientation[1][1] = M[1][1];
-				orientation[1][2] = M[1][2];
+				orientation[1][0] = static_cast<TM>(M[1][0]);
+				orientation[1][1] = static_cast<TM>(M[1][1]);
+				orientation[1][2] = static_cast<TM>(M[1][2]);
 
-				orientation[2][0] = M[2][0];
-				orientation[2][1] = M[2][1];
-				orientation[2][2] = M[2][2];
+				orientation[2][0] = static_cast<TM>(M[2][0]);
+				orientation[2][1] = static_cast<TM>(M[2][1]);
+				orientation[2][2] = static_cast<TM>(M[2][2]);
 
-				offset[0] = M[3][0];
-				offset[1] = M[3][1];
-				offset[2] = M[3][2];
+				offset[0] = static_cast<TV>(M[3][0]);
+				offset[1] = static_cast<TV>(M[3][1]);
+				offset[2] = static_cast<TV>(M[3][2]);
 			}
 
-			GRAPI glm::dmat4 GetMatrix()
+			template<typename Type>
+			GRAPI glm::mat<4, 4, Type> GetMatrix()
 			{
-				return glm::dmat4(
-					orientation[0][0], orientation[0][1], orientation[0][2], 0.0,
-					orientation[1][0], orientation[1][1], orientation[1][2], 0.0,
-					orientation[2][0], orientation[2][1], orientation[2][2], 0.0,
-					offset[0], offset[1], offset[2], 1.0
+				return glm::mat<4, 4, Type>
+				(
+					static_cast<Type>(orientation[0][0]), static_cast<Type>(orientation[0][1]), static_cast<Type>(orientation[0][2]), static_cast<Type>(0.0),
+					static_cast<Type>(orientation[1][0]), static_cast<Type>(orientation[1][1]), static_cast<Type>(orientation[1][2]), static_cast<Type>(0.0),
+					static_cast<Type>(orientation[2][0]), static_cast<Type>(orientation[2][1]), static_cast<Type>(orientation[2][2]), static_cast<Type>(0.0),
+					static_cast<Type>(offset[0]), static_cast<Type>(offset[1]), static_cast<Type>(offset[2]), static_cast<Type>(1.0)
 				);
 			}
 

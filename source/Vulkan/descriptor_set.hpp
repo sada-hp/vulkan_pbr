@@ -14,7 +14,9 @@ public:
 
 	const VkDescriptorSetLayout& GetLayout() const { return descriptorSetLayout; };
 
-	void BindSet(uint32_t set, VkCommandBuffer cmd, const Pipeline& pipeline);
+	void BindSet(uint32_t set, VkCommandBuffer cmd, const ComputePipeline& pipeline);
+
+	void BindSet(uint32_t set, VkCommandBuffer cmd, const GraphicsPipeline& pipeline);
 
 private:
 	friend class DescriptorSetDescriptor;

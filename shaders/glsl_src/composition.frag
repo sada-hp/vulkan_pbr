@@ -7,10 +7,11 @@ layout(binding = 1) uniform sampler2D HDRColor;
 layout(binding = 2) uniform sampler2D HDRNormals;
 layout(binding = 3) uniform sampler2D HDRDeferred;
 layout(binding = 4) uniform sampler2D SceneDepth;
+layout(binding = 5) uniform sampler2D SceneBackground;
 
-layout(binding = 5) uniform sampler2D TransmittanceLUT;
-layout(binding = 6) uniform sampler2D IrradianceLUT;
-layout(binding = 7) uniform sampler3D InscatteringLUT;
+layout(binding = 6) uniform sampler2D TransmittanceLUT;
+layout(binding = 7) uniform sampler2D IrradianceLUT;
+layout(binding = 8) uniform sampler3D InscatteringLUT;
 
 layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 outColor;
@@ -51,17 +52,18 @@ vec3 GetWorldPosition(float Depth)
 
 void main()
 {
-    float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
+    vec4 SkyColor = texture(SceneBackground, UV);
     vec4 Color = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
-    vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
+    float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
+    vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
  
     if (Deferred.a != 0.0)
     {
         vec3 Eye = ubo.CameraPosition.xyz;
         vec3 L = normalize(ubo.SunDirection.xyz);
         vec3 WorldPosition = GetWorldPosition(Depth);
-        vec3 V = normalize(ubo.CameraPosition.xyz - WorldPosition.xyz);
+        vec3 V = normalize(Eye - WorldPosition.xyz);
 
         SMaterial Material;
         Material.Roughness = Deferred.r;
@@ -71,12 +73,29 @@ void main()
         Color.rgb = DirectSunlight(V, L, Normal, Material);
 
         // treat it as if we were always looking at the ground, saves from horizon artifacts
-        V = normalize(normalize(WorldPosition.xyz) * Rg - ubo.CameraPosition.xyz);
+        vec3 NormalizedPosition = normalize(WorldPosition) * Rg;
+        float t = distance(Eye, WorldPosition);
+
+        V = normalize(Eye - NormalizedPosition);
 
         SAtmosphere Atmosphere;
-        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, distance(ubo.CameraPosition.xyz, WorldPosition), V, L, Atmosphere);
-        Color.rgb = Color.rgb * Atmosphere.L + Atmosphere.S;
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, WorldPosition, t, V, L, Atmosphere);
+        Color.rgb = Color.rgb * Atmosphere.L * MaxLightIntensity;
+
+        V = normalize(NormalizedPosition - Eye);
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, Eye, t, V, L, Atmosphere);
+        Color.rgb = Color.rgb + Atmosphere.S;
+
+        // temp hack
+        if (ubo.CameraRadius > Rcb)
+        {
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, SkyColor.a);
+        }
+    }
+    else
+    {
+        Color.rgb = SkyColor.rgb;
     }
 
-    outColor = Color;
+    outColor = vec4(Color.rgb, 1.0);
 }

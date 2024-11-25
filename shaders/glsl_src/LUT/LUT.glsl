@@ -1,4 +1,3 @@
-#define LUT_MEASURES
 #include "../lighting.glsl"
 
 float DistanceToAtmosphere(float R, float Mu)

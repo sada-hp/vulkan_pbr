@@ -3,7 +3,7 @@
 #include "Vulkan/pipeline.hpp"
 #include "Vulkan/descriptor_set.hpp"
 
-extern std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, const VkFormat& format, const VkImageCreateFlags& flags);
+extern std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, int c, const VkFormat& format, const VkImageCreateFlags& flags);
 
 std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<uint32_t> constants)
 {
@@ -43,7 +43,7 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 		noise_pipeline.AddSpecializationConstant(i, constants[i]);
 	}
 
-	std::unique_ptr<Pipeline> pipeline = noise_pipeline.Construct(Scope);
+	std::unique_ptr<ComputePipeline> pipeline = noise_pipeline.Construct(Scope);
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
@@ -77,7 +77,7 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateSolidColor(const RenderScope& Scop
 		pixels[i + 3] = a;
 	}
 
-	std::unique_ptr<VulkanImage> target = create_image(Scope, pixels, 1, imageSize.width, imageSize.height, Format, 0);
+	std::unique_ptr<VulkanImage> target = create_image(Scope, pixels, 1, imageSize.width, imageSize.height, 4, Format, 0);
 	
 	delete[] pixels;
 

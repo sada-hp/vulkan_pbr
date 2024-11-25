@@ -9,7 +9,7 @@ struct GraphicsObject
 private:
 	friend class VulkanBase;
 
-	std::unique_ptr<Pipeline> pipeline;
+	std::unique_ptr<GraphicsPipeline> pipeline;
 	std::unique_ptr<DescriptorSet> descriptorSet;
 };
 

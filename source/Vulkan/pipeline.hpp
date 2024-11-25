@@ -2,31 +2,18 @@
 #include "Vulkan/vulkan_api.hpp"
 #include "Vulkan/scope.hpp"
 
-enum class EPipelineType
-{
-	None = 0,
-	Graphics = 1,
-	Compute = 2
-};
-
-class Pipeline
+class ComputePipeline
 {
 	friend class ComputePipelineDescriptor;
 
-	friend class GraphicsPipelineDescriptor;
-
 public:
-	Pipeline(const RenderScope& Scope) : scope(Scope) {};
+	ComputePipeline(const RenderScope& Scope) : scope(Scope) {};
 
-	virtual ~Pipeline();
+	virtual ~ComputePipeline();
 
-	const VkPipelineBindPoint GetBindPoint() const { return bindPoint; };
+	ComputePipeline& BindPipeline(VkCommandBuffer cmd);
 
-	Pipeline& BindPipeline(VkCommandBuffer cmd);
-
-	Pipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages);
-
-	EPipelineType GetPipelineType() const { return EPipelineType::None; };
+	ComputePipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages);
 
 	const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
 
@@ -35,9 +22,28 @@ private:
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
 	const RenderScope& scope;
+};
 
-	VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_MAX_ENUM;
-	EPipelineType type = EPipelineType::None;
+class GraphicsPipeline
+{
+	friend class GraphicsPipelineDescriptor;
+
+public:
+	GraphicsPipeline(const RenderScope& Scope) : scope(Scope) {};
+
+	virtual ~GraphicsPipeline();
+
+	GraphicsPipeline& BindPipeline(VkCommandBuffer cmd);
+
+	GraphicsPipeline& PushConstants(VkCommandBuffer cmd, const void* data, size_t dataSize, size_t offset, VkShaderStageFlagBits stages);
+
+	const VkPipelineLayout& GetLayout() const { return pipelineLayout; };
+
+private:
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+	const RenderScope& scope;
 };
 
 class PipelineDescriptor
@@ -69,8 +75,6 @@ public:
 		other.descriptorLayouts.clear();
 		other.specializationConstants.clear();
 	}
-
-	virtual std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) = 0;
 
 protected:
 	std::vector<VkDescriptorSetLayout> descriptorLayouts{};
@@ -107,7 +111,7 @@ public:
 
 	ComputePipelineDescriptor& AddSpecializationConstant(uint32_t id, std::any value);
 
-	std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) override;
+	std::unique_ptr<ComputePipeline> Construct(const RenderScope& Scope);
 };
 
 class GraphicsPipelineDescriptor : public PipelineDescriptor
@@ -158,7 +162,7 @@ public:
 
 	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass, uint32_t Subpass);
 
-	std::unique_ptr<Pipeline> Construct(const RenderScope& Scope) override;
+	std::unique_ptr<GraphicsPipeline> Construct(const RenderScope& Scope);
 
 private:
 	uint32_t subpass = 0;

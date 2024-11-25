@@ -1,9 +1,9 @@
 #pragma once
-#include <glfw/glfw3.h>
-#include <vma/vk_mem_alloc.h>
-#include <vector>
 #include <array>
+#include <vector>
+#include <glfw/glfw3.h>
 #include "Vulkan/scope.hpp"
+#include <vma/vk_mem_alloc.h>
 
 struct Buffer
 {

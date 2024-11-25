@@ -22,14 +22,6 @@
 #define VALIDATION
 #endif
 
-#ifndef PLANET_RADIUS
-#define PLANET_RADIUS 6360.0 * 1e3
-#endif
-
-#ifndef ATMOSPHERE_RADIUS
-#define ATMOSPHERE_RADIUS 6420.0 * 1e3
-#endif
-
 struct VulkanTexture : Texture
 {
 	std::shared_ptr<VulkanImage> Image = VK_NULL_HANDLE;
@@ -98,8 +90,17 @@ namespace GR
 		GR::Camera m_Camera = {};
 		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
 
+#ifndef PLANET_RADIUS
+		static constexpr float Rg = 6360.0 * 1e3;
+#else
 		static constexpr float Rg = PLANET_RADIUS;
+#endif
+
+#ifndef ATMOSPHERE_RADIUS
+		static constexpr float Rt = 6420.0 * 1e3;
+#else
 		static constexpr float Rt = ATMOSPHERE_RADIUS;
+#endif
 	};
 };
 
@@ -112,8 +113,6 @@ private:
 	std::vector<VkImage> m_SwapchainImages = {};
 	std::vector<VkImageView> m_SwapchainViews = {};
 
-
-
 	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsHR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsHR = {};
 	
@@ -125,9 +124,6 @@ private:
 
 	std::vector<std::unique_ptr<VulkanImage>> m_NormalAttachments = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_NormalViews = {};
-
-	std::vector<std::unique_ptr<VulkanImage>> m_CompositionAttachments = {};
-	std::vector<std::unique_ptr<VulkanImageView>> m_CompositionViews = {};
 
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsLR = {};
@@ -147,13 +143,13 @@ private:
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
 
-	std::vector<std::unique_ptr<Pipeline>> m_CompositionPipelines = {};
+	std::vector<std::unique_ptr<GraphicsPipeline>> m_CompositionPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 
-	std::vector<std::unique_ptr<Pipeline>> m_HDRPipelines = {};
+	std::vector<std::unique_ptr<GraphicsPipeline>> m_HDRPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_HDRDescriptors = {};
 
-	std::vector<std::unique_ptr<Pipeline>> m_PostProcessPipelines = {};
+	std::vector<std::unique_ptr<GraphicsPipeline>> m_PostProcessPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
@@ -245,7 +241,6 @@ public:
 	void _updateObject(entt::entity ent, entt::registry& registry) const;
 
 private:
-
 	VkBool32 create_instance();
 
 	VkBool32 create_swapchain_images();
@@ -264,9 +259,9 @@ private:
 
 	std::unique_ptr<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 	
-	std::unique_ptr<Pipeline> create_pbr_pipeline(const DescriptorSet& set) const;
+	std::unique_ptr<GraphicsPipeline> create_pbr_pipeline(const DescriptorSet& set) const;
 
-	std::unique_ptr<Pipeline> create_terrain_pipeline(const DescriptorSet& set) const;
+	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set) const;
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;

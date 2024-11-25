@@ -26,7 +26,7 @@ layout(location = 2) out vec4 outDeferred;
 
 vec2 Displace(vec2 inUV, vec3 V)
 {
-    const int steps = 64;
+    const int steps = min(int(32 * PushConstants.HeightScale), 128);
     const float stepsize = 1.0 / float(steps);
 
     vec2 UV = inUV;
@@ -71,7 +71,8 @@ void main()
     Material.Albedo = texture(AlbedoMap, UV);
     Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
 
-    if (UV.x < 0.0 || UV.x > 1.0 || UV.y < 0.0 || UV.y > 1.0)
+    const float eps = 1e-4 * PushConstants.HeightScale;
+    if (UV.x <= 0.0 || UV.x >= 1.0 || UV.y <= 0.0 || UV.y >= 1.0)
         discard;
 
     outColor = vec4(Material.Albedo.rgb, PushConstants.ColorMask.a * Material.Albedo.a);

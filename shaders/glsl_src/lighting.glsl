@@ -1,87 +1,13 @@
 #include "common.glsl"
 #include "constants.glsl"
 
-float SphereDistance(vec3 ro, vec3 rd, vec3 so, float radius, bool get_max)
+struct SAtmosphere
 {
-	vec3 sphereCenter = so;
-
-	float radius2 = radius*radius;
-
-	vec3 L = ro - sphereCenter;
-	float a = dot(rd, rd);
-	float b = 2.0 * dot(rd, L);
-	float c = dot(L, L) - radius2;
-
-	float discr = b * b - 4.0 * a * c;
-
-	if (discr < 0.0) 
-        return 0.0;
-
-    float t1 = max((-b - sqrt(discr))/2, 0.0);
-    float t2 = max((-b + sqrt(discr))/2, 0.0);
-
-    if (t1 > 0.0 && t2 > 0.0)
-    {
-        return get_max ? max(t1, t2) : min(t1, t2);
-    }
-    else if (t1 > 0.0)
-    {
-        return t1;
-    }
-    
-    return t2;
-}
-
-bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius, out vec3 p1)
-{
-	vec3 sphereCenter = so;
-
-	float radius2 = radius*radius;
-
-	vec3 L = ro - sphereCenter;
-	float a = dot(rd, rd);
-	float b = 2.0 * dot(rd, L);
-	float c = dot(L, L) - radius2;
-
-	float discr = b * b - 4.0 * a * c;
-
-	if (discr < 0.0) 
-        return false;
-
-	float t1 = max(0.0, (-b + sqrt(discr))/2);
-    //float t2 = max(0.0, (-b - sqrt(discr))/2);
-	if(t1 == 0.0){
-		return false;
-	}
-
-    p1 = ro + rd * t1;
-
-	return true;
-}
-
-bool RaySphereintersection(vec3 ro, vec3 rd, vec3 so, float radius)
-{
-	vec3 sphereCenter = so;
-
-	float radius2 = radius*radius;
-
-	vec3 L = ro - sphereCenter;
-	float a = dot(rd, rd);
-	float b = 2.0 * dot(rd, L);
-	float c = dot(L, L) - radius2;
-
-	float discr = b * b - 4.0 * a * c;
-
-	if (discr < 0.0) 
-        return false;
-
-	float t1 = max(0.0, (-b + sqrt(discr))/2);
-	if(t1 == 0.0){
-		return false;
-	}
-
-	return true;
-}
+    vec3 L;
+    vec3 S;
+    vec3 E;
+    vec3 T;
+};
 
 float HenyeyGreensteinPhase(float a, float g)
 {
@@ -116,8 +42,8 @@ float DrainePhase(float a, float g, float k)
 //https://research.nvidia.com/labs/rtr/approximate-mie/publications/approximate-mie.pdf
 float HGDPhase(float a, float w)
 {
-    //float d = mix(5.0, 50.0, g);
-    float d = 25.0;
+    float d = mix(5.0, 50.0, MieG);
+    //float d = 15.0;
 
     float ghg = exp(-0.0990567/(d - 1.67154));
     float gd = exp(-2.20679/(d + 3.91029) - 0.428934);
@@ -140,7 +66,7 @@ float HGDPhase(float a, float ghg, float gd, float kd, float w)
 
 float Powder(float e, float ds)
 {
-    return 2.0 * (1.0 - exp(-ds * e * 2)) * exp(-ds * e);
+    return exp(-ds * e) * (1.0 - exp(-ds * e * 2));
 }
 
 vec3 GetMie(vec4 RayMie)
@@ -261,7 +187,7 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
             float mu0 = rMu0 / r0;
             float muS0 = dot(x0, s) / r0;
             Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
-            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
+            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS);
 
             if (r0 > Rg + 0.01) 
             {
@@ -306,7 +232,7 @@ void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, ve
     Atmosphere.S = result * MaxLightIntensity;
 }
 
-void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere1, out SAtmosphere Atmosphere2) 
+void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
 {
     vec3 resultHG;
     vec3 resultHGD;
@@ -328,7 +254,6 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
         float nu = dot(v, s);
         float muS = dot(x, s) / r;
         float phaseR = RayleighPhase(nu);
-        float phaseM = MiePhase(nu);
         float phaseHGD = HGDPhase(nu, MieG);
         vec4 inscatter = max(GetInscattering(InscatteringLUT, r, mu, muS, nu), 0.0);
 
@@ -339,12 +264,12 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
             float rMu0 = dot(x0, v);
             float mu0 = rMu0 / r0;
             float muS0 = dot(x0, s) / r0;
-            Atmosphere1.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
-            Atmosphere1.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS) * MaxLightIntensity;
+            Atmosphere.T = GetTransmittance(TransmittanceLUT, r, mu, v, x0);
+            Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, r, muS);
 
             if (r0 > Rg + 0.01) 
             {
-                inscatter = max(inscatter - Atmosphere1.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
+                inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, r0, mu0, muS0, nu), 0.0);
 
                 const float EPS = 0.004;
                 float muHoriz = -sqrt(1.0 - (Rg / r) * (Rg / r));
@@ -357,14 +282,14 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
                     mu0 = (r * mu + t) / r0;
                     vec4 inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
                     vec4 inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterA = max(inScatter0 - Atmosphere1.T.rgbr * inScatter1, 0.0);
+                    vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
                     mu = muHoriz + EPS;
                     r0 = sqrt(r * r + t * t + 2.0 * r * t * mu);
                     mu0 = (r * mu + t) / r0;
                     inScatter0 = GetInscattering(InscatteringLUT, r, mu, muS, nu);
                     inScatter1 = GetInscattering(InscatteringLUT, r0, mu0, muS0, nu);
-                    vec4 inScatterB = max(inScatter0 - Atmosphere1.T.rgbr * inScatter1, 0.0);
+                    vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
                     inscatter = mix(inScatterA, inScatterB, a);
                 }
@@ -372,25 +297,15 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
         }
         inscatter.w *= smoothstep(0.00, 0.02, muS);
 
-        resultHG = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseM, 0.0);
         resultHGD = max(inscatter.rgb * phaseR + GetMie(inscatter) * phaseHGD, 0.0);
     } 
     else 
     {
-        Atmosphere1.S = vec3(0.0);
-        Atmosphere1.L = vec3(0.0);
-        Atmosphere1.T = vec3(0.0);
-
-        Atmosphere2.S = vec3(0.0);
-        Atmosphere2.L = vec3(0.0);
-        Atmosphere2.T = vec3(0.0);
-
+        Atmosphere.S = vec3(0.0);
+        Atmosphere.L = vec3(0.0);
+        Atmosphere.T = vec3(0.0);
         return;
     }
 
-    Atmosphere1.S = resultHG * MaxLightIntensity;
-
-    Atmosphere2.L = Atmosphere1.L;
-    Atmosphere2.T = Atmosphere1.T;
-    Atmosphere2.S = resultHGD * MaxLightIntensity;
+    Atmosphere.S = resultHGD * MaxLightIntensity;
 }

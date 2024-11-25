@@ -9,7 +9,7 @@ layout(location = 0) out vec4 outColor;
 // snatched from precomputed-atmospheric-scattering code
 vec3 Tonemap(vec3 L) 
 {
-    const float exposure = 1.5;
+    const float exposure = 0.75;
     const float gamma = 2.2;
 
     L = L * exposure;

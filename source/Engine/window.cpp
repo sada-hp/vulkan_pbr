@@ -4,8 +4,8 @@
 
 #ifdef INCLUDE_GUI
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_vulkan.h"
 #endif
 
 namespace GR
@@ -122,7 +122,7 @@ namespace GR
 		return glm::vec2{ xpos, ypos };
 	}
 
-	GRAPI double Window::GetAspectRatio() const
+	double Window::GetAspectRatio() const
 	{
 		int width = 0, height = 0;
 		glfwGetWindowSize(m_GlfwWindow, &width, &height);

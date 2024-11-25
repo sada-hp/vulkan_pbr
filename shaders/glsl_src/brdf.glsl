@@ -18,8 +18,7 @@ vec3 FresnelSchlick(float Mu, vec3 f0, vec3 f90)
 
 float DistributionGGX(float NdotH, float roughness)
 {
-    float a = roughness * roughness;
-    float a2 = a * a;
+    float a2 = pow(roughness, 4.0);
     float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	
     return a2 / (d * d);
