@@ -16,12 +16,12 @@ struct UniformBuffer
 	glm::dmat4 ViewProjection;
 	glm::dmat4 ViewMatrix;
 	glm::dmat4 ViewMatrixInverse;
+	glm::dvec4 CameraPositionFP64;
 	glm::mat4 ProjectionMatrix;
 	glm::mat4 ProjectionMatrixInverse;
-	glm::dvec4 CameraPositionFP64;
 	glm::vec4 CameraPosition;
 	glm::vec4 SunDirection;
-	glm::vec4 CamerUp;
+	glm::vec4 CameraUp;
 	glm::vec4 CameraRight;
 	glm::vec4 CameraForward;
 	glm::vec2 Resolution;

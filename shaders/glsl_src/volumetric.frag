@@ -145,26 +145,26 @@ void FillScattering(float T)
     vec3 S = T * Atmosphere.S;
     S = S - S * outScattering.a;
 
+    vec3 L = T * Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz);
+
     // Sky scattering
     t = SphereMinDistance(ubo.CameraPosition.xyz, fromCamera, vec3(0.0), Rt);
     AtmosphereAtPoint_2(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, t, fromCamera, ubo.SunDirection.xyz, Atmosphere);
     S += (Atmosphere.S + GetSunColor(ubo.CameraPosition.xyz, fromCamera, ubo.SunDirection.xyz) * Atmosphere.L * MaxLightIntensity) * outScattering.a;
-    outScattering.rgb = Atmosphere.L * outScattering.rgb + S;
+    outScattering.rgb = L * outScattering.rgb + S;
 }
 
 // I doubt it's physically correct but looks nice
 // Unoptimized and expensive
 void MarchToCloud()
 {
-    vec3 rl = normalize(ubo.SunDirection.xyz);
-
     marchDirection = normalize(marchEnd - marchStart);
     
     int i = 0;
     vec3 pos = marchStart;
     float sample_density = 0.0;
-    float phase = HGDPhase(dot(rl, fromCamera), 0.75, -0.15, 0.5, 0.35);
-    //float phase = DualLobeFunction(dot(rl, marchDirection), MieG, -0.25, 0.65);
+    float phase = HGDPhase(dot(ubo.SunDirection.xyz, fromCamera), 0.75, -0.35, 0.5, 0.65);
+    //float phase = DualLobeFunction(dot(ubo.SunDirection.xyz, marchDirection), MieG, -0.25, 0.45);
 
     float mean_depth = 0.0;
     float mean_transmittance = 0.0;
@@ -172,7 +172,7 @@ void MarchToCloud()
     // take larger steps and
     // skip empty space until cloud is found
 
-    int steps = 24;
+    int steps = 16;
     float len = distance(marchStart, marchEnd);
     float stepsize = len / float(steps);
     for (i; i < steps && sample_density == 0.0; i++)
@@ -190,7 +190,7 @@ void MarchToCloud()
     // go more precise for clouds
     float DotEH = dot(normalize(ubo.CameraPosition.xyz), fromCamera);
 
-    steps = int(mix(256, 32, abs(DotEH)) * (1.0 - float(max(i - 1, 0)) / float(steps)));
+    steps = int(mix(128, 32, abs(DotEH)));
     stepsize = len / float(steps);
 
     float march_to_camera = distance(ubo.CameraPosition.xyz, marchStart);
@@ -206,7 +206,7 @@ void MarchToCloud()
             float extinction = Clouds.Absorption * sample_density;
 
             float transmittance = BeerLambert(extinction, stepsize);
-            float luminance = MaxLightIntensity * phase * MarchToLight(pos, rl, stepsize);
+            float luminance = MaxLightIntensity * phase * MarchToLight(pos, ubo.SunDirection.xyz, stepsize);
 
             vec3 E = extinction * vec3(luminance);
             E = vec3(E - transmittance * E) / max(extinction, 1e-6);

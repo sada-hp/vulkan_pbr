@@ -154,6 +154,18 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
     }
 }
 
+vec3 GetTransmittanceWithShadow(sampler2D TransmittanceLUT, vec3 x, vec3 s)
+{
+    float r = max(length(x), Rg + 1.0);
+    if (r <= Rt)
+    {
+        float muS = dot(x, s) / r;
+        return GetTransmittanceWithShadow(TransmittanceLUT, r, muS);
+    }
+
+    return vec3(0.0);
+}
+
 // precomputed-atmospheric-scattering
 void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
 {
