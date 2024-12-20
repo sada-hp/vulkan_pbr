@@ -54,14 +54,18 @@ void main()
     float perlin2 = perlin(Normal.xz, 300.0 * 4.0);
     float perlin3 = perlin(Normal.xz, 400.0 * 6.0);
     float perlin4 = perlin(Normal.xz, 500.0 * 16.0);
-    float perlin5 = perlin(Normal.xz, 100.0);
+    float perlin5 = perlin(Normal.xy, 100.0);
+    float perlin6 = 1.0 - perlin(Normal.yz, 300.0);
+    float perlin7 = perlin(Normal.yz, 3000.0);
+    float perlin8 = perlin(Normal.xy, 3000.0);
+    float perlin9 = perlin(Normal.xz, 3000.0);
 
-    Height = pow(saturate(
+    Height = saturate(pow(saturate(
         (saturate(perlin1 * 1.0 + perlin2 * 0.5 + perlin3 * 0.25 + perlin4 * 0.125) - perlin5 * perlin1)
         // (perlin5 * perlin1 + pow(1.0 - perlin2, 2.0) * 0.5 + perlin3 * 0.25 + perlin4 * 0.125)
-    ), 3.0);
+    ), 3.0) * (perlin6 + perlin7 * perlin8 * perlin9));
     
-    WorldPosition = vec4(Normal * (300.0 + Rg + Height * 7500.0), 1.0);
+    WorldPosition = vec4(Normal * (300.0 + Rg + Height * 10000.0), 1.0);
     // WorldPosition = vec4(Normal * Rg, 1.0);
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
