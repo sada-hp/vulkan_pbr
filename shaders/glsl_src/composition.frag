@@ -13,11 +13,18 @@ layout(binding = 6) uniform sampler2D TransmittanceLUT;
 layout(binding = 7) uniform sampler2D IrradianceLUT;
 layout(binding = 8) uniform sampler3D InscatteringLUT;
 
+layout(binding = 9) uniform CloudLayer
+{
+    float Coverage;
+    float Absorption;
+    float WindSpeed;
+} Clouds;
+
 layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 outColor;
 
 // get specular and ambient part from sunlight
-vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material)
+vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material, in SAtmosphere Atmosphere)
 {
     vec3 H = normalize(V + L);
 
@@ -32,13 +39,15 @@ vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material)
     float G = GeometrySmith(NdotV, NdotL, Material.Roughness);
     float D = DistributionGGX(NdotH, Material.Roughness);
 
+    vec3 Sunl = Atmosphere.L * MaxLightIntensity;
+
     vec3 kD = vec3(1.0 - Material.Metallic);
     vec3 specular = vec3(max((D * G * F) / (4.0 * NdotV * NdotL), 0.001));
     vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     //vec3 diffuse = kD * Material.Albedo.rgb;
     vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
 
-    return ambient + ((specular + diffuse) / PI * NdotL) * NdotV;
+    return Sunl * (ambient + ((specular + diffuse) / PI) * NdotV * NdotL) + Atmosphere.S;
 }
 
 vec3 GetWorldPosition(float Depth)
@@ -65,26 +74,16 @@ void main()
         vec3 WorldPosition = GetWorldPosition(Depth);
         vec3 V = normalize(Eye - WorldPosition.xyz);
 
+        float t = distance(Eye, WorldPosition);
+        SAtmosphere Atmosphere;
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, Eye, t, -V, L, Atmosphere);
+
         SMaterial Material;
         Material.Roughness = Deferred.r;
         Material.Metallic = Deferred.g;
         Material.AO = Deferred.b;
         Material.Albedo = Color;
-        Color.rgb = DirectSunlight(V, L, Normal, Material);
-
-        // treat it as if we were always looking at the ground, saves from horizon artifacts
-        vec3 NormalizedPosition = normalize(WorldPosition) * Rg;
-        float t = distance(Eye, WorldPosition);
-
-        V = normalize(Eye - NormalizedPosition);
-
-        SAtmosphere Atmosphere;
-        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, WorldPosition, t, V, L, Atmosphere);
-        Color.rgb = Color.rgb * Atmosphere.L * MaxLightIntensity;
-
-        V = normalize(NormalizedPosition - Eye);
-        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, Eye, t, V, L, Atmosphere);
-        Color.rgb = Color.rgb + Atmosphere.S;
+        Color.rgb = DirectSunlight(V, L, Normal, Material, Atmosphere);
 
         // temp hack
         if (ubo.CameraRadius > Rcb)

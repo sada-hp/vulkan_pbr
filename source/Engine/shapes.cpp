@@ -321,6 +321,8 @@ namespace GR
 		std::vector<uint32_t> indices{};
 		std::vector<TerrainVertex> vertices{};
 
+		std::unordered_map<glm::vec3, uint32_t> uniquePositions{};
+
 		indices.reserve(m * m * 24u * m_Rings);
 		vertices.reserve(m * m * 9u * m_Rings);
 
@@ -331,7 +333,6 @@ namespace GR
 			int32_t prev_step = level > 0 ? (1u << (level - 1u)) : 0u;
 			int32_t half_step = prev_step;
 			int32_t g = m / 2;
-			float L = float(level);
 			int32_t padding = 1u;
 			int32_t radius = step * (g + padding);
 
@@ -342,6 +343,13 @@ namespace GR
 				{
 					if (glm::max(glm::abs(x + half_step), glm::abs(z + half_step)) >= g * prev_step)
 					{
+#if 0
+						float L = x == -radius || x + step >= radius
+							|| z == -radius || z + step >= radius
+							? float(level + 1) : float(level);
+#else
+						float L = float(level);
+#endif
 						glm::vec3 Ap = glm::vec3(m_Scale * float(x), L, m_Scale * float(z));
 						glm::vec3 Cp = glm::vec3(m_Scale * float(x + step), L, m_Scale * float(z));
 						glm::vec3 Gp = glm::vec3(m_Scale * float(x), L, m_Scale * float(z + step));
@@ -353,32 +361,69 @@ namespace GR
 						glm::vec3 Hp = (Gp + Ip) * 0.5f;
 						glm::vec3 Ep = (Ap + Ip) * 0.5f;
 
-						vertices.emplace_back(Ap);
-						A = C > 0u ? C : vertices.size() - 1;
+						if (!uniquePositions.contains(Ap * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Ap);
+							uniquePositions[Ap * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						A = uniquePositions[Ap * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Bp);
-						B = vertices.size() - 1;
+						if (!uniquePositions.contains(Bp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Bp);
+							uniquePositions[Bp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						B = uniquePositions[Bp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Cp);
-						C = vertices.size() - 1;
+						if (!uniquePositions.contains(Cp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Cp);
+							uniquePositions[Cp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						C = uniquePositions[Cp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Dp);
-						D = F > 0u ? F : vertices.size() - 1;
+						if (!uniquePositions.contains(Dp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Dp);
+							uniquePositions[Dp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						D = uniquePositions[Dp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Ep);
-						E = vertices.size() - 1;
+						if (!uniquePositions.contains(Ep * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Ep);
+							uniquePositions[Ep * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						E = uniquePositions[Ep * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Fp);
-						F = vertices.size() - 1;
+						if (!uniquePositions.contains(Fp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Fp);
+							uniquePositions[Fp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						F = uniquePositions[Fp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Gp);
-						G = I > 0u ? I : vertices.size() - 1;
+						if (!uniquePositions.contains(Gp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Gp);
+							uniquePositions[Gp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						G = uniquePositions[Gp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Hp);
-						H = vertices.size() - 1;
+						if (!uniquePositions.contains(Hp * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Hp);
+							H = vertices.size() - 1;
+							uniquePositions[Hp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						H = uniquePositions[Hp * glm::vec3(1, 0, 1)];
 
-						vertices.emplace_back(Ip);
-						I = vertices.size() - 1;
+						if (!uniquePositions.contains(Ip * glm::vec3(1, 0, 1)))
+						{
+							vertices.emplace_back(Ip);
+							uniquePositions[Ip * glm::vec3(1, 0, 1)] = vertices.size() - 1;
+						}
+						I = uniquePositions[Ip * glm::vec3(1, 0, 1)];
 
 						if (x == -radius)
 						{

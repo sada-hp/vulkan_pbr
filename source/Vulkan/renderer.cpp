@@ -114,6 +114,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.independentBlend = VK_TRUE;
 	deviceFeatures.fillModeNonSolid = VK_TRUE;
+	deviceFeatures.geometryShader = VK_TRUE;
 
 	poolSizes[0].descriptorCount = 100u;
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLER;
@@ -957,6 +958,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(6, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(7, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(8, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
+			.AddUniformBuffer(9, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 
 		m_CompositionPipelines[i] = GraphicsPipelineDescriptor()
@@ -1193,6 +1195,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.SetVertexInputBindings(1, &vertBindings)
 		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
 		.SetShaderStage("terrain_vert", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("terrain_geom", VK_SHADER_STAGE_GEOMETRY_BIT)
 		.SetShaderStage("terrain_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
@@ -1200,6 +1203,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
+		//.SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
 #pragma endregion
