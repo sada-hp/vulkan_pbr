@@ -53,7 +53,11 @@ void main()
     vec4 c2 = vec4(1.0, 0.0, 0.0, 1.0);
     vec4 c3 = vec4(0.0, 0.0, 1.0, 1.0);
 
-    if (Slope > 0.95)
+    if (Height == 0.0)
+    {
+        Material.Albedo = c3;
+    }
+    else if (Slope > 0.95)
     {
         Material.Albedo = c1;
     }

@@ -59,11 +59,15 @@ void main()
     float perlin7 = perlin(Normal.yz, 3000.0);
     float perlin8 = perlin(Normal.xy, 3000.0);
     float perlin9 = perlin(Normal.xz, 3000.0);
+    
+    float perlin10 = perlin(Normal.xz, 10.0);
+    float perlin11 = perlin(Normal.yz, 10.0);
+    float perlin12 = perlin(Normal.xy, 10.0);
 
-    Height = saturate(pow(saturate(
+    Height = saturate(saturate(pow(saturate(
         (saturate(perlin1 * 1.0 + perlin2 * 0.5 + perlin3 * 0.25 + perlin4 * 0.125) - perlin5 * perlin1)
         // (perlin5 * perlin1 + pow(1.0 - perlin2, 2.0) * 0.5 + perlin3 * 0.25 + perlin4 * 0.125)
-    ), 3.0) * (perlin6 + perlin7 * perlin8 * perlin9));
+    ), 3.0) * (perlin6 + perlin7 * perlin8 * perlin9)) - pow(perlin10 * perlin11 * perlin12, 3.0));
     
     WorldPosition = vec4(Normal * (300.0 + Rg + Height * 10000.0), 1.0);
     // WorldPosition = vec4(Normal * Rg, 1.0);
