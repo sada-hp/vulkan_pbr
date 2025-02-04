@@ -74,7 +74,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 				{
-					output[j] = j;
+					output[j] = i;
 					break;
 				}
 			}
@@ -85,7 +85,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0)
 				{
-					output[j] = j;
+					output[j] = i;
 					break;
 				}
 			}
@@ -96,7 +96,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 				{
-					output[j] = j;
+					output[j] = i;
 					break;
 				}
 			}
@@ -108,7 +108,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if (queueFamilies[i].queueFlags & flags[j])
 				{
-					output[j] = j;
+					output[j] = i;
 					break;
 				}
 			}
