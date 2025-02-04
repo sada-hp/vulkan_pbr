@@ -74,7 +74,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 				{
-					output[j] = i;
+					output[j] = j;
 					break;
 				}
 			}
@@ -85,7 +85,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0)
 				{
-					output[j] = i;
+					output[j] = j;
 					break;
 				}
 			}
@@ -96,7 +96,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if ((queueFamilies[i].queueFlags & flags[j]) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 				{
-					output[j] = i;
+					output[j] = j;
 					break;
 				}
 			}
@@ -108,7 +108,7 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 			{
 				if (queueFamilies[i].queueFlags & flags[j])
 				{
-					output[j] = i;
+					output[j] = j;
 					break;
 				}
 			}
@@ -149,7 +149,9 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
 	VkSurfaceFormatKHR surfaceFormat = GetSurfaceFormat(physicalDevice, surface, desired_format);
 
-	std::vector<uint32_t> queueFamilies(FindDeviceQueues(physicalDevice, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT }));
+	std::vector<uint32_t> queueFamilies = FindDeviceQueues(physicalDevice, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT });
+	std::sort(queueFamilies.begin(), queueFamilies.end());
+	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
 	uint32_t desiredImageCount = glm::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
 
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -157,7 +159,7 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 	createInfo.surface = surface;
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	createInfo.imageArrayLayers = 1;
-	createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+	createInfo.imageSharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
 	createInfo.preTransform = capabilities.currentTransform;
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.clipped = VK_TRUE;
@@ -265,10 +267,16 @@ VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhy
 	std::vector<VkDeviceQueueCreateInfo> queueInfos;
 
 	float queuePriority = 1.0f;
-	for (uint32_t queueFamily : queues) {
+	for (uint32_t i = 0; i < queues.size(); i++) {
+
+		if (i > 0 && std::find(queues.cbegin(), std::next(queues.cbegin(), i), queues[i]) != std::next(queues.cbegin(), i))
+		{
+			continue;
+		}
+
 		VkDeviceQueueCreateInfo queueCreateInfo{};
 		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueFamilyIndex = queues[i];
 		queueCreateInfo.queueCount = 1;
 		queueCreateInfo.pQueuePriorities = &queuePriority;
 		queueInfos.push_back(queueCreateInfo);

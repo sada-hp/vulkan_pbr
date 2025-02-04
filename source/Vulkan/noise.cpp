@@ -7,9 +7,9 @@ extern std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void*
 
 std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<uint32_t> constants)
 {
-	std::vector<uint32_t> queueFamilyIndices;
-	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-	queueFamilyIndices.push_back(Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+	std::vector<uint32_t> queueFamilies = FindDeviceQueues(Scope.GetPhysicalDevice(), {VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT});
+	std::sort(queueFamilies.begin(), queueFamilies.end());
+	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
 
 	VkImageCreateInfo noiseInfo{};
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -21,9 +21,9 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	noiseInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-	noiseInfo.queueFamilyIndexCount = queueFamilyIndices.size();
-	noiseInfo.pQueueFamilyIndices = queueFamilyIndices.data();
+	noiseInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+	noiseInfo.queueFamilyIndexCount = queueFamilies.size();
+	noiseInfo.pQueueFamilyIndices = queueFamilies.data();
 	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	noiseInfo.imageType = imageSize.depth == 1u ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
 

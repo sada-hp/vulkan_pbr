@@ -50,6 +50,7 @@ void main()
 
     Normal = vec3(normalize(ObjectPosition));
 
+#if 0
     float perlin1 = perlin(Normal.xz, 200.0 * 1.0);
     float perlin2 = perlin(Normal.xz, 300.0 * 4.0);
     float perlin3 = perlin(Normal.xz, 400.0 * 6.0);
@@ -70,7 +71,9 @@ void main()
     ), 3.0) * (perlin6 + perlin7 * perlin8 * perlin9)) - pow(perlin10 * perlin11 * perlin12, 3.0));
     
     WorldPosition = vec4(Normal * (300.0 + Rg + Height * 10000.0), 1.0);
-    // WorldPosition = vec4(Normal * Rg, 1.0);
+#else
+    WorldPosition = vec4(Normal * Rg, 1.0);
+#endif
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
 }

@@ -826,7 +826,10 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
-	const std::array<uint32_t, 2> queueIndices = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
+	std::vector<uint32_t> queueFamilies = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
+	std::sort(queueFamilies.begin(), queueFamilies.end());
+	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
+
 	VmaAllocationCreateInfo allocCreateInfo{};
 	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
@@ -854,9 +857,9 @@ VkBool32 VulkanBase::create_swapchain_images()
 		hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		hdrInfo.mipLevels = 1;
 		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-		hdrInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-		hdrInfo.queueFamilyIndexCount = queueIndices.size();
-		hdrInfo.pQueueFamilyIndices = queueIndices.data();
+		hdrInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+		hdrInfo.queueFamilyIndexCount = queueFamilies.size();
+		hdrInfo.pQueueFamilyIndices = queueFamilies.data();
 
 		VkImageCreateInfo depthInfo{};
 		depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -869,9 +872,9 @@ VkBool32 VulkanBase::create_swapchain_images()
 		depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		depthInfo.mipLevels = 1;
 		depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		depthInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-		depthInfo.queueFamilyIndexCount = queueIndices.size();
-		depthInfo.pQueueFamilyIndices = queueIndices.data();
+		depthInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+		depthInfo.queueFamilyIndexCount = queueFamilies.size();
+		depthInfo.pQueueFamilyIndices = queueFamilies.data();
 
 		res = (vkCreateImageView(m_Scope.GetDevice(), &viewInfo, VK_NULL_HANDLE, &m_SwapchainViews[i]) == VK_SUCCESS) & res;
 

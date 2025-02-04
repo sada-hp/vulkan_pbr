@@ -26,8 +26,8 @@ layout(location = 2) out vec4 outDeferred;
 
 void main()
 {
-    vec3 dX = dFdxFine(WorldPosition.xyz);
-    vec3 dY = dFdyFine(WorldPosition.xyz);
+    // vec3 dX = dFdxFine(WorldPosition.xyz);
+    // vec3 dY = dFdyFine(WorldPosition.xyz);
 
     // reading the normal map
     // vec3 N = normalize(cross(dY.xyz, dX.xyz));
@@ -45,7 +45,7 @@ void main()
     //Material.Albedo = texture(AlbedoMap, UV);
     //Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
 
-#if 1
+#if 0
 
     float Slope = abs(dot(N, normalize(WorldPosition.xyz)));
 
@@ -71,10 +71,9 @@ void main()
     }
 
 #else
-    Material.Albedo = vec4(0.25, 1.0, 0.5, 1.0);
+    Material.Albedo = PushConstants.ColorMask.rgba;
 #endif
 
-    //Material.Albedo = PushConstants.ColorMask.rgba;
     Material.Albedo.rgb = pow(Material.Albedo.rgb, vec3(2.2));
 
     outColor = Material.Albedo;
