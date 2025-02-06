@@ -34,7 +34,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k1 + 1, k2,
 						k1 + 1, k2 + 1, k2
-						});
+					});
 				}
 			}
 		}
@@ -56,7 +56,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k2, k1 + 1,
 						k1 + 1, k2, k2 + 1
-						});
+					});
 				}
 			}
 		}
@@ -78,7 +78,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k2, k1 + 1,
 						k1 + 1, k2, k2 + 1
-						});
+					});
 				}
 			}
 		}
@@ -100,7 +100,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k1 + 1, k2,
 						k1 + 1, k2 + 1, k2
-						});
+					});
 				}
 			}
 		}
@@ -122,7 +122,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k1 + 1, k2,
 						k1 + 1, k2 + 1, k2
-						});
+					});
 				}
 			}
 		}
@@ -144,7 +144,7 @@ namespace GR
 					indices.insert(indices.end(), {
 						k1, k2, k1 + 1,
 						k1 + 1, k2, k2 + 1
-						});
+					});
 				}
 			}
 		}

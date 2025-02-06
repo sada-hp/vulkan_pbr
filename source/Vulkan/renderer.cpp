@@ -1062,7 +1062,7 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 {
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
-	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet);
+	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet, shape);
 	gro.mesh = shape.Generate(m_Scope);
 
 	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
@@ -1170,7 +1170,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_pbr_pipeline(const Descript
 		.Construct(m_Scope);
 }
 
-std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const DescriptorSet& set) const
+std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const
 {
 	auto vertAttributes = TerrainVertex::getAttributeDescriptions();
 	auto vertBindings = TerrainVertex::getBindingDescription();
@@ -1198,15 +1198,19 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.SetVertexInputBindings(1, &vertBindings)
 		.SetVertexAttributeBindings(vertAttributes.size(), vertAttributes.data())
 		.SetShaderStage("terrain_vert", VK_SHADER_STAGE_VERTEX_BIT)
-		.SetShaderStage("terrain_geom", VK_SHADER_STAGE_GEOMETRY_BIT)
+		// .SetShaderStage("terrain_geom", VK_SHADER_STAGE_GEOMETRY_BIT)
 		.SetShaderStage("terrain_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
 		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
-		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
-		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
-		//.SetPolygonMode(VK_POLYGON_MODE_LINE)
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
+		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
 #pragma endregion

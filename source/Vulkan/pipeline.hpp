@@ -80,6 +80,7 @@ protected:
 	std::vector<VkDescriptorSetLayout> descriptorLayouts{};
 	std::vector<VkPushConstantRange> pushConstants{};
 	std::map<VkShaderStageFlagBits, std::map<uint32_t, std::any>> specializationConstants;
+	// std::map<uint32_t, std::map<VkShaderStageFlagBits, std::any>> specializationConstants;
 	std::map<VkShaderStageFlagBits, std::string> shaderNames;
 };
 

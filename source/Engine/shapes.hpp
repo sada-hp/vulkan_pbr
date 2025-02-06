@@ -101,9 +101,12 @@ namespace GR
 			}
 
 		public:
-			uint32_t m_Rings = 8;
-			uint32_t m_VerPerRing = 255;
+			uint32_t m_Rings = 8u;
+			uint32_t m_VerPerRing = 127u;
 			float m_Scale = 1.f;
+			float m_MinHeight = 1.f;
+			float m_MaxHeight = 1.f;
+			uint32_t m_NoiseSeed = 0u;
 		};
 	};
 }

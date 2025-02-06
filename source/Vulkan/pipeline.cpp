@@ -262,7 +262,15 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::AddPushConstant(VkPushCo
 
 GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::AddSpecializationConstant(uint32_t id, std::any value, VkShaderStageFlagBits stage)
 {
-	specializationConstants[stage][id] = value;
+	const std::array<const VkShaderStageFlagBits, 5> stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
+	
+	for (size_t i = 0; i < stages.size(); i++)
+	{
+		if ((stage & stages[i]) != 0 || stage == VK_SHADER_STAGE_ALL_GRAPHICS)
+		{
+			specializationConstants[stages[i]][id] = value;
+		}
+	}
 
 	return *this;
 }
@@ -294,6 +302,10 @@ std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const Re
 	std::vector<VkSpecializationInfo> specInfos;
 	std::vector<VkSpecializationMapEntry> specialization_entries;
 	std::vector<unsigned char> specialization_data;
+
+	specialization_data.reserve(4096); // prevent data move
+	specialization_entries.reserve(128);
+	specInfos.reserve(32);
 
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStagesCI{};
 	const std::array<const VkShaderStageFlagBits, 5> stages = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, VK_SHADER_STAGE_GEOMETRY_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
@@ -329,7 +341,7 @@ std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const Re
 				specialization_entries[specialization_entry].constantID = id;
 				specialization_entries[specialization_entry].offset = specialization_offset;
 				specialization_entries[specialization_entry].size = specialization_bytes.size();
-				memcpy(&specialization_data[specialization_offset], specialization_bytes.data(), specialization_bytes.size());
+				memcpy(&specialization_data[data_offset + specialization_offset], specialization_bytes.data(), specialization_bytes.size());
 
 				specialization_offset += specialization_bytes.size();
 				specialization_entry++;
@@ -338,9 +350,9 @@ std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const Re
 			if (specializationConstants[stages[i]].size() > 0)
 			{
 				VkSpecializationInfo specializationInfo;
-				specializationInfo.mapEntryCount = specialization_entries.size();
+				specializationInfo.mapEntryCount = specialization_entry;
 				specializationInfo.pMapEntries = specialization_entries.data() + entry_offset;
-				specializationInfo.dataSize = specialization_data.size();
+				specializationInfo.dataSize = specialization_offset;
 				specializationInfo.pData = specialization_data.data() + data_offset;
 
 				specInfos.push_back(specializationInfo);

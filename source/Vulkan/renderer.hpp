@@ -261,7 +261,7 @@ private:
 	
 	std::unique_ptr<GraphicsPipeline> create_pbr_pipeline(const DescriptorSet& set) const;
 
-	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set) const;
+	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const;
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
