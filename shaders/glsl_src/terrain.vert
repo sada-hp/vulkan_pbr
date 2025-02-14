@@ -6,7 +6,8 @@
 layout (constant_id = 2) const float Scale = 1.f;
 layout (constant_id = 3) const float MinHeight = 1.f;
 layout (constant_id = 4) const float MaxHeight = 1.f;
-layout (constant_id = 5) const uint Seed = 0;
+layout (constant_id = 5) const uint Rings = 0;
+layout (constant_id = 6) const uint Seed = 0;
 
 layout(push_constant) uniform constants
 {
@@ -18,7 +19,8 @@ layout(location = 0) in vec3 vertPosition;
 
 layout(location = 0) out vec4 WorldPosition;
 layout(location = 1) out vec3 Normal;
-layout(location = 2) out float Height;
+layout(location = 2) out vec2 UV;
+layout(location = 3) out float Height;
 
 float RoundToIncrement(float value, float increment)
 {
@@ -49,9 +51,10 @@ void main()
     Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
     Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
 
-    dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(vertPosition.y) * 0.5f);
-
+    dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(vertPosition.y));
     vec3 ObjectPosition = vec3(Orientation * vec3(vertPosition.x, 0.0, vertPosition.z) + Center);
+
+    UV = 0.1f * vertPosition.zx / float(exp2(Rings));
 
     Normal = vec3(normalize(ObjectPosition));
 
@@ -59,11 +62,15 @@ void main()
     {
         NOISE_SEED = Seed;
 
-        float perlin1 = perlin(Normal.xz, 400.0 * 1.0);
-        float perlin2 = perlin(Normal.xy, 400.0 * 1.0);
-        float perlin3 = perlin(Normal.yz, 400.0 * 1.0);
+        float perlin1 = perlin(Normal.xz, 100.0 * 1.0);
+        float perlin2 = perlin(Normal.yx, 100.0 * 1.0);
+        float perlin3 = perlin(Normal.yz, 100.0 * 1.0);
 
-        Height = saturate((perlin1 + perlin2 + perlin3) / 3.0);
+        float perlin4 = perlin(Normal.xz, 300.0 * 1.0);
+        float perlin5 = perlin(Normal.xz, 300.0 * 1.0);
+        float perlin6 = perlin(Normal.xz, 300.0 * 1.0);
+
+        Height = 0.25 * saturate(perlin1 * perlin2 * perlin3) + 0.75 * saturate(perlin4 * perlin5 * perlin6);
         
         WorldPosition = vec4(Normal * (MinHeight + Rg + Height * (MaxHeight - MinHeight)), 1.0);
     }
@@ -73,4 +80,5 @@ void main()
     }
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
+    WorldPosition -= ubo.CameraPosition;
 }

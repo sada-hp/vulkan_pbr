@@ -1,3 +1,6 @@
+#ifndef _CONSTANTS_SHADER
+#define _CONSTANTS_SHADER
+
 layout (constant_id = 0) const float Rg = 6360.0 * 1e3;
 layout (constant_id = 1) const float Rt = 6420.0 * 1e3;
 
@@ -31,3 +34,5 @@ const int DIM_MU = 128;
 const int DIM_MU_S = 32;
 const int DIM_R = 32;
 const int DIM_NU = 8;
+
+#endif

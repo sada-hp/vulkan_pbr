@@ -1,6 +1,9 @@
 #include "common.glsl"
 #include "constants.glsl"
 
+#ifndef _LIGHTING_SHADER
+#define _LIGHTING_SHADER
+
 struct SAtmosphere
 {
     vec3 L;
@@ -321,3 +324,5 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
 
     Atmosphere.S = resultHGD * MaxLightIntensity;
 }
+
+#endif

@@ -1,6 +1,5 @@
 #version 460
 #include "ubo.glsl"
-#include "lighting.glsl"
 
 layout(push_constant) uniform constants
 {

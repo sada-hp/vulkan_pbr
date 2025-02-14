@@ -13,6 +13,7 @@ namespace GR
 		Registry.emplace<Components::WorldMatrix>(ent);
 		Registry.emplace<Components::DisplacementScale>(ent);
 		Registry.emplace<Components::RoughnessMultiplier>(ent);
+		Registry.emplace<Components::EntityType>(ent, Enums::EEntity::Terrain);
 
 		return static_cast<const ::VulkanBase*>(&m_Scope)->_constructShape(ent, Registry, Descriptor);
 	}
@@ -25,6 +26,7 @@ namespace GR
 		Registry.emplace<Components::WorldMatrix>(ent);
 		Registry.emplace<Components::DisplacementScale>(ent);
 		Registry.emplace<Components::RoughnessMultiplier>(ent);
+		Registry.emplace<Components::EntityType>(ent, Enums::EEntity::Shape);
 
 		return static_cast<const ::VulkanBase*>(&m_Scope)->_constructShape(ent, Registry, Descriptor);
 	}

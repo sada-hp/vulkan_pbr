@@ -2,6 +2,7 @@
 #include "ubo.glsl"
 #include "lighting.glsl"
 #include "brdf.glsl"
+#include "hextiling.glsl"
 
 layout(push_constant) uniform constants
 {
@@ -18,7 +19,8 @@ layout(set = 1, binding = 3) uniform sampler2D ARMMap;
 
 layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec3 Normal;
-layout(location = 2) in float Height;
+layout(location = 2) in vec2 UV;
+layout(location = 3) in float Height;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
@@ -39,43 +41,20 @@ void main()
 
     // material descriptor
     SMaterial Material;
-    Material.Roughness = max(PushConstants.RoughnessMultiplier * ARM.g, 0.01);
-    Material.Metallic = (PushConstants.Metallic == 0.0 ? ARM.b : PushConstants.Metallic);
-    Material.AO = ARM.r;
-    //Material.Albedo = texture(AlbedoMap, UV);
-    //Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
 
-#if 0
-    float Slope = abs(dot(N, normalize(WorldPosition.xyz)));
-
-    vec4 c1 = vec4(0.0, 1.0, 0.0, 1.0);
-    vec4 c2 = vec4(1.0, 0.0, 0.0, 1.0);
-    vec4 c3 = vec4(0.0, 0.0, 1.0, 1.0);
-
-    if (Height == 0.0)
-    {
-        Material.Albedo = c3;
-    }
-    else if (Slope > 0.95)
-    {
-        Material.Albedo = c1;
-    }
-    //else if (Slope > 0.95)
-    //{
-    //    Material.Albedo = c3;
-    //}
-    else
-    {
-        Material.Albedo = mix(c1, c2, saturate(10.0 * (1.0 - saturate(Slope / 0.95))));
-    }
-
+#if 1
+    vec3 W;
+    hex2colTex(AlbedoMap, ARMMap, (WorldPosition.xz + ubo.CameraPosition.xz) * 1e-4, Material, W);
+    // Material.Albedo.rgb = W;
 #else
-    Material.Albedo = PushConstants.ColorMask.rgba;
+    Material.Albedo = texture(AlbedoMap, (WorldPosition.xz + ubo.CameraPosition.xz) * 1e-4);
 #endif
+    Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
+    
+    Material.AO = 1.0;
+    Material.Roughness = 1.0;
 
-    Material.Albedo.rgb = pow(Material.Albedo.rgb, vec3(2.2));
-
-    outColor = Material.Albedo;
+    outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(N * 0.5 + 0.5, 0.0);
-    outDeferred = vec4(vec3(Material.Roughness, Material.Metallic, Material.AO), 1.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
 }

@@ -69,7 +69,7 @@ void main()
     Material.Metallic = (PushConstants.Metallic == 0.0 ? ARM.b : PushConstants.Metallic);
     Material.AO = ARM.r;
     Material.Albedo = texture(AlbedoMap, UV);
-    Material.Albedo.rgb = pow(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(2.2));
+    Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
 
     const float eps = 1e-4 * PushConstants.HeightScale;
     if (UV.x <= 0.0 || UV.x >= 1.0 || UV.y <= 0.0 || UV.y >= 1.0)
@@ -77,5 +77,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, PushConstants.ColorMask.a * Material.Albedo.a);
     outNormal = vec4(N * 0.5 + 0.5, 0.0);
-    outDeferred = vec4(vec3(Material.Roughness, Material.Metallic, Material.AO), 1.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
 }

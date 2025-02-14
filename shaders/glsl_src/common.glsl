@@ -1,3 +1,6 @@
+#ifndef _COMMON_SHADER
+#define _COMMON_SHADER
+
 #define PI 3.14159265359
 #define ONE_OVER_PI 1.0 / PI
 #define ONE_OVER_2PI 1.0 / (2.0 * PI)
@@ -9,6 +12,16 @@ float remap(float orig, float old_min, float old_max, float new_min, float new_m
 }
 
 float saturate(float x)
+{
+    return clamp(x, 0.0, 1.0);
+}
+
+vec2 saturate(vec2 x)
+{
+    return clamp(x, 0.0, 1.0);
+}
+
+vec3 saturate(vec3 x)
 {
     return clamp(x, 0.0, 1.0);
 }
@@ -76,3 +89,5 @@ vec2 SpehereUV(vec3 normal)
 {
     return vec2(0.5 + atan(normal.z, normal.x) * ONE_OVER_2PI, 1.0 - (0.5 + asin(normal.y) * ONE_OVER_PI));
 }
+
+#endif

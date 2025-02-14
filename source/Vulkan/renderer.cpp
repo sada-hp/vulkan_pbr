@@ -1115,7 +1115,12 @@ void VulkanBase::_updateObject(entt::entity ent, entt::registry& registry) const
 
 	PBRObject& gro = registry.get<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*albedo->View, *nh->View, *arm->View);
-	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
+
+	//if (registry.get<GR::Components::EntityType>(ent).Get() == GR::Enums::EEntity::Terrain)
+	//	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet);
+	//else
+	//	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
+
 	gro.dirty = false;
 }
 
@@ -1203,13 +1208,14 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
-		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()), static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(5, shape.m_Rings, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(6, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
 		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }

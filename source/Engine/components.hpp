@@ -2,6 +2,7 @@
 #include "core.hpp"
 #include "glm/glm.hpp"
 #include "glm/common.hpp"
+#include "Engine/enums.hpp"
 #include "Engine/structs.hpp"
 #include "glm/gtx/quaternion.hpp"
 /*
@@ -119,6 +120,20 @@ namespace GR
 		public:
 			glm::vec3 Value = glm::vec3(1.0);
 		private:
+		};
+
+		struct EntityType
+		{
+			EntityType(Enums::EEntity Type)
+				: m_type(Type)
+			{
+
+			}
+
+			Enums::EEntity Get() const { return m_type; }
+
+		protected:
+			Enums::EEntity m_type;
 		};
 		/*
 		* !@brief Projection matrix

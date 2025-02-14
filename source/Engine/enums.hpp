@@ -114,5 +114,11 @@ namespace GR
 			RGBA_UNORM,
 			RGBA_FLOAT
 		};
+
+		enum class EEntity
+		{
+			Shape,
+			Terrain
+		};
 	};
 };

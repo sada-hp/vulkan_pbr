@@ -35,19 +35,18 @@ vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material, in SAtmospher
     float HdotV = saturate(dot(H, V));
 
     vec3 F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
-    vec3 F = FresnelSchlick(HdotV, F0);
-    float G = GeometrySmith(NdotV, NdotL, Material.Roughness);
-    float D = DistributionGGX(NdotH, Material.Roughness);
+    vec3  F = F_FresnelSchlick(HdotV, F0);
+    float G = G_GeometrySmith(NdotV, NdotL, Material.Roughness);
+    float D = D_DistributionGGX(NdotH, Material.Roughness);
 
     vec3 Sunl = Atmosphere.L * MaxLightIntensity;
 
-    vec3 kD = vec3(1.0 - Material.Metallic);
-    vec3 specular = vec3(max((D * G * F) / (4.0 * NdotV * NdotL), 0.001));
-    vec3 diffuse = kD * GetDiffuseTerm(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
-    //vec3 diffuse = kD * Material.Albedo.rgb;
+    vec3 kD = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
+    vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
+    vec3 diffuse = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
 
-    return Sunl * (ambient + ((specular + diffuse) / PI) * NdotV * NdotL); //  + Atmosphere.S
+    return Sunl * (ambient + ((specular + diffuse)) * NdotL); // + Atmosphere.S
 }
 
 vec3 GetWorldPosition(float Depth)
@@ -76,13 +75,14 @@ void main()
 
         float t = distance(Eye, WorldPosition);
         SAtmosphere Atmosphere;
-        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, Eye, t, -V, L, Atmosphere);
+        AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, WorldPosition.xyz, t, V, L, Atmosphere);
 
         SMaterial Material;
-        Material.Roughness = Deferred.r;
-        Material.Metallic = Deferred.g;
-        Material.AO = Deferred.b;
-        Material.Albedo = Color;
+        Material.Roughness = Deferred.g;
+        Material.Metallic = Deferred.b;
+        Material.AO = Deferred.r;
+        Material.Albedo.rgb = pow(Color.rgb, vec3(2.2));
+        Material.Albedo.a = Color.a;
         Color.rgb = DirectSunlight(V, L, Normal, Material, Atmosphere);
 
         // temp hack
