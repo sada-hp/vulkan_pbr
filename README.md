@@ -11,5 +11,6 @@ Feature list:
 
 Features in work:
 - Geoclipmap terrain
+- Hydraulic Erosion
 - SSAO
 - Shadow mapping
