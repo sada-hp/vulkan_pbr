@@ -5,7 +5,7 @@
 
 extern std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, int c, const VkFormat& format, const VkImageCreateFlags& flags);
 
-std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<uint32_t> constants)
+std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<std::any> constants)
 {
 	std::vector<uint32_t> queueFamilies = FindDeviceQueues(Scope.GetPhysicalDevice(), {VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT});
 	std::sort(queueFamilies.begin(), queueFamilies.end());

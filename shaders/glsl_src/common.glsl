@@ -90,4 +90,24 @@ vec2 SpehereUV(vec3 normal)
     return vec2(0.5 + atan(normal.z, normal.x) * ONE_OVER_2PI, 1.0 - (0.5 + asin(normal.y) * ONE_OVER_PI));
 }
 
+float RoundToIncrement(float value, float increment)
+{
+    return round(value * (1.0 / increment)) * increment;
+}
+
+vec2 RoundToIncrement(vec2 value, float increment)
+{
+    return round(value * (1.0 / increment)) * increment;
+}
+
+vec3 RoundToIncrement(vec3 value, float increment)
+{
+    return round(value * (1.0 / increment)) * increment;
+}
+
+dvec3 RoundToIncrement(dvec3 value, float increment)
+{
+    return round(value * (1.0 / increment)) * increment;
+}
+
 #endif

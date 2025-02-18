@@ -4,6 +4,7 @@ struct SMaterial
     float Roughness;
     float Metallic;
     float AO;
+    float Specular;
 };
 
 vec3 F_FresnelSchlick(float Mu, vec3 f0)

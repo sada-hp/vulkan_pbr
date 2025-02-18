@@ -16,7 +16,7 @@
 #pragma region Utils
 std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, int c, const VkFormat& format, const VkImageCreateFlags& flags)
 {
-	assert(pixels != nullptr && count > 0 && w > 0 && h > 0 && c > 0);
+	assert(count > 0 && w > 0 && h > 0 && c > 0);
 
 	int resolution = w * h * c;
 	uint32_t familyIndex = Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex();
@@ -34,7 +34,9 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	
 	Buffer stagingBuffer(Scope, sbInfo, sbAlloc);
-	stagingBuffer.Update(pixels);
+
+	if (pixels)
+		stagingBuffer.Update(pixels);
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(w, h)))) + 1;
 	VkImageSubresourceRange subRes{};
@@ -74,18 +76,21 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	target->CreateImage(imageCI, skyAlloc);
 
 	VkCommandBuffer cmd;
-	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
-		.AllocateCommandBuffers(1, &cmd);
+	if (pixels)
+	{
+		Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
+			.AllocateCommandBuffers(1, &cmd);
 
-	BeginOneTimeSubmitCmd(cmd);
-	target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_TRANSFER_BIT);
-	CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, imageCI.extent);
-	EndCommandBuffer(cmd);
+		BeginOneTimeSubmitCmd(cmd);
+		target->TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_TRANSFER_BIT);
+		CopyBufferToImage(cmd, target->GetImage(), stagingBuffer.GetBuffer(), subRes, imageCI.extent);
+		EndCommandBuffer(cmd);
 
-	Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
-		.Submit(cmd)
-		.Wait()
-		.FreeCommandBuffers(1, &cmd);
+		Scope.GetQueue(VK_QUEUE_TRANSFER_BIT)
+			.Submit(cmd)
+			.Wait()
+			.FreeCommandBuffers(1, &cmd);
+	}
 
 	Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.AllocateCommandBuffers(1, &cmd);
@@ -221,6 +226,10 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
+	m_TerrainCompute.reset();
+	m_TerrainSet.reset();
+	m_TerrainLUT.reset();
+
 	m_Volumetrics.reset();
 	m_UBOBuffers.resize(0);
 
@@ -321,6 +330,9 @@ bool VulkanBase::BeginFrame()
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
 		return false;
 
+	// m_TerrainLUT.Image = GRNoise::GenerateTerrainNoise(m_Scope, { 1024, 1204, 1 }, m_Camera.Transform.GetOffset(), 1000.f * glm::exp2(8));
+	// m_TerrainLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT.Image);
+
 	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex]);
 
@@ -328,7 +340,7 @@ bool VulkanBase::BeginFrame()
 
 	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], VK_NULL_HANDLE, &m_SwapchainIndex);
 
-	const VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -372,7 +384,7 @@ bool VulkanBase::BeginFrame()
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
-	// Prepare resources
+	// Prepare render targets
 	{
 		std::array<VkImageMemoryBarrier, 4> barriers = {};
 		barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -435,6 +447,19 @@ bool VulkanBase::BeginFrame()
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 2, &barriers[2]);
 	}
 
+	// Start async compute to update terrain height
+	if (m_TerrainCompute.get())
+	{
+		m_TerrainLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_TerrainCompute);
+		m_TerrainSet->BindSet(1, cmd, *m_TerrainCompute);
+		m_TerrainCompute->BindPipeline(cmd);
+		vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 32 + 1, m_TerrainLUT.Image->GetExtent().height / 32 + 1, 1);
+
+		m_TerrainLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+	}
+
 	// Draw Low Resolution Background
 	{
 		VkClearValue clearValues[2];
@@ -482,8 +507,8 @@ bool VulkanBase::BeginFrame()
 #endif
 
 		std::array<VkClearValue, 4> clearValues;
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 		clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 		clearValues[3].depthStencil = { 0.0f, 0 };
 
@@ -1060,10 +1085,14 @@ std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::string& path, V
 
 entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const
 {
+
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
-	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
-	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet, shape);
 	gro.mesh = shape.Generate(m_Scope);
+
+	const_cast<VulkanBase*>(this)->terrain_init(*gro.mesh->GetVertexBuffer(), shape.m_Scale, shape.m_NoiseSeed);
+
+	gro.descriptorSet = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet, shape);
 
 	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
 	registry.emplace_or_replace<GR::Components::NormalDisplacementMap>(ent, m_DefaultNormal, &gro.dirty);
@@ -1115,12 +1144,17 @@ void VulkanBase::_updateObject(entt::entity ent, entt::registry& registry) const
 
 	PBRObject& gro = registry.get<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*albedo->View, *nh->View, *arm->View);
+	gro.dirty = false;
+}
 
-	//if (registry.get<GR::Components::EntityType>(ent).Get() == GR::Enums::EEntity::Terrain)
-	//	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet);
-	//else
-	//	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
+void VulkanBase::_updateTerrain(entt::entity ent, entt::registry& registry) const
+{
+	VulkanTexture* albedo = static_cast<VulkanTexture*>(registry.get<GR::Components::AlbedoMap>(ent).Get().get());
+	VulkanTexture* nh = static_cast<VulkanTexture*>(registry.get<GR::Components::NormalDisplacementMap>(ent).Get().get());
+	VulkanTexture* arm = static_cast<VulkanTexture*>(registry.get<GR::Components::AORoughnessMetallicMap>(ent).Get().get());
 
+	PBRObject& gro = registry.get<PBRObject>(ent);
+	gro.descriptorSet = create_terrain_set(*albedo->View, *nh->View, *arm->View);
 	gro.dirty = false;
 }
 
@@ -1128,7 +1162,7 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImageView&
 	, const VulkanImageView& nh
 	, const VulkanImageView& arm) const
 {
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
+	const VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
 
 	return DescriptorSetDescriptor()
 		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
@@ -1167,12 +1201,25 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_pbr_pipeline(const Descript
 		.SetShaderStage("default_vert", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("default_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(set.GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
-		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()),  static_cast<uint32_t>(PBRConstants::FragmentSize()) })
+		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()), static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.Construct(m_Scope);
+}
+
+std::unique_ptr<DescriptorSet> VulkanBase::create_terrain_set(const VulkanImageView& albedo
+	, const VulkanImageView& nh
+	, const VulkanImageView& arm) const
+{
+	const VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
+
+	return DescriptorSetDescriptor()
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
+		.AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
+		.Allocate(m_Scope);
 }
 
 std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const
@@ -1576,6 +1623,51 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.SetRenderPass(m_Scope.GetLowResRenderPass(), 0)
+		.Construct(m_Scope);
+
+	return 1;
+}
+
+VkBool32 VulkanBase::terrain_init(const Buffer& VB, float radius, uint32_t seed)
+{
+	std::vector<uint32_t> queueFamilies = FindDeviceQueues(m_Scope.GetPhysicalDevice(), { VK_QUEUE_GRAPHICS_BIT });
+	const uint32_t VertexCount = VB.GetDescriptor().range / sizeof(TerrainVertex);
+	const uint32_t LUTExtent = static_cast<uint32_t>(glm::ceil(glm::sqrt(float(VertexCount))));
+
+	VkImageCreateInfo noiseInfo{};
+	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	noiseInfo.arrayLayers = 1u;
+	noiseInfo.extent = { LUTExtent, LUTExtent, 1 };
+	noiseInfo.format = VK_FORMAT_R32_SFLOAT;
+	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+	noiseInfo.mipLevels = 1u;
+	noiseInfo.flags = 0u;
+	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	noiseInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	noiseInfo.queueFamilyIndexCount = queueFamilies.size();
+	noiseInfo.pQueueFamilyIndices = queueFamilies.data();
+	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	noiseInfo.imageType = VK_IMAGE_TYPE_2D;
+
+	VmaAllocationCreateInfo noiseAllocCreateInfo{};
+	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+	m_TerrainLUT.Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
+	m_TerrainLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT.Image);
+
+	m_TerrainSet = DescriptorSetDescriptor()
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT.View->GetImageView())
+		.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
+		.Allocate(m_Scope);
+
+	m_TerrainCompute = ComputePipelineDescriptor()
+		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+		.AddDescriptorLayout(m_TerrainSet->GetLayout())
+		.AddSpecializationConstant(0, VertexCount)
+		.AddSpecializationConstant(1, radius)
+		.AddSpecializationConstant(2, seed)
+		.SetShaderName("terrain_noise_comp")
 		.Construct(m_Scope);
 
 	return 1;

@@ -7,15 +7,19 @@ namespace GR
 {
 	Entity World::AddShape(const Shapes::GeoClipmap& Descriptor)
 	{
-		Entity ent = Registry.create();
-		Registry.emplace<Components::RGBColor>(ent);
-		Registry.emplace<Components::MetallicOverride>(ent);
-		Registry.emplace<Components::WorldMatrix>(ent);
-		Registry.emplace<Components::DisplacementScale>(ent);
-		Registry.emplace<Components::RoughnessMultiplier>(ent);
-		Registry.emplace<Components::EntityType>(ent, Enums::EEntity::Terrain);
+		if (m_TerrainEntity != entt::entity(-1))
+		{
+			Registry.destroy(m_TerrainEntity);
+		}
 
-		return static_cast<const ::VulkanBase*>(&m_Scope)->_constructShape(ent, Registry, Descriptor);
+		m_TerrainEntity = Registry.create();
+		Registry.emplace<Components::RGBColor>(m_TerrainEntity);
+		Registry.emplace<Components::MetallicOverride>(m_TerrainEntity);
+		Registry.emplace<Components::DisplacementScale>(m_TerrainEntity);
+		Registry.emplace<Components::RoughnessMultiplier>(m_TerrainEntity);
+		Registry.emplace<Components::EntityType>(m_TerrainEntity, Enums::EEntity::Terrain);
+
+		return static_cast<VulkanBase*>(m_Scope)->_constructShape(m_TerrainEntity, Registry, Descriptor);
 	}
 
 	Entity World::AddShape(const Shapes::Shape& Descriptor)
@@ -28,7 +32,7 @@ namespace GR
 		Registry.emplace<Components::RoughnessMultiplier>(ent);
 		Registry.emplace<Components::EntityType>(ent, Enums::EEntity::Shape);
 
-		return static_cast<const ::VulkanBase*>(&m_Scope)->_constructShape(ent, Registry, Descriptor);
+		return static_cast<VulkanBase*>(m_Scope)->_constructShape(ent, Registry, Descriptor);
 	}
 
 	void World::BindTexture(Components::Resource<Texture>& Resource, const std::string& path)
@@ -47,12 +51,30 @@ namespace GR
 			format = VK_FORMAT_R8G8B8A8_SRGB;
 		}
 
-		Resource.Set(static_cast<const ::VulkanBase*>(&m_Scope)->_loadImage(path, format));
+		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage(path, format));
 	}
 
 	void World::DrawScene(double Delta)
 	{
-		auto renderer = static_cast<const ::VulkanBase*>(&m_Scope);
+		auto renderer = static_cast<VulkanBase*>(m_Scope);
+
+		if (m_TerrainEntity != entt::entity(-1))
+		{
+			PBRConstants constants{};
+			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(m_TerrainEntity).Value, 1.0);
+			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(m_TerrainEntity).Value;
+			constants.Metallic = Registry.get<Components::MetallicOverride>(m_TerrainEntity).Value;
+			constants.HeightScale = Registry.get<Components::DisplacementScale>(m_TerrainEntity).Value;
+
+			PBRObject& tro = Registry.get<PBRObject>(m_TerrainEntity);
+			if (tro.is_dirty())
+			{
+				renderer->_updateTerrain(m_TerrainEntity, Registry);
+			}
+
+			renderer->_drawObject(tro, constants);
+		}
+
 		auto view = Registry.view<PBRObject, Components::WorldMatrix>();
 		for (const auto& [ent, gro, world] : view.each())
 		{
@@ -75,7 +97,7 @@ namespace GR
 
 	void World::Clear()
 	{
-		static_cast<const ::VulkanBase*>(&m_Scope)->Wait();
+		static_cast<VulkanBase*>(m_Scope)->Wait();
 		Registry.clear();
 	}
 };

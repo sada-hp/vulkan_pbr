@@ -21,6 +21,7 @@ layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec3 Normal;
 layout(location = 2) in vec2 UV;
 layout(location = 3) in float Height;
+layout(location = 4) in flat int Level;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
@@ -28,8 +29,8 @@ layout(location = 2) out vec4 outDeferred;
 
 void main()
 {
-    vec3 dX = dFdxFine(WorldPosition.xyz);
-    vec3 dY = dFdyFine(WorldPosition.xyz);
+    vec3 dX = dFdx(WorldPosition.xyz);
+    vec3 dY = dFdx(WorldPosition.xyz);
 
     // reading the normal map
     vec3 N = normalize(cross(dY.xyz, dX.xyz));
@@ -44,10 +45,34 @@ void main()
 
 #if 1
     vec3 W;
-    hex2colTex(AlbedoMap, ARMMap, (WorldPosition.xz + ubo.CameraPosition.xz) * 1e-4, Material, W);
+    hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
     // Material.Albedo.rgb = W;
 #else
-    Material.Albedo = texture(AlbedoMap, (WorldPosition.xz + ubo.CameraPosition.xz) * 1e-4);
+    // Material.Albedo = texture(NoiseMap, UV);
+    switch (Level)
+    {
+        case 0:
+        Material.Albedo = vec4(1.0);
+        break;
+        case 1:
+        Material.Albedo = vec4(1.0, 0.0, 0.0, 1.0);
+        break;
+        case 2:
+        Material.Albedo = vec4(0.0, 1.0, 0.0, 1.0);
+        break;
+        case 3:
+        Material.Albedo = vec4(0.0, 0.0, 1.0, 1.0);
+        break;
+        case 4:
+        Material.Albedo = vec4(0.0, 1.0, 1.0, 1.0);
+        break;
+        case 5:
+        Material.Albedo = vec4(1.0, 0.0, 1.0, 1.0);
+        break;
+        case 6:
+        Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
+        break;
+    }
 #endif
     Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
     
@@ -56,5 +81,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(N * 0.5 + 0.5, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
 }

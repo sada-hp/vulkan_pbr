@@ -22,10 +22,10 @@ namespace GR
 	private:
 		friend class Window;
 
-		std::vector<void(*)(Events::KeyPress, void*)> m_KeyPressEvents;
-		std::vector<void(*)(Events::MousePress, void*)> m_MousePressEvents;
-		std::vector<void(*)(Events::MousePosition, void*)> m_MouseMoveEvents;
-		std::vector<void(*)(Events::ScrollDelta, void*)> m_ScrollEvents;
+		std::vector<void(*)(Events::KeyPress, void*)> m_KeyPressEvents = {};
+		std::vector<void(*)(Events::MousePress, void*)> m_MousePressEvents = {};
+		std::vector<void(*)(Events::MousePosition, void*)> m_MouseMoveEvents = {};
+		std::vector<void(*)(Events::ScrollDelta, void*)> m_ScrollEvents = {};
 
 		void* m_UserPointer = nullptr;
 

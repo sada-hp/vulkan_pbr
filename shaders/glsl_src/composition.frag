@@ -35,7 +35,7 @@ vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material, in SAtmospher
     float HdotV = saturate(dot(H, V));
 
     vec3 F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
-    vec3  F = F_FresnelSchlick(HdotV, F0);
+    vec3  F = Material.Specular * F_FresnelSchlick(HdotV, F0);
     float G = G_GeometrySmith(NdotV, NdotL, Material.Roughness);
     float D = D_DistributionGGX(NdotH, Material.Roughness);
 
@@ -66,7 +66,7 @@ void main()
     vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
     vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
  
-    if (Deferred.a != 0.0)
+    if (Color.a != 0.0)
     {
         vec3 Eye = ubo.CameraPosition.xyz;
         vec3 L = normalize(ubo.SunDirection.xyz);
@@ -83,6 +83,7 @@ void main()
         Material.AO = Deferred.r;
         Material.Albedo.rgb = pow(Color.rgb, vec3(2.2));
         Material.Albedo.a = Color.a;
+        Material.Specular = Deferred.a;
         Color.rgb = DirectSunlight(V, L, Normal, Material, Atmosphere);
 
         // temp hack

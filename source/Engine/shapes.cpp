@@ -326,7 +326,7 @@ namespace GR
 		indices.reserve(m * m * 24u * m_Rings);
 		vertices.reserve(m * m * 9u * m_Rings);
 
-		float MaxRadius = float((1u << (m_Rings - 1u)) * (m / 2 + 1));
+		float Diameter = 2.0 * m_Scale * float(1u << m_Rings);
 		for (uint32_t level = 0u; level < m_Rings; ++level)
 		{
 			int32_t step = (1u << level);
@@ -337,12 +337,12 @@ namespace GR
 			int32_t radius = step * (g + padding);
 
 			float L = float(level);
-			for (int32_t z = -radius - half_step; z <= radius + half_step; z += step)
+			for (int32_t z = -radius; z < radius; z += step)
 			{
 				uint32_t A = 0u, B = 0u, C = 0u, D = 0u, E = 0u, F = 0u, G = 0u, H = 0u, I = 0u;
-				for (int32_t x = -radius - half_step; x <= radius + half_step; x += step)
+				for (int32_t x = -radius; x < radius; x += step)
 				{
-					if (glm::max(glm::abs(x + half_step), glm::abs(z + half_step)) >= g * prev_step)
+					if (level == 0 || glm::max(glm::abs(x + half_step), glm::abs(z + half_step)) > g * prev_step)
 					{
 						glm::vec3 Ap = glm::vec3(m_Scale * float(x), L, m_Scale * float(z));
 						glm::vec3 Cp = glm::vec3(m_Scale * float(x + step), L, m_Scale * float(z));
@@ -355,69 +355,98 @@ namespace GR
 						glm::vec3 Hp = (Gp + Ip) * 0.5f;
 						glm::vec3 Ep = (Ap + Ip) * 0.5f;
 
-						if (!uniquePositions.contains(Ap))
+#if 1
+						if (!uniquePositions.contains(Ap * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Ap);
-							uniquePositions[Ap] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Ap, 1.0 });
+							uniquePositions[Ap * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						A = uniquePositions[Ap];
+						A = uniquePositions[Ap * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Bp))
+						if (!uniquePositions.contains(Bp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Bp);
-							uniquePositions[Bp] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Bp, 1.0 });
+							uniquePositions[Bp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						B = uniquePositions[Bp];
+						B = uniquePositions[Bp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Cp))
+						if (!uniquePositions.contains(Cp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Cp);
-							uniquePositions[Cp] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Cp, 1.0 });
+							uniquePositions[Cp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						C = uniquePositions[Cp];
+						C = uniquePositions[Cp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Dp))
+						if (!uniquePositions.contains(Dp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Dp);
-							uniquePositions[Dp] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Dp, 1.0 });
+							uniquePositions[Dp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						D = uniquePositions[Dp];
+						D = uniquePositions[Dp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Ep))
+						if (!uniquePositions.contains(Ep * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Ep);
-							uniquePositions[Ep] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Ep, 1.0 });
+							uniquePositions[Ep * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						E = uniquePositions[Ep];
+						E = uniquePositions[Ep * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Fp))
+						if (!uniquePositions.contains(Fp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Fp);
-							uniquePositions[Fp] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Fp, 1.0 });
+							uniquePositions[Fp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						F = uniquePositions[Fp];
+						F = uniquePositions[Fp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Gp))
+						if (!uniquePositions.contains(Gp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Gp);
-							uniquePositions[Gp] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Gp, 1.0 });
+							uniquePositions[Gp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						G = uniquePositions[Gp];
+						G = uniquePositions[Gp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Hp))
+						if (!uniquePositions.contains(Hp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Hp);
+							vertices.emplace_back(glm::vec4{ Hp, 1.0 });
 							H = vertices.size() - 1;
-							uniquePositions[Hp] = vertices.size() - 1;
+							uniquePositions[Hp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						H = uniquePositions[Hp];
+						H = uniquePositions[Hp * glm::vec3(1, 0, 1)];
 
-						if (!uniquePositions.contains(Ip))
+						if (!uniquePositions.contains(Ip * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(Ip);
-							uniquePositions[Ip] = vertices.size() - 1;
+							vertices.emplace_back(glm::vec4{ Ip, 1.0 });
+							uniquePositions[Ip * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
-						I = uniquePositions[Ip];
+						I = uniquePositions[Ip * glm::vec3(1, 0, 1)];
+#else
+						vertices.emplace_back(Ap);
+						A = C > 0u ? C : vertices.size() - 1;
+
+						vertices.emplace_back(Bp);
+						B = vertices.size() - 1;
+
+						vertices.emplace_back(Cp);
+						C = vertices.size() - 1;
+
+						vertices.emplace_back(Dp);
+						D = F > 0u ? F : vertices.size() - 1;
+
+						vertices.emplace_back(Ep);
+						E = vertices.size() - 1;
+
+						vertices.emplace_back(Fp);
+						F = vertices.size() - 1;
+
+						vertices.emplace_back(Gp);
+						G = I > 0u ? I : vertices.size() - 1;
+
+						vertices.emplace_back(Hp);
+						H = vertices.size() - 1;
+
+						vertices.emplace_back(Ip);
+						I = vertices.size() - 1;
+#endif
 
 						if (x == -radius)
 						{

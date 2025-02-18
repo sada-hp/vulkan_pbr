@@ -91,7 +91,7 @@ struct TerrainVertex
 		return position == other.position;
 	}
 
-	glm::vec3 position;
+	glm::vec4 position;
 };
 
 template<>
@@ -112,7 +112,7 @@ struct std::hash<TerrainVertex>
 {
 	size_t operator()(TerrainVertex const& vertex) const
 	{
-		return ((std::hash<glm::vec3>()(vertex.position)) >> 1);
+		return ((std::hash<glm::vec4>()(vertex.position) >> 1));
 	}
 };
 

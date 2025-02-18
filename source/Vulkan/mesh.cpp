@@ -30,10 +30,16 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t 
 VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices)
 	: Scope(&InScope)
 {
+	std::vector<uint32_t> queueFamilies = FindDeviceQueues(InScope.GetPhysicalDevice(), { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT });
+	std::sort(queueFamilies.begin(), queueFamilies.end());
+	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
+
 	VkBufferCreateInfo sbInfo{};
 	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	sbInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.queueFamilyIndexCount = queueFamilies.size();
+	sbInfo.pQueueFamilyIndices = queueFamilies.data();
 	sbInfo.size = sizeof(TerrainVertex) * numVertices;
 
 	VmaAllocationCreateInfo sbAlloc{};

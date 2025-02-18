@@ -14,13 +14,14 @@ namespace GR
 	class World
 	{
 	protected:
-		const Renderer& m_Scope;
+		Renderer* m_Scope;
+		entt::entity m_TerrainEntity = entt::entity(-1);
 
 	public:
 		entt::registry Registry;
 		
-		World(const Renderer& Context) 
-			: m_Scope(Context) {};
+		World(Renderer& Context) 
+			: m_Scope(&Context) {};
 
 		virtual ~World() { Clear(); };
 

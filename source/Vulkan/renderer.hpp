@@ -131,8 +131,6 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
-
-
 	std::vector<VkFramebuffer> m_FramebuffersHR = {};
 	std::vector<VkFramebuffer> m_FramebuffersLR = {};
 	std::vector<VkFramebuffer> m_FramebuffersCP = {};
@@ -172,6 +170,10 @@ private:
 	VulkanTexture m_ScatteringLUT = {};
 	VulkanTexture m_IrradianceLUT = {};
 	VulkanTexture m_TransmittanceLUT = {};
+
+	VulkanTexture m_TerrainLUT = {};
+	std::unique_ptr<DescriptorSet> m_TerrainSet = {};
+	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
 
 	uint32_t m_SwapchainIndex = 0;
 
@@ -239,6 +241,10 @@ public:
 	* 
 	*/
 	void _updateObject(entt::entity ent, entt::registry& registry) const;
+	/*
+	*
+	*/
+	void _updateTerrain(entt::entity ent, entt::registry& registry) const;
 
 private:
 	VkBool32 create_instance();
@@ -257,9 +263,13 @@ private:
 
 	VkBool32 volumetric_precompute();
 
+	VkBool32 terrain_init(const Buffer& VB, float radius, uint32_t seed);
+
 	std::unique_ptr<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 	
 	std::unique_ptr<GraphicsPipeline> create_pbr_pipeline(const DescriptorSet& set) const;
+
+	std::unique_ptr<DescriptorSet> create_terrain_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 
 	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const;
 
