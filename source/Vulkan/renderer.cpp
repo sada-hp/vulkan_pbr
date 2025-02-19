@@ -455,7 +455,7 @@ bool VulkanBase::BeginFrame()
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_TerrainCompute);
 		m_TerrainSet->BindSet(1, cmd, *m_TerrainCompute);
 		m_TerrainCompute->BindPipeline(cmd);
-		vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 32 + 1, m_TerrainLUT.Image->GetExtent().height / 32 + 1, 1);
+		vkCmdDispatch(cmd, m_TerrainDispatches, 1, 1);
 
 		m_TerrainLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 	}
@@ -1089,7 +1089,7 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
 	gro.mesh = shape.Generate(m_Scope);
 
-	const_cast<VulkanBase*>(this)->terrain_init(*gro.mesh->GetVertexBuffer(), shape.m_Scale, shape.m_NoiseSeed);
+	const_cast<VulkanBase*>(this)->terrain_init(*gro.mesh->GetVertexBuffer(), shape);
 
 	gro.descriptorSet = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet, shape);
@@ -1201,6 +1201,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_pbr_pipeline(const Descript
 		.SetShaderStage("default_vert", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("default_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+		.AddDescriptorLayout(set.GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
 		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()), static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -1218,7 +1219,7 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_terrain_set(const VulkanImageV
 		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
 		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
 		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
-		.AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
 
@@ -1261,8 +1262,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(5, shape.m_Rings, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(6, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
 		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
@@ -1628,17 +1628,21 @@ VkBool32 VulkanBase::volumetric_precompute()
 	return 1;
 }
 
-VkBool32 VulkanBase::terrain_init(const Buffer& VB, float radius, uint32_t seed)
+VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap& shape)
 {
 	std::vector<uint32_t> queueFamilies = FindDeviceQueues(m_Scope.GetPhysicalDevice(), { VK_QUEUE_GRAPHICS_BIT });
 	const uint32_t VertexCount = VB.GetDescriptor().range / sizeof(TerrainVertex);
-	const uint32_t LUTExtent = static_cast<uint32_t>(glm::ceil(glm::sqrt(float(VertexCount))));
+
+	const uint32_t m = (glm::max(shape.m_VerPerRing, 7u) + 1) / 4;
+	const uint32_t LUTExtent = static_cast<uint32_t>(2 * (m + 2) + 1);
+
+	m_TerrainDispatches = VertexCount / 32 + static_cast<uint32_t>(VertexCount % 32 > 0);
 
 	VkImageCreateInfo noiseInfo{};
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	noiseInfo.arrayLayers = 1u;
+	noiseInfo.arrayLayers = shape.m_Rings;
 	noiseInfo.extent = { LUTExtent, LUTExtent, 1 };
-	noiseInfo.format = VK_FORMAT_R32_SFLOAT;
+	noiseInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	noiseInfo.mipLevels = 1u;
 	noiseInfo.flags = 0u;
@@ -1665,8 +1669,8 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, float radius, uint32_t seed)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_TerrainSet->GetLayout())
 		.AddSpecializationConstant(0, VertexCount)
-		.AddSpecializationConstant(1, radius)
-		.AddSpecializationConstant(2, seed)
+		.AddSpecializationConstant(1, shape.m_Scale)
+		.AddSpecializationConstant(2, shape.m_NoiseSeed)
 		.SetShaderName("terrain_noise_comp")
 		.Construct(m_Scope);
 

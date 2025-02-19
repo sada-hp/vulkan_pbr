@@ -317,7 +317,7 @@ namespace GR
 
 	std::unique_ptr<VulkanMesh> Shapes::GeoClipmap::Generate(const RenderScope& Scope) const
 	{
-		uint32_t m = (m_VerPerRing + 1) / 4;
+		const uint32_t m = (glm::max(m_VerPerRing, 7u) + 1) / 4;
 		std::vector<uint32_t> indices{};
 		std::vector<TerrainVertex> vertices{};
 
@@ -326,15 +326,18 @@ namespace GR
 		indices.reserve(m * m * 24u * m_Rings);
 		vertices.reserve(m * m * 9u * m_Rings);
 
-		float Diameter = 2.0 * m_Scale * float(1u << m_Rings);
+		const int32_t padding = 1u;
+		const int32_t g = m / 2;
+
+		float Diameter = m_Scale * (1 << m_Rings - 1) * (m + 2 * padding);
 		for (uint32_t level = 0u; level < m_Rings; ++level)
 		{
 			int32_t step = (1u << level);
 			int32_t prev_step = level > 0 ? (1u << (level - 1u)) : 0u;
 			int32_t half_step = prev_step;
-			int32_t g = m / 2;
-			int32_t padding = 1u;
 			int32_t radius = step * (g + padding);
+
+			float DiameterLevel = m_Scale * step * (m + 2 * padding);
 
 			float L = float(level);
 			for (int32_t z = -radius; z < radius; z += step)
@@ -355,59 +358,71 @@ namespace GR
 						glm::vec3 Hp = (Gp + Ip) * 0.5f;
 						glm::vec3 Ep = (Ap + Ip) * 0.5f;
 
+						const glm::vec4 UvNorm = glm::vec4(glm::vec2(DiameterLevel), glm::vec2(Diameter));
+
+						glm::vec4 Auv = glm::vec4(0.5) + glm::vec4(Ap.x, Ap.z, Ap.x, Ap.z) / UvNorm;
+						glm::vec4 Buv = glm::vec4(0.5) + glm::vec4(Bp.x, Bp.z, Bp.x, Bp.z) / UvNorm;
+						glm::vec4 Cuv = glm::vec4(0.5) + glm::vec4(Cp.x, Cp.z, Cp.x, Cp.z) / UvNorm;
+						glm::vec4 Duv = glm::vec4(0.5) + glm::vec4(Dp.x, Dp.z, Dp.x, Dp.z) / UvNorm;
+						glm::vec4 Euv = glm::vec4(0.5) + glm::vec4(Ep.x, Ep.z, Ep.x, Ep.z) / UvNorm;
+						glm::vec4 Fuv = glm::vec4(0.5) + glm::vec4(Fp.x, Fp.z, Fp.x, Fp.z) / UvNorm;
+						glm::vec4 Guv = glm::vec4(0.5) + glm::vec4(Gp.x, Gp.z, Gp.x, Gp.z) / UvNorm;
+						glm::vec4 Iuv = glm::vec4(0.5) + glm::vec4(Ip.x, Ip.z, Ip.x, Ip.z) / UvNorm;
+						glm::vec4 Huv = glm::vec4(0.5) + glm::vec4(Hp.x, Hp.z, Hp.x, Hp.z) / UvNorm;
+
 #if 1
 						if (!uniquePositions.contains(Ap * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ap, 1.0 });
+							vertices.emplace_back(glm::vec4{ Ap, 1.0 }, Auv);
 							uniquePositions[Ap * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						A = uniquePositions[Ap * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Bp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Bp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Bp, 1.0 }, Buv);
 							uniquePositions[Bp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						B = uniquePositions[Bp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Cp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Cp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Cp, 1.0 }, Cuv);
 							uniquePositions[Cp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						C = uniquePositions[Cp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Dp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Dp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Dp, 1.0 }, Duv);
 							uniquePositions[Dp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						D = uniquePositions[Dp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Ep * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ep, 1.0 });
+							vertices.emplace_back(glm::vec4{ Ep, 1.0 }, Euv);
 							uniquePositions[Ep * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						E = uniquePositions[Ep * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Fp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Fp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Fp, 1.0 }, Fuv);
 							uniquePositions[Fp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						F = uniquePositions[Fp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Gp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Gp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Gp, 1.0 }, Guv);
 							uniquePositions[Gp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						G = uniquePositions[Gp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Hp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Hp, 1.0 });
+							vertices.emplace_back(glm::vec4{ Hp, 1.0 }, Huv);
 							H = vertices.size() - 1;
 							uniquePositions[Hp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
@@ -415,7 +430,7 @@ namespace GR
 
 						if (!uniquePositions.contains(Ip * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ip, 1.0 });
+							vertices.emplace_back(glm::vec4{ Ip, 1.0 }, Iuv);
 							uniquePositions[Ip * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						I = uniquePositions[Ip * glm::vec3(1, 0, 1)];
@@ -448,7 +463,7 @@ namespace GR
 						I = vertices.size() - 1;
 #endif
 
-						if (x == -radius)
+						if (x == -radius && level + 1 < m_Rings)
 						{
 							indices.insert(indices.end(), { E, A, G });
 						}
@@ -457,7 +472,7 @@ namespace GR
 							indices.insert(indices.end(), { E, A, D, E, D, G });
 						}
 
-						if (x + step >= radius)
+						if (x + step >= radius && level + 1 < m_Rings)
 						{
 							indices.insert(indices.end(), { E, I, C });
 						}
@@ -466,7 +481,7 @@ namespace GR
 							indices.insert(indices.end(), { E, I, F, E, F, C });
 						}
 
-						if (z == -radius)
+						if (z == -radius && level + 1 < m_Rings)
 						{
 							indices.insert(indices.end(), { E, C, A });
 						}
@@ -475,7 +490,7 @@ namespace GR
 							indices.insert(indices.end(), { E, C, B, E, B, A });
 						}
 
-						if (z + step >= radius)
+						if (z + step >= radius && level + 1 < m_Rings)
 						{
 							indices.insert(indices.end(), { E, G, I });
 						}

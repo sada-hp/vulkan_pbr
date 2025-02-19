@@ -174,6 +174,7 @@ private:
 	VulkanTexture m_TerrainLUT = {};
 	std::unique_ptr<DescriptorSet> m_TerrainSet = {};
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
+	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_SwapchainIndex = 0;
 
@@ -263,7 +264,7 @@ private:
 
 	VkBool32 volumetric_precompute();
 
-	VkBool32 terrain_init(const Buffer& VB, float radius, uint32_t seed);
+	VkBool32 terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap& shape);
 
 	std::unique_ptr<DescriptorSet> create_pbr_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 	

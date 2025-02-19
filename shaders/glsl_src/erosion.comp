@@ -1,0 +1,18 @@
+#version 460
+#include "common.glsl"
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout (set = 0, binding = 0, rgba32f) uniform image2D target;
+
+layout(push_constant) uniform constants
+{
+    layout(offset = 0) vec4 position; // offset_x, offset_y, velocity_x, velocity_y
+    layout(offset = 12) vec4 parameters; // volume, sediment, acceleration, friction
+    layout(offset = 24) vec4 rates; // erosion rates: sediment, deposition, soil softness
+} Droplet;
+
+void main()
+{
+
+}

@@ -63,6 +63,8 @@ struct VulkanImage
 
 	const uint32_t GetMipLevelsCount() const { return subRange.levelCount; };
 
+	const uint32_t GetArrayLayers() const { return subRange.layerCount; };
+
 	const VkImageLayout GetImageLayout() const { return descriptorInfo.imageLayout; };
 
 private:

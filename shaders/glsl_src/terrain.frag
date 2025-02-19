@@ -16,6 +16,7 @@ PushConstants;
 layout(set = 1, binding = 1) uniform sampler2D AlbedoMap;
 layout(set = 1, binding = 2) uniform sampler2D NormalHeightMap;
 layout(set = 1, binding = 3) uniform sampler2D ARMMap;
+layout(set = 1, binding = 4) uniform sampler2D NoiseMap;
 
 layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec3 Normal;
@@ -29,11 +30,11 @@ layout(location = 2) out vec4 outDeferred;
 
 void main()
 {
-    vec3 dX = dFdx(WorldPosition.xyz);
-    vec3 dY = dFdx(WorldPosition.xyz);
+    vec3 dX = dFdxFine(WorldPosition).xyz;
+    vec3 dY = dFdxFine(WorldPosition).xyz;
 
     // reading the normal map
-    vec3 N = normalize(cross(dY.xyz, dX.xyz));
+    vec3 N = normalize(cross(dY, dX));
     // vec3 N = normalize(Normal);
     // vec3 N = vec3(0.0, 1.0, 0.0);
 
@@ -45,7 +46,7 @@ void main()
 
 #if 1
     vec3 W;
-    hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
+    hex2colTex(AlbedoMap, ARMMap, WorldPosition.xz * 1e-4, Material, W);
     // Material.Albedo.rgb = W;
 #else
     // Material.Albedo = texture(NoiseMap, UV);
@@ -73,13 +74,15 @@ void main()
         Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
         break;
     }
-#endif
-    Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
-    
+
     Material.AO = 1.0;
     Material.Roughness = 1.0;
+    Material.Metallic = 0.0;
+#endif
+    Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
+
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(N * 0.5 + 0.5, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
 }

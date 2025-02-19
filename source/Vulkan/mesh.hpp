@@ -76,22 +76,28 @@ struct TerrainVertex
 
 	static const std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions()
 	{
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(1);
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		attributeDescriptions[0].offset = offsetof(TerrainVertex, position);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(TerrainVertex, uv);
 
 		return attributeDescriptions;
 	}
 
 	bool operator==(const TerrainVertex& other) const
 	{
-		return position == other.position;
+		return position == other.position && uv == other.uv;
 	}
 
 	glm::vec4 position;
+	glm::vec4 uv;
 };
 
 template<>
@@ -112,7 +118,7 @@ struct std::hash<TerrainVertex>
 {
 	size_t operator()(TerrainVertex const& vertex) const
 	{
-		return ((std::hash<glm::vec4>()(vertex.position) >> 1));
+		return (((std::hash<glm::vec4>()(vertex.position) ^ (std::hash<glm::vec4>()(vertex.uv))) >> 1));
 	}
 };
 

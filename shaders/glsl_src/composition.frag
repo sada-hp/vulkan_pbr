@@ -46,7 +46,7 @@ vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material, in SAtmospher
     vec3 diffuse = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
 
-    return Sunl * (ambient + ((specular + diffuse)) * NdotL); // + Atmosphere.S
+    return Sunl * (ambient + ((specular + diffuse)) * NdotL) + Atmosphere.S; // + Atmosphere.S
 }
 
 vec3 GetWorldPosition(float Depth)
