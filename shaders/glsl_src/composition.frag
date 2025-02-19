@@ -8,12 +8,13 @@ layout(binding = 2) uniform sampler2D HDRNormals;
 layout(binding = 3) uniform sampler2D HDRDeferred;
 layout(binding = 4) uniform sampler2D SceneDepth;
 layout(binding = 5) uniform sampler2D SceneBackground;
+layout(binding = 6) uniform sampler2D BackgroundDepth;
 
-layout(binding = 6) uniform sampler2D TransmittanceLUT;
-layout(binding = 7) uniform sampler2D IrradianceLUT;
-layout(binding = 8) uniform sampler3D InscatteringLUT;
+layout(binding = 7) uniform sampler2D TransmittanceLUT;
+layout(binding = 8) uniform sampler2D IrradianceLUT;
+layout(binding = 9) uniform sampler3D InscatteringLUT;
 
-layout(binding = 9) uniform CloudLayer
+layout(binding = 10) uniform CloudLayer
 {
     float Coverage;
     float Absorption;
@@ -46,7 +47,7 @@ vec3 DirectSunlight(vec3 V, vec3 L, vec3 N, in SMaterial Material, in SAtmospher
     vec3 diffuse = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     vec3 ambient = Material.AO * vec3(0.01) * Material.Albedo.rgb;
 
-    return Sunl * (ambient + ((specular + diffuse)) * NdotL) + Atmosphere.S; // + Atmosphere.S
+    return Sunl * (ambient + ((specular + diffuse)) * NdotL); // + Atmosphere.S
 }
 
 vec3 GetWorldPosition(float Depth)
@@ -61,12 +62,13 @@ vec3 GetWorldPosition(float Depth)
 void main()
 {
     vec4 SkyColor = texture(SceneBackground, UV);
+    float SkyDepth = texture(BackgroundDepth, UV).r;
     vec4 Color = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
     float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
     vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
  
-    if (Color.a != 0.0)
+    if (Color.a != 0.0 && Depth > SkyDepth)
     {
         vec3 Eye = ubo.CameraPosition.xyz;
         vec3 L = normalize(ubo.SunDirection.xyz);
@@ -85,12 +87,6 @@ void main()
         Material.Albedo.a = Color.a;
         Material.Specular = Deferred.a;
         Color.rgb = DirectSunlight(V, L, Normal, Material, Atmosphere);
-
-        // temp hack
-        if (ubo.CameraRadius > Rcb)
-        {
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, SkyColor.a);
-        }
     }
     else
     {

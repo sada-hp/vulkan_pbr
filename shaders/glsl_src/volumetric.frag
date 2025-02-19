@@ -203,6 +203,14 @@ void MarchToCloud()
 
         if (sample_density > 0.0) 
         {
+            if (outScattering.a == 1.0)
+            {
+                vec4 clip = vec4(ubo.ViewProjectionMatrix * vec4(pos, 1.0));
+                clip.xyz /= clip.w;
+
+                gl_FragDepth = clip.z;
+            }
+
             float extinction = Clouds.Absorption * sample_density;
 
             float transmittance = BeerLambert(extinction, stepsize);
@@ -237,6 +245,8 @@ void MarchToCloud()
 
 void main()
 {
+    gl_FragDepth = 0.0;
+
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
     vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xy, -1.0, 0.0));
