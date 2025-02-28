@@ -30,7 +30,13 @@ namespace GR
 		void* m_UserPointer = nullptr;
 
 	public:
-		EventListener() = default;
+		EventListener()
+		{
+			m_KeyPressEvents.resize(0);
+			m_MousePressEvents.resize(0);
+			m_MouseMoveEvents.resize(0);
+			m_ScrollEvents.resize(0);
+		}
 
 		~EventListener() = default;
 

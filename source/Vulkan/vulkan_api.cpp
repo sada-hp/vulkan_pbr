@@ -260,7 +260,7 @@ VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const std::vector<
 	return VK_FALSE;
 }
 
-VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice)
+VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice, void* pNext)
 {
 	assert(physicalDevice != VK_NULL_HANDLE);
 
@@ -289,6 +289,7 @@ VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhy
 	createInfo.enabledExtensionCount = device_extensions.size();
 	createInfo.pQueueCreateInfos = queueInfos.data();
 	createInfo.queueCreateInfoCount = queueInfos.size();
+	createInfo.pNext = pNext;
 
 	return vkCreateDevice(physicalDevice, &createInfo, VK_NULL_HANDLE, outDevice) == VK_SUCCESS;
 }

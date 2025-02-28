@@ -114,7 +114,7 @@ VkBool32 EnumeratePhysicalDevices(const VkInstance& instance, const std::vector<
 *
 * @return VK_TRUE if device was created successfuly, VK_FALSE otherwise
 */
-VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice);
+VkBool32 CreateLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkPhysicalDeviceFeatures& device_features, const std::vector<const char*>& device_extensions, const std::vector<uint32_t>& queues, VkDevice* outDevice, void* pNext = nullptr);
 
 VkBool32 CreateRenderPass(const VkDevice& device, const VkRenderPassCreateInfo& info, VkRenderPass* outRenderPass);
 

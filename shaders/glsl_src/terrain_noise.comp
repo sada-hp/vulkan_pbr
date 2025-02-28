@@ -1,5 +1,6 @@
 #version 460
 #include "ubo.glsl"
+#include "constants.glsl"
 #include "common.glsl"
 #include "noise.glsl"
 
@@ -11,14 +12,16 @@ struct Vertex
     vec4 UV;
 };
 
-layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray outImage;
+layout (set = 1, binding = 0, r32f) uniform writeonly image2DArray outImage;
 layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
 	Vertex at[];
 } vertices;
 
-layout (constant_id = 0) const uint VertexCount = 0;
-layout (constant_id = 1) const float Scale = 0;
-layout (constant_id = 2) const uint Seed = 0;
+layout (constant_id = 2) const uint VertexCount = 0;
+layout (constant_id = 3) const float Scale = 0;
+layout (constant_id = 4) const float MinHeight = 0;
+layout (constant_id = 5) const float MaxHeight = 0;
+layout (constant_id = 6) const uint Seed = 0;
 
 void main()
 {
@@ -29,14 +32,17 @@ void main()
         Vertex vertex = vertices.at[gl_GlobalInvocationID.x];
 
         int Level = int(vertex.Position.y);
-
+#if 1
+        dmat3 Orientation = GetTerrainOrientation();
+        dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(vertex.Position.y));
+#else
         dmat3 Orientation;
         Orientation[0] = vec3(1.0, 0.0, 0.0);
-        Orientation[1] = normalize(ubo.CameraPositionFP64.xyz);
+        Orientation[1] = normalize(dvec3(0.0, Rg, 0.0));
         Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
         Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
-
-        dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(vertex.Position.y));
+        dvec3 Center = dvec3(0.0, Rg, 0.0);
+#endif
         vec3 ObjectPosition = vec3(Orientation * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center);
         vec3 Normal = vec3(normalize(ObjectPosition));
 
@@ -50,6 +56,6 @@ void main()
 
         float Height = 0.25 * saturate(perlin1 * perlin2 * perlin3) + 0.75 * saturate(perlin4 * perlin5 * perlin6);
 
-        imageStore(outImage, ivec3(round(vertex.UV.xy * (imageSize(outImage).xy - 1)), Level), vec4(Normal, Height));
+        imageStore(outImage, ivec3(round(vertex.UV.xy * (imageSize(outImage).xy - 1)), Level), vec4(MinHeight + Height * (MaxHeight - MinHeight)));
     }
 }

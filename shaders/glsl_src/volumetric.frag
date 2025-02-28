@@ -105,7 +105,6 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     float radius = 1.0;
     float transmittance = 1.0;
 
-    stepsize *= 3.f;
     for (int i = 0; i <= 6; i++)
     {
         pos = rs + float(i) * radius * light_kernel[i];
@@ -123,12 +122,13 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 
         if (sampled_density > 0.0)
         {
-            float transmittance_light = BeerLambert(sampled_density * Clouds.Absorption, stepsize);
+            float transmittance_light = BeerLambert(Clouds.Absorption * sampled_density * 0.35, stepsize);
             transmittance *= transmittance_light;
         }
         
         density += sampled_density;
         rs += stepsize * rd;
+        stepsize *= i > 4 ? 2.f : 1.f;
         radius += 1.f / 6.f;
     }
 
@@ -145,12 +145,12 @@ void FillScattering(float T)
     vec3 S = T * Atmosphere.S;
     S = S - S * outScattering.a;
 
-    vec3 L = T * Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz);
+    vec3 L = T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz);
 
     // Sky scattering
     t = SphereMinDistance(ubo.CameraPosition.xyz, fromCamera, vec3(0.0), Rt);
     AtmosphereAtPoint_2(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, t, fromCamera, ubo.SunDirection.xyz, Atmosphere);
-    S += (Atmosphere.S + GetSunColor(ubo.CameraPosition.xyz, fromCamera, ubo.SunDirection.xyz) * Atmosphere.L * MaxLightIntensity) * outScattering.a;
+    S += (Atmosphere.S + GetSunColor(ubo.CameraPosition.xyz, fromCamera, ubo.SunDirection.xyz) * Atmosphere.T * MaxLightIntensity) * outScattering.a;
     outScattering.rgb = L * outScattering.rgb + S;
 }
 
@@ -163,7 +163,7 @@ void MarchToCloud()
     int i = 0;
     vec3 pos = marchStart;
     float sample_density = 0.0;
-    float phase = HGDPhase(dot(ubo.SunDirection.xyz, fromCamera), 0.75, -0.35, 0.5, 0.65);
+    float phase = HGDPhase(dot(ubo.SunDirection.xyz, fromCamera), 0.75, -0.35, 0.35, 0.6);
     //float phase = DualLobeFunction(dot(ubo.SunDirection.xyz, marchDirection), MieG, -0.25, 0.45);
 
     float mean_depth = 0.0;

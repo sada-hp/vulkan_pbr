@@ -23,3 +23,14 @@ dmat4 GetWorldMatrix(mat3x4 Orientation, dvec3 Offset)
                  Orientation[2][0], Orientation[2][1], Orientation[2][2], 0.0,
                  Offset[0], Offset[1], Offset[2], 1.0);
 }
+
+dmat3 GetTerrainOrientation()
+{
+    dmat3 Orientation;
+    Orientation[0] = vec3(1.0, 0.0, 0.0);
+    Orientation[1] = normalize(ubo.CameraPositionFP64.xyz);
+    Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
+    Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
+
+    return Orientation;
+}

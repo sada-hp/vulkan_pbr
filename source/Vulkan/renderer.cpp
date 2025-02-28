@@ -111,6 +111,11 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 VulkanBase::VulkanBase(GLFWwindow* window)
 	: m_GlfwWindow(window)
 {
+	VkPhysicalDeviceShaderAtomicFloatFeaturesEXT featureFloats{};
+	featureFloats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	featureFloats.shaderImageFloat32AtomicAdd = VK_TRUE;
+	featureFloats.shaderImageFloat32Atomics = VK_TRUE;
+
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	std::vector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
@@ -133,7 +138,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = (glfwCreateWindowSurface(m_VkInstance, m_GlfwWindow, VK_NULL_HANDLE, &m_Surface) == VK_SUCCESS) & res;
 
 	m_Scope.CreatePhysicalDevice(m_VkInstance, m_ExtensionsList)
-		.CreateLogicalDevice(deviceFeatures, m_ExtensionsList, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT })
+		.CreateLogicalDevice(deviceFeatures, m_ExtensionsList, { VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT }, &featureFloats)
 		.CreateMemoryAllocator(m_VkInstance)
 		.CreateSwapchain(m_Surface)
 		.CreateDefaultRenderPass()
@@ -226,7 +231,9 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
+	m_ErosionPoints.reset();
 	m_TerrainCompute.reset();
+	m_ErosionCompute.reset();
 	m_TerrainSet.reset();
 	m_TerrainLUT.reset();
 
@@ -450,14 +457,59 @@ bool VulkanBase::BeginFrame()
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
-		m_TerrainLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+		barrier.image = m_TerrainLUT.Image->GetImage();
+		barrier.subresourceRange = m_TerrainLUT.Image->GetSubResourceRange();
+		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_TerrainCompute);
 		m_TerrainSet->BindSet(1, cmd, *m_TerrainCompute);
 		m_TerrainCompute->BindPipeline(cmd);
 		vkCmdDispatch(cmd, m_TerrainDispatches, 1, 1);
 
-		m_TerrainLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+#if 1
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_ErosionCompute);
+		m_TerrainSet->BindSet(1, cmd, *m_ErosionCompute);
+		m_ErosionCompute->BindPipeline(cmd);
+
+		for (uint32_t i = 0; i < points.size() / 25; i++)
+		{
+			glm::vec4 it = { i, 0, 0, 0 };
+			m_ErosionCompute->PushConstants(cmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+			// vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 10, m_TerrainLUT.Image->GetExtent().height / 10, 1);
+			vkCmdDispatch(cmd, 1, 1, 1);
+
+			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			// vkDeviceWaitIdle(m_Scope.GetDevice());
+		}
+#endif
+
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 	}
 
 	// Draw Low Resolution Background
@@ -911,7 +963,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_DeferredAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_DeferredViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DeferredAttachments[i]);
 
-		hdrInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+		hdrInfo.format = VK_FORMAT_R8G8B8A8_SNORM;
 		m_NormalAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_NormalViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_NormalAttachments[i]);
 
@@ -1631,7 +1683,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap& shape)
 {
-	std::vector<uint32_t> queueFamilies = FindDeviceQueues(m_Scope.GetPhysicalDevice(), { VK_QUEUE_GRAPHICS_BIT });
+	std::vector<uint32_t> queueFamilies = FindDeviceQueues(m_Scope.GetPhysicalDevice(), { VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT });
 	const uint32_t VertexCount = VB.GetDescriptor().range / sizeof(TerrainVertex);
 
 	const uint32_t m = (glm::max(shape.m_VerPerRing, 7u) + 1) / 4;
@@ -1643,8 +1695,8 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	noiseInfo.arrayLayers = shape.m_Rings;
 	noiseInfo.extent = { LUTExtent, LUTExtent, 1 };
-	noiseInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+	noiseInfo.format = VK_FORMAT_R32_SFLOAT;
+	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	noiseInfo.mipLevels = 1u;
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1652,7 +1704,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	noiseInfo.queueFamilyIndexCount = queueFamilies.size();
 	noiseInfo.pQueueFamilyIndices = queueFamilies.data();
-	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	noiseInfo.imageType = VK_IMAGE_TYPE_2D;
 
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
@@ -1661,18 +1713,68 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	m_TerrainLUT.Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
 	m_TerrainLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT.Image);
 
+	points.reserve(2500);
+
+	uint32_t w = m_TerrainLUT.Image->GetExtent().width;
+	uint32_t h = m_TerrainLUT.Image->GetExtent().height;
+	uint32_t dw = w / 5;
+	uint32_t dh = h / 5;
+
+	for (uint32_t i = 0; i < points.capacity();)
+	{
+		for (uint32_t j = 0; j < 5; j++)
+		{
+			for (uint32_t k = 0; k < 5; k++, i++)
+			{
+				points.emplace_back(glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j), 0, 0);
+			}
+		}
+	}
+
+	VkBufferCreateInfo sbInfo{};
+	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	sbInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	sbInfo.queueFamilyIndexCount = queueFamilies.size();
+	sbInfo.pQueueFamilyIndices = queueFamilies.data();
+	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.size = points.size() * sizeof(points[0]);
+
+	VmaAllocationCreateInfo sbAlloc{};
+	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+	sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	m_ErosionPoints = std::make_unique<Buffer>(m_Scope, sbInfo, sbAlloc);
+	m_ErosionPoints->Update(points.data());
+
 	m_TerrainSet = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT.View->GetImageView())
 		.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
+		.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_ErosionPoints)
 		.Allocate(m_Scope);
 
 	m_TerrainCompute = ComputePipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_TerrainSet->GetLayout())
-		.AddSpecializationConstant(0, VertexCount)
-		.AddSpecializationConstant(1, shape.m_Scale)
-		.AddSpecializationConstant(2, shape.m_NoiseSeed)
+		.AddSpecializationConstant(0, Rg)
+		.AddSpecializationConstant(1, Rt)
+		.AddSpecializationConstant(2, VertexCount)
+		.AddSpecializationConstant(3, shape.m_Scale)
+		.AddSpecializationConstant(4, shape.m_MinHeight)
+		.AddSpecializationConstant(5, shape.m_MaxHeight)
+		.AddSpecializationConstant(6, shape.m_NoiseSeed)
 		.SetShaderName("terrain_noise_comp")
+		.Construct(m_Scope);
+
+	VkPushConstantRange pushConstants{};
+	pushConstants.size = sizeof(glm::vec4);
+	pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	m_ErosionCompute = ComputePipelineDescriptor()
+		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+		.AddDescriptorLayout(m_TerrainSet->GetLayout())
+		.AddPushConstant(pushConstants)
+		.AddSpecializationConstant(0, Rg)
+		.AddSpecializationConstant(1, Rt)
+		.SetShaderName("erosion_comp")
 		.Construct(m_Scope);
 
 	return 1;

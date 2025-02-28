@@ -1,18 +1,225 @@
-#version 460
+ #version 460
+#extension GL_EXT_shader_atomic_float : enable
+
+#include "constants.glsl"
 #include "common.glsl"
+#include "ubo.glsl"
+#include "noise.glsl"
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+struct Vertex
+{
+    vec4 Position;
+    vec4 UV;
+};
 
-layout (set = 0, binding = 0, rgba32f) uniform image2D target;
+layout(local_size_x = 25, local_size_y = 1, local_size_z = 1) in;
+
+layout (set = 1, binding = 0, r32f) uniform image2DArray target;
+
+layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
+	Vertex at[];
+} vertices;
+
+layout (std140, set = 1, binding = 2) readonly buffer RandomPoints{
+	vec4 at[];
+} points;
 
 layout(push_constant) uniform constants
 {
-    layout(offset = 0) vec4 position; // offset_x, offset_y, velocity_x, velocity_y
-    layout(offset = 12) vec4 parameters; // volume, sediment, acceleration, friction
-    layout(offset = 24) vec4 rates; // erosion rates: sediment, deposition, soil softness
-} Droplet;
+    vec4 iter;
+} data;
+
+ivec3 clamp_coords(int x, int z)
+{
+    ivec3 texel = ivec3(x, z, 0);
+    ivec2 size = imageSize(target).xy;
+    
+    if (x >= size.x || z >= size.y || x < 0 || z < 0)
+    {
+        texel.z = 1;
+        texel.x = int(floor(float(size.x) / 4)) + (x < 0 ? x : int(ceil(float(x) / 2)));
+        texel.y = int(floor(float(size.y) / 4)) + (z < 0 ? z : int(ceil(float(z) / 2)));
+    }
+
+    return texel;
+}
+
+void deposit(inout float h, float ds, float xf, float zf, int xi, int zi)
+{
+    float delta = ds * (1.0 - xf) * (1.0 - zf);
+
+    ivec3 texel = clamp_coords(xi, zi);
+    imageAtomicAdd(target, texel, delta);
+
+    texel = clamp_coords(xi + 1, zi);
+    delta = ds * xf * (1.0 - zf);
+    imageAtomicAdd(target, texel, delta);
+
+    texel = clamp_coords(xi, zi + 1);
+    delta = ds * (1.0 - xf) * zf;
+    imageAtomicAdd(target, texel, delta);
+ 
+    texel = clamp_coords(xi + 1, zi + 1);
+    delta = ds * xf * zf;
+    imageAtomicAdd(target, texel, delta);
+
+    h += ds;
+}
+
+void erode(int x, int z, float w, float ds)
+{
+    ivec3 texel = clamp_coords(x, z);
+    float delta = ds * w;
+
+    imageAtomicAdd(target, texel, -delta);
+}
+
+float sample_target(int x, int z)
+{
+    ivec3 texel = clamp_coords(x, z);
+
+    return imageAtomicAdd(target, texel, 0.0);
+}
 
 void main()
 {
+    float Kq = 10;
+    float Kw = 0.5;
+    float Kr = 0.5;
+    float Kd = 0.02;
+    float Ki = 0.1;
+    float minSlope = 0.15;
+    float g = 20.0;
+    float Kg = g * 2.0;
 
+    int xi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].x), zi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].y);
+
+    dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, 1e3);
+
+    xi -= int(floor(Center.x / 500.0)) % imageSize(target).x;
+    zi -= int(floor(Center.z / 500.0)) % imageSize(target).y;
+
+    xi = xi < 0 ? imageSize(target).x + xi : xi;
+    zi = zi < 0 ? imageSize(target).y + zi : zi;
+
+    // imageStore(target, clamp_coords(xi, zi), vec4(0.0));
+    // return;
+
+    float xf = 0.0, zf = 0.0;
+    float xp = xi, zp = zi;
+
+    float h = sample_target(xi, zi);
+
+    float h00 = h;
+    float h10 = sample_target(xi + 1, zi);
+    float h01 = sample_target(xi, zi + 1);
+    float h11 = sample_target(xi + 1, zi + 1);
+
+    float dx = 0.0, dz = 0.0;
+    float s = 0.0, v = 0.0, w = 1.0;
+
+    int steps = 100;
+    while (w > 0.01 && steps > 0)
+    {
+        steps--;
+        float gx = h00 + h01 - h10 - h11;
+        float gz = h00 + h10 - h01 - h11;
+
+        dx = (dx - gx) * Ki + gx;
+        dz = (dz - gz) * Ki + gz;
+
+        float dl = sqrt(dx * dx + dz * dz);
+        if (dl <= 0.001)
+        {
+            break;
+        }
+        else
+        {
+            dx /= dl;
+            dz /= dl;
+        }
+
+        float nxp = xp + dx;
+        float nzp = zp + dz;
+
+        int nxi = int(floor(nxp));
+        int nzi = int(floor(nzp));
+        float nxf = fract(nxp);
+        float nzf = fract(nzp);
+
+        float nh00 = sample_target(nxi, nzi);
+        float nh10 = sample_target(nxi + 1, nzi);
+        float nh01 = sample_target(nxi, nzi + 1);
+        float nh11 = sample_target(nxi + 1, nzi + 1);
+
+        float nh = mix(nh00, nh10, nxf) * (1-nzf) + mix(nh01, nh11, nxf) * nzf;
+
+        if (nh >= h)
+        {
+            float ds=(nh-h)+0.001f;
+
+            if (ds >= s)
+            {
+                deposit(h, s, xf, zf, xi, zi);
+            }
+            else
+            {
+                deposit(h, ds, xf, zf, xi, zi);
+            }
+            
+            break;
+        }
+
+        float dh = h - nh;
+        float slope = dh;
+
+        float q = max(slope, minSlope) * v * w * Kq;
+        float ds = s - q;
+        if (ds >= 0)
+        {
+            ds *= Kd;
+            deposit(dh, ds, xf, zf, xi, zi);
+            s -= ds;
+        }
+        else
+        {
+            ds *= -Kr;
+            ds = min(ds, dh);
+
+            for (int z = zi - 1; z <= zi + 2; z++)
+            {
+                float zo = z - zp;
+                float zo2 = zo * zo;
+
+                for (int x = xi - 1; x <= xi + 2; x++)
+                {
+                    float xo = x - xp;
+                    float nw = 1.0 - saturate((xo * xo + zo2) * 0.25);
+                    
+                    if (nw <= 0.0)
+                        continue;
+
+                    nw *= 0.1591549430918953f;
+
+                    erode(x, z, nw, ds);
+                }
+            }
+
+            dh -= ds;
+            s += ds;
+        }
+
+        v=sqrt(v * v + Kg * dh);
+        w *= 1 - Kw;
+
+        xp=nxp; zp=nzp;
+        xi=nxi; zi=nzi;
+        xf=nxf; zf=nzf;
+
+        h=nh;
+        h00=nh00;
+        h10=nh10;
+        h01=nh01;
+        h11=nh11;
+    }
 }

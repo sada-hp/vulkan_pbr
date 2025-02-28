@@ -9,11 +9,11 @@ RenderScope& RenderScope::CreatePhysicalDevice(const VkInstance& instance, const
 	return *this;
 }
 
-RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues)
+RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues, void* pNext)
 {
 	assert(m_PhysicalDevice != VK_NULL_HANDLE && m_LogicalDevice == VK_NULL_HANDLE);
 
-	::CreateLogicalDevice(m_PhysicalDevice, features, device_extensions, FindDeviceQueues(m_PhysicalDevice, queues), &m_LogicalDevice);
+	::CreateLogicalDevice(m_PhysicalDevice, features, device_extensions, FindDeviceQueues(m_PhysicalDevice, queues), &m_LogicalDevice, pNext);
 
 	for (const auto& queue : queues) {
 		uint32_t queueFamilies = FindDeviceQueues(m_PhysicalDevice, { queue })[0];
@@ -63,7 +63,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[0].flags = 0;
 
 	// Normal attachment
-	attachments[1].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[1].format = VK_FORMAT_R8G8B8A8_SNORM;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;

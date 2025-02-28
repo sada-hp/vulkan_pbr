@@ -109,7 +109,7 @@ class VulkanBase final : public GR::Renderer
 private:
 	friend class GR::Window;
 
-	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME };
 	std::vector<VkImage> m_SwapchainImages = {};
 	std::vector<VkImageView> m_SwapchainViews = {};
 
@@ -174,6 +174,10 @@ private:
 	VulkanTexture m_TerrainLUT = {};
 	std::unique_ptr<DescriptorSet> m_TerrainSet = {};
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
+	std::unique_ptr<ComputePipeline> m_ErosionCompute = {};
+	std::unique_ptr<Buffer> m_ErosionPoints = {};
+
+	std::vector<glm::vec4> points;
 	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_SwapchainIndex = 0;

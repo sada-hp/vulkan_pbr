@@ -24,7 +24,7 @@ public:
 
 	RenderScope& CreatePhysicalDevice(const VkInstance& instance, const std::vector<const char*>& device_extensions);
 
-	RenderScope& CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues);
+	RenderScope& CreateLogicalDevice(const VkPhysicalDeviceFeatures& features, const std::vector<const char*>& device_extensions, const std::vector<VkQueueFlagBits>& queues, void* pNext = nullptr);
 
 	RenderScope& CreateMemoryAllocator(const VkInstance& instance);
 

@@ -66,9 +66,9 @@ void main()
     vec4 Color = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
     float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
-    vec3 Normal = normalize(2.0 * texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb - 1.0);
+    vec3 Normal = normalize(texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb);
  
-    if (Color.a != 0.0 && Depth > SkyDepth)
+    if (Color.a != 0.0)
     {
         vec3 Eye = ubo.CameraPosition.xyz;
         vec3 L = normalize(ubo.SunDirection.xyz);
@@ -87,6 +87,11 @@ void main()
         Material.Albedo.a = Color.a;
         Material.Specular = Deferred.a;
         Color.rgb = DirectSunlight(V, L, Normal, Material, Atmosphere);
+
+        if (Depth < SkyDepth)
+        {
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, SkyColor.a);
+        }
     }
     else
     {
