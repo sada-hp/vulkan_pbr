@@ -158,7 +158,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	m_PresentSemaphores.resize(m_SwapchainImages.size());
 	m_SwapchainSemaphores.resize(m_SwapchainImages.size());
 	m_PresentFences.resize(m_SwapchainImages.size());
-	
+
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.AllocateCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
 
@@ -173,6 +173,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	std::for_each(m_PresentFences.begin(), m_PresentFences.end(), [&, this](VkFence& it) {
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
+
+	res = CreateFence(m_Scope.GetDevice(), &m_AcquireFence, VK_FALSE) & res;
 
 	res = prepare_renderer_resources() & res;
 	res = atmosphere_precompute() & res;
@@ -224,7 +226,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 
 VulkanBase::~VulkanBase() noexcept
 {
-	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
+	vkDeviceWaitIdle(m_Scope.GetDevice());
 
 #ifdef INCLUDE_GUI
 	ImGui_ImplVulkan_Shutdown();
@@ -253,6 +255,8 @@ VulkanBase::~VulkanBase() noexcept
 	m_DefaultBlack.reset();
 	m_DefaultNormal.reset();
 	m_DefaultARM.reset();
+
+	vkDestroyFence(m_Scope.GetDevice(), m_AcquireFence, VK_NULL_HANDLE);
 
 	std::erase_if(m_PresentFences, [&, this](VkFence& it) {
 		vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
@@ -334,24 +338,28 @@ VulkanBase::~VulkanBase() noexcept
 
 bool VulkanBase::BeginFrame()
 {
-	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
+	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0 || glfwWindowShouldClose(m_GlfwWindow))
 		return false;
 
-	// m_TerrainLUT.Image = GRNoise::GenerateTerrainNoise(m_Scope, { 1024, 1204, 1 }, m_Camera.Transform.GetOffset(), 1000.f * glm::exp2(8));
-	// m_TerrainLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT.Image);
+	assert(!m_InFrame, "Finish the frame in progress first!");
+
+	uint32_t OldIndex = m_SwapchainIndex;
 
 	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex]);
 
-	assert(!m_InFrame, "Finish the frame in progress first!");
+	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], m_AcquireFence, &m_SwapchainIndex);
 
-	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], VK_NULL_HANDLE, &m_SwapchainIndex);
+	vkWaitForFences(m_Scope.GetDevice(), 1, &m_AcquireFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_Scope.GetDevice(), 1, &m_AcquireFence);
 
-	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	vkBeginCommandBuffer(cmd, &beginInfo);
+	if (OldIndex != m_SwapchainIndex)
+	{
+		std::iter_swap(m_PresentFences.begin() + OldIndex, m_PresentFences.begin() + m_SwapchainIndex);
+		std::iter_swap(m_PresentSemaphores.begin() + OldIndex, m_PresentSemaphores.begin() + m_SwapchainIndex);
+		std::iter_swap(m_SwapchainSemaphores.begin() + OldIndex, m_SwapchainSemaphores.begin() + m_SwapchainIndex);
+		std::iter_swap(m_PresentBuffers.begin() + OldIndex, m_PresentBuffers.begin() + m_SwapchainIndex);
+	}
 
 	// Udpate UBO
 	{
@@ -390,6 +398,12 @@ bool VulkanBase::BeginFrame()
 
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
+
+	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	vkBeginCommandBuffer(cmd, &beginInfo);
 
 	// Prepare render targets
 	{
@@ -604,7 +618,7 @@ void VulkanBase::EndFrame()
 
 	assert(m_InFrame);
 
-	const VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
 
 	// Draw High Resolution Objects
 	{
@@ -725,8 +739,9 @@ void VulkanBase::EndFrame()
 	presentInfo.pSwapchains = &m_Scope.GetSwapchain();
 	presentInfo.pImageIndices = &m_SwapchainIndex;
 	presentInfo.pResults = VK_NULL_HANDLE;
-
+	
 	vkQueuePresentKHR(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), &presentInfo);
+
 	m_SwapchainIndex = (m_SwapchainIndex + 1) % m_SwapchainImages.size();
 
 #if DEBUG == 1
@@ -795,18 +810,6 @@ void VulkanBase::_handleResize()
 	create_frame_pipelines();
 
 	m_Camera.Projection.SetAspect(static_cast<float>(m_Scope.GetSwapchainExtent().width) / static_cast<float>(m_Scope.GetSwapchainExtent().height));
-
-	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
-		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
-		CreateSemaphore(m_Scope.GetDevice(), &it);
-	});
-
-	std::for_each(m_SwapchainSemaphores.begin(), m_SwapchainSemaphores.end(), [&, this](VkSemaphore& it) {
-		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
-		CreateSemaphore(m_Scope.GetDevice(), &it);
-	});
-
-	m_SwapchainIndex = 0;
 
 	//it shouldn't change afaik, but better to keep it under control
 	assert(m_SwapchainImages.size() == m_PresentBuffers.size());

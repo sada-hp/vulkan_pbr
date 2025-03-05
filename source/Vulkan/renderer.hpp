@@ -137,6 +137,7 @@ private:
 	std::vector<VkFramebuffer> m_FramebuffersPP = {};
 
 	std::vector<VkFence> m_PresentFences = {};
+	VkFence m_AcquireFence = VK_NULL_HANDLE;
 	std::vector<VkSemaphore> m_PresentSemaphores = {};
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
