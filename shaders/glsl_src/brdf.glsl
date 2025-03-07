@@ -1,6 +1,7 @@
 struct SMaterial
 {
     vec4 Albedo;
+    vec3 Normal;
     float Roughness;
     float Metallic;
     float AO;
@@ -22,7 +23,7 @@ float D_DistributionGGX(float NdotH, float roughness)
     float a2 = pow(roughness, 4.0);
     float det = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	
-    return a2 / max((det * det) * PI, 0.001);
+    return a2 / max((det * det), 0.001);
 }
 
 float G_GeometrySmith(float NdotV, float NdotL, float roughness)
@@ -46,5 +47,5 @@ vec3 DisneyDiffuse(vec3 Albedo, float NdotL, float NdotV, float LdotH, float Rou
     float LightScatter = F_FresnelSchlick(NdotL, F0, F90).r;
     float ViewScatter = F_FresnelSchlick(NdotV, F0, F90).r;
 
-    return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor) / PI;
+    return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
 }

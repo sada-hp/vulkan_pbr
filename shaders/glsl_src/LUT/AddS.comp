@@ -13,13 +13,14 @@ layout (binding = 1) uniform sampler3D DeltaS;
 
 void main()
 {
-    vec3 UVW = vec3(0.0);
-    UVW.xy = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
-    UVW.z = float(gl_GlobalInvocationID.z + 0.5) / float(imageSize(outImage).z);
+    if (gl_GlobalInvocationID.z < imageSize(outImage).z && gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
+    {
+        vec3 UVW = GetUV(imageSize(outImage).xyz);
 
-    float R, CosViewZenith, CosSunZenith, CosViewun;
-    UVWToWorldInscatter(UVW.xy, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
+        float R, CosViewZenith, CosSunZenith, CosViewun;
+        UVWToWorldInscatter(UVW.xyz, R, CosViewZenith, CosSunZenith, CosViewun);
 
-    vec4 S = imageLoad(outImage, ivec3(gl_GlobalInvocationID.xyz));
-    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), S + vec4(texelFetch(DeltaS, ivec3(gl_GlobalInvocationID.xyz), 0).rgb / RayleighPhase(CosViewun), 0.0));
+        vec4 S = imageLoad(outImage, ivec3(gl_GlobalInvocationID.xyz));
+        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), S + vec4(texelFetch(DeltaS, ivec3(gl_GlobalInvocationID.xyz), 0).rgb / RayleighPhase(CosViewun), 0.0));
+    }
 }

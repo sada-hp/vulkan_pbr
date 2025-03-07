@@ -1403,8 +1403,11 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	DeltaE.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	DeltaE.View = std::make_unique<VulkanImageView>(m_Scope, *DeltaE.Image);
 
+	m_IrradianceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
+	m_IrradianceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_IrradianceLUT.Image);
+
 	DeltaEDSO = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView())
+		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView())
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
 
@@ -1414,9 +1417,6 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.AddSpecializationConstant(1, Rt * 1e-3f)
 		.AddDescriptorLayout(DeltaEDSO->GetLayout())
 		.Construct(m_Scope);
-
-	m_IrradianceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
-	m_IrradianceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_IrradianceLUT.Image);
 
 	imageCI.imageType = VK_IMAGE_TYPE_3D;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_3D;
@@ -1462,7 +1462,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	DeltaJDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaJ.View->GetImageView())
 		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaE.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView(), ImageSampler)
 		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
 		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler)
 		.Allocate(m_Scope);
@@ -1542,11 +1542,9 @@ VkBool32 VulkanBase::atmosphere_precompute()
 
 	GenDeltaELUT->BindPipeline(cmd);
 	DeltaEDSO->BindSet(0, cmd, *GenDeltaELUT);
-	vkCmdDispatch(cmd, DeltaE.Image->GetExtent().width / 8u + uint32_t(DeltaE.Image->GetExtent().width % 8u > 0),
-		DeltaE.Image->GetExtent().height / 8u + uint32_t(DeltaE.Image->GetExtent().height % 8u > 0),
+	vkCmdDispatch(cmd, m_IrradianceLUT.Image->GetExtent().width / 8u + uint32_t(m_IrradianceLUT.Image->GetExtent().width % 8u > 0),
+		m_IrradianceLUT.Image->GetExtent().height / 8u + uint32_t(m_IrradianceLUT.Image->GetExtent().height % 8u > 0),
 		1u);
-
-	DeltaE.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 	GenDeltaSRSMLUT->BindPipeline(cmd);
 	DeltaSRSMDSO->BindSet(0, cmd, *GenDeltaSRSMLUT);
@@ -1563,12 +1561,15 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
 		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (uint32_t Sample = 2; Sample <= 10; Sample++)
+	for (uint32_t Sample = 2; Sample <= 20; Sample++)
 	{
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		GenDeltaJLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaJLUT->BindPipeline(cmd);
+
+		m_IrradianceLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
 		DeltaJDSO->BindSet(0, cmd, *GenDeltaJLUT);
 		vkCmdDispatch(cmd, DeltaJ.Image->GetExtent().width / 4u + uint32_t(DeltaJ.Image->GetExtent().width % 4u > 0),
 			DeltaJ.Image->GetExtent().height / 4u + uint32_t(DeltaJ.Image->GetExtent().height % 4u > 0),
@@ -1593,6 +1594,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 			DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
 
 		DeltaE.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_IrradianceLUT.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		AddE->BindPipeline(cmd);
 		AddEDSO->BindSet(0, cmd, *AddE);
@@ -1640,7 +1642,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
-	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 3u);
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 8u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
 	m_VolumeWeather.Image = GRNoise::GeneratePerlin(m_Scope, { 128u, 128u, 1u }, 32u, 1u);

@@ -34,10 +34,13 @@ float GetOpticalDepth(float H, float R, float Mu)
 
 void main()
 {
-    float R, Mu;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
+    if (gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
+    {
+        float R, Mu;
+        vec2 UV = GetUV(imageSize(outImage).xy, vec2(0.5));
 
-    GetTransmittanceRMu(UV, R, Mu);
-    vec3 Depth = BetaR * GetOpticalDepth(HR, R, Mu) + BetaMEx * GetOpticalDepth(HM, R, Mu);
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(exp(-Depth), 0.0));
+        GetTransmittanceRMu(UV, R, Mu);
+        vec3 Depth = BetaR * GetOpticalDepth(HR, R, Mu) + BetaMEx * GetOpticalDepth(HM, R, Mu);
+        imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(exp(-Depth), 0.0));
+    }
 }

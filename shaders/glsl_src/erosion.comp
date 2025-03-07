@@ -83,16 +83,18 @@ float sample_target(int x, int z)
 
 void main()
 {
-    float Kq = 10;
-    float Kw = 0.5;
-    float Kr = 0.5;
-    float Kd = 0.02;
-    float Ki = 0.1;
-    float minSlope = 0.15;
+    int xi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].x), zi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].y);
+
+    float random = noise(vec2(xi, zi));
+
+    float Kq = 15.f * random;
+    float Kw = random;
+    float Kr = 1.0 - Kw;
+    float Kd = 0.1 * random;
+    float Ki = 0.5 * random;
+    float minSlope = 0.1;
     float g = 20.0;
     float Kg = g * 2.0;
-
-    int xi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].x), zi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].y);
 
     dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, 1e3);
 
@@ -186,12 +188,12 @@ void main()
             ds *= -Kr;
             ds = min(ds, dh);
 
-            for (int z = zi - 1; z <= zi + 2; z++)
+            for (int z = zi - 2; z <= zi + 2; z++)
             {
                 float zo = z - zp;
                 float zo2 = zo * zo;
 
-                for (int x = xi - 1; x <= xi + 2; x++)
+                for (int x = xi - 2; x <= xi + 2; x++)
                 {
                     float xo = x - xp;
                     float nw = 1.0 - saturate((xo * xo + zo2) * 0.25);

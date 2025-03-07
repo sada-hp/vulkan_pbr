@@ -13,9 +13,12 @@ layout (binding = 1) uniform sampler2D Transmittance;
 
 void main()
 {
-    float R, Mu;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
+    if (gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
+    {
+        float R, Mu;
+        vec2 UV = GetUV(imageSize(outImage).xy);
 
-    GetIrradienceRMu(UV, R, Mu);
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(GetTransmittance(Transmittance, R, Mu) * max(Mu, 0.0), 0.0));
+        GetIrradienceRMu(UV, R, Mu);
+        imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(GetTransmittance(Transmittance, R, Mu) * max(Mu, 0.0), 0.0));
+    }
 }

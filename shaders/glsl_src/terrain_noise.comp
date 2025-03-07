@@ -23,6 +23,11 @@ layout (constant_id = 4) const float MinHeight = 0;
 layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
 
+float sample_perlin_sphere(vec3 Normal, float freq)
+{
+    return saturate(perlin(Normal.xz, freq) * perlin(Normal.xy, freq) * perlin(Normal.yz, freq));
+}
+
 void main()
 {
     NOISE_SEED = Seed;
@@ -46,15 +51,14 @@ void main()
         vec3 ObjectPosition = vec3(Orientation * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center);
         vec3 Normal = vec3(normalize(ObjectPosition));
 
-        float perlin1 = perlin(Normal.xz, 100.0 * 1.0);
-        float perlin2 = perlin(Normal.yx, 100.0 * 1.0);
-        float perlin3 = perlin(Normal.yz, 100.0 * 1.0);
+        float perlin1 = sample_perlin_sphere(Normal * vec3(0.5, 1.0, 0.5), 250.0);
+        float perlin2 = sample_perlin_sphere(Normal, 350.0);
+        float perlin3 = sample_perlin_sphere(Normal * vec3(0.75, 1.0, 0.25), 480.0);
+        float perlin4 = sample_perlin_sphere(Normal * vec3(0.5, 1.0, 0.5), 100.0);
+        float perlin5 = sample_perlin_sphere(Normal, 1000.0);
 
-        float perlin4 = perlin(Normal.xz, 300.0 * 1.0);
-        float perlin5 = perlin(Normal.xz, 300.0 * 1.0);
-        float perlin6 = perlin(Normal.xz, 300.0 * 1.0);
-
-        float Height = 0.25 * saturate(perlin1 * perlin2 * perlin3) + 0.75 * saturate(perlin4 * perlin5 * perlin6);
+        float Height = 1.0 - saturate(0.75 * perlin3 + 0.5 * perlin1 + 0.25 * perlin2);
+        Height = saturate(sqrt(saturate(Height - perlin4)) * perlin5);
 
         imageStore(outImage, ivec3(round(vertex.UV.xy * (imageSize(outImage).xy - 1)), Level), vec4(MinHeight + Height * (MaxHeight - MinHeight)));
     }

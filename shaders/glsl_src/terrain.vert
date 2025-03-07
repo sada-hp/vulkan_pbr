@@ -69,15 +69,15 @@ void main()
         dvec3 Center = dvec3(0.0, Rg, 0.0);
 #endif
 
-    float u = texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y - 1, Level), 0).x;
-    float d = texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).x;
-    float r = texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).x;
-    float l = texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).x;
+    float u = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y - 1, Level), 0).x;
+    float d = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).x;
+    float r = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).x;
+    float l = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).x;
 
     Normal.z = u - d;
     Normal.x = l - r;
     Normal.y = Height;
-    Normal = vec3(normalize(Normal));
+    Normal = vec3(Orientation * normalize(Normal));
 
     vec3 ObjectPosition = vec3(Orientation * vec3(vertPosition.x, 0.0, vertPosition.z) + Center);
     WorldPosition = vec4(vec3(normalize(ObjectPosition)) * (Rg + Height), 1.0);

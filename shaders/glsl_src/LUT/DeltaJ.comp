@@ -92,11 +92,14 @@ vec3 ComputeDeltaJ(int Order, float R, float Mu, float MuS, float Nu)
 
 void main()
 {
-    float R, CosViewZenith, CosSunZenith, CosViewun;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(outImage).xy);
+    if (gl_GlobalInvocationID.z < imageSize(outImage).z && gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
+    {
+        float R, CosViewZenith, CosSunZenith, CosViewun;
+        vec3 UV = GetUV(imageSize(outImage).xyz);
 
-    UVWToWorldInscatter(UV, gl_GlobalInvocationID.z, R, CosViewZenith, CosSunZenith, CosViewun);
+        UVWToWorldInscatter(UV, R, CosViewZenith, CosSunZenith, CosViewun);
 
-    vec3 DeltaJ = ComputeDeltaJ(PushConstants.Sample, R, CosViewZenith, CosSunZenith, CosViewun);
-    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaJ, 0.0));
+        vec3 DeltaJ = ComputeDeltaJ(PushConstants.Sample, R, CosViewZenith, CosSunZenith, CosViewun);
+        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaJ, 0.0));
+    }
 }

@@ -105,9 +105,10 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
     float radius = 1.0;
     float transmittance = 1.0;
 
+    stepsize *= 3.f;
     for (int i = 0; i <= 6; i++)
     {
-        pos = rs + float(i) * radius * light_kernel[i];
+        pos = rs + float(i) * radius * reflect(rd, light_kernel[i]);
 
         float sampled_density = 0.0;
 
@@ -128,7 +129,7 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
         
         density += sampled_density;
         rs += stepsize * rd;
-        stepsize *= i > 4 ? 2.f : 1.f;
+        stepsize *= 1.1f;
         radius += 1.f / 6.f;
     }
 
@@ -145,7 +146,7 @@ void FillScattering(float T)
     vec3 S = T * Atmosphere.S;
     S = S - S * outScattering.a;
 
-    vec3 L = T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz);
+    vec3 L = T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz) * Atmosphere.T;
 
     // Sky scattering
     t = SphereMinDistance(ubo.CameraPosition.xyz, fromCamera, vec3(0.0), Rt);
@@ -163,8 +164,8 @@ void MarchToCloud()
     int i = 0;
     vec3 pos = marchStart;
     float sample_density = 0.0;
-    float phase = HGDPhase(dot(ubo.SunDirection.xyz, fromCamera), 0.75, -0.35, 0.35, 0.6);
-    //float phase = DualLobeFunction(dot(ubo.SunDirection.xyz, marchDirection), MieG, -0.25, 0.45);
+    // float phase = HGDPhase(dot(ubo.SunDirection.xyz, fromCamera), MieG);
+    float phase = DualLobeFunction(dot(ubo.SunDirection.xyz, fromCamera), 0.5, 0.7, 0.35);
 
     float mean_depth = 0.0;
     float mean_transmittance = 0.0;
@@ -190,7 +191,7 @@ void MarchToCloud()
     // go more precise for clouds
     float DotEH = dot(normalize(ubo.CameraPosition.xyz), fromCamera);
 
-    steps = int(mix(128, 32, abs(DotEH)));
+    steps = int(mix(256, 128, abs(DotEH)));
     stepsize = len / float(steps);
 
     float march_to_camera = distance(ubo.CameraPosition.xyz, marchStart);
@@ -249,7 +250,7 @@ void main()
 
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
     vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
-    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xy, -1.0, 0.0));
+    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xyz, 0.0));
     vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
     vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
     fromCamera = normalize(ScreenWorld.xyz);

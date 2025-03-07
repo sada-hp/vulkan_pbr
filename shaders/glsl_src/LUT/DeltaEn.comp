@@ -37,17 +37,10 @@ vec3 ComputeDeltaEn(int Order, float R, float CosSunZenith)
 
             float CosViewun = dot(Sun, W);
 
-            if (Order == 2)
-            {
-                vec3 Ray = GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb;
-                vec3 Mie = GetInscattering(DeltaSM, R, W.z, CosSunZenith, CosViewun).rgb;
+            vec3 Ray = GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb;
+            vec3 Mie = GetInscattering(DeltaSM, R, W.z, CosSunZenith, CosViewun).rgb;
 
-                DeltaE += (Ray * RayleighPhase(CosViewun) + Mie * MiePhase(CosViewun)) * dW;
-            }
-            else
-            {
-                DeltaE += GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb * dW;
-            }
+            DeltaE += (Ray * RayleighPhase(CosViewun) + Mie * MiePhase(CosViewun)) * dW;
         }
     }
 
@@ -56,11 +49,14 @@ vec3 ComputeDeltaEn(int Order, float R, float CosSunZenith)
 
 void main()
 {
-    float R, Mu;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy)  / vec2(imageSize(outImage).xy);
-    
-    GetIrradienceRMu(UV, R, Mu);
+    if (gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
+    {
+        float R, Mu;
+        vec2 UV = GetUV(imageSize(outImage).xy);
+        
+        GetIrradienceRMu(UV, R, Mu);
 
-    vec3 DeltaE = ComputeDeltaEn(PushConstants.Sample, R, Mu);
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(DeltaE, 0.0));
+        vec3 DeltaE = ComputeDeltaEn(PushConstants.Sample, R, Mu);
+        imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(DeltaE, 0.0));
+    }
 }

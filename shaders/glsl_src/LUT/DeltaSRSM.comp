@@ -59,15 +59,18 @@ void ComputeDeltaSRDeltaSM(float R, float Mu, float MuS, float Nu, out vec3 Ray,
 
 void main()
 {
-    float R, CosViewZenith, CosSunZenith, CosViewun;
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(rScattering).xy);
-    
-    UVWToWorldInscatter(UV, float(gl_GlobalInvocationID.z), R, CosViewZenith, CosSunZenith, CosViewun);
+    if (gl_GlobalInvocationID.z < imageSize(rScattering).z && gl_GlobalInvocationID.x < imageSize(rScattering).x && gl_GlobalInvocationID.y < imageSize(rScattering).y)
+    {
+        float R, CosViewZenith, CosSunZenith, CosViewun;
+        vec3 UV = GetUV(imageSize(rScattering).xyz);
+        
+        UVWToWorldInscatter(UV, R, CosViewZenith, CosSunZenith, CosViewun);
 
-    vec3 DeltaSR;
-    vec3 DeltaSM;
-    ComputeDeltaSRDeltaSM(R, CosViewZenith, CosSunZenith, CosViewun, DeltaSR, DeltaSM);
-    
-    imageStore(rScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSR, 0.0));
-    imageStore(mScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSM, 0.0));
+        vec3 DeltaSR;
+        vec3 DeltaSM;
+        ComputeDeltaSRDeltaSM(R, CosViewZenith, CosSunZenith, CosViewun, DeltaSR, DeltaSM);
+        
+        imageStore(rScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSR, 0.0));
+        imageStore(mScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSM, 0.0));
+    }
 }

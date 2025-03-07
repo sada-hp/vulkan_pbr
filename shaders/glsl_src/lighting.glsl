@@ -45,7 +45,7 @@ float DrainePhase(float a, float g, float k)
 //https://research.nvidia.com/labs/rtr/approximate-mie/publications/approximate-mie.pdf
 float HGDPhase(float a, float w)
 {
-    float d = mix(5.0, 50.0, MieG);
+    float d = mix(5.0, 50.0, 1.0 - MieG);
     //float d = 15.0;
 
     float ghg = exp(-0.0990567/(d - 1.67154));
@@ -97,7 +97,7 @@ vec4 GetInscattering(sampler3D LUT, float R, float Mu, float MuS, float DotVL)
 vec3 GetIrradiance(sampler2D LUT, float R, float MuS)
 {
     float uvR = (R - Rg) / (Rt - Rg);
-    float uvMuS = (MuS + 0.2) / (1.0 + 0.2);
+    float uvMuS = (0.2 * max(MuS, 0.0)) / (1.0 + 0.2);
     return texture(LUT, vec2(uvMuS, uvR)).rgb;
 }
 
@@ -110,7 +110,7 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu)
 
 vec3 GetTransmittanceWithShadow(sampler2D LUT, float R, float Mu)
 {
-    const float eps = 0.1;
+    const float eps = 0.01;
     float CosHorizon = -sqrt(1.0 - (Rg / R) * (Rg / R));
 
     if (Mu < CosHorizon)
@@ -159,7 +159,7 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
 
 vec3 GetTransmittanceWithShadow(sampler2D TransmittanceLUT, vec3 x, vec3 s)
 {
-    float r = max(length(x), Rg + 1.0);
+    float r = length(x);
     if (r <= Rt)
     {
         float muS = dot(x, s) / r;
@@ -173,7 +173,7 @@ vec3 GetTransmittanceWithShadow(sampler2D TransmittanceLUT, vec3 x, vec3 s)
 void AtmosphereAtPoint(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 x, float t, vec3 v, vec3 s, out SAtmosphere Atmosphere) 
 {
     vec3 result;
-    float r = max(length(x), Rg + 1.0);
+    float r = length(x);
 
     float mu = dot(x, v) / r;
     float d = -r * mu - sqrt(r * r * (mu * mu - 1.0) + Rt * Rt);
@@ -251,7 +251,7 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
 {
     vec3 resultHG;
     vec3 resultHGD;
-    float r = max(length(x), Rg + 1.0);
+    float r = length(x);
 
     float mu = dot(x, v) / r;
     float d = -r * mu - sqrt(r * r * (mu * mu - 1.0) + Rt * Rt);
@@ -323,6 +323,60 @@ void AtmosphereAtPoint_2(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, 
     }
 
     Atmosphere.S = resultHGD * MaxLightIntensity;
+}
+
+vec3 PointRadiance(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, vec3 eye, vec3 x, vec3 S)
+{
+    vec3 Result = vec3(0.0);
+
+    float t = distance(eye, x);
+    if (t > 0.0)
+    {
+        vec3 x0 = eye + t * normalize(x - eye);
+        float r0 = length(x0);
+        vec3 N = x0 / r0;
+
+        vec2 uv = vec2(atan(N.y, N.x), acos(N.z)) * vec2(0.5, 1.0) / PI + vec2(0.5, 0.0);
+        uv.y = 1.0 - uv.y;
+
+        vec4 reflectance = texture(IrradianceLUT, uv) * vec4(0.2, 0.2, 0.2, 1.0);
+
+        if (r0 > Rg + 0.01) {
+            reflectance = vec4(0.4, 0.4, 0.4, 0.0);
+        }
+
+        float muS = max(dot(N, S), 0.0);
+        vec3 sunLight = GetTransmittanceWithShadow(TransmittanceLUT, r0, muS);
+        vec3 groundSkyLight = GetIrradiance(IrradianceLUT, r0, muS);
+        vec3 groundColor = (muS * sunLight + groundSkyLight) * MaxLightIntensity; // reflectance.rgb * 
+
+        if (reflectance.w > 0.0)
+        {
+
+        }
+
+        Result = groundColor;
+    }
+
+    return Result;
+}
+
+vec3 PointIrradiance(sampler2D IrradianceLUT, vec3 eye, vec3 x, vec3 S)
+{
+    vec3 Result = vec3(0.0);
+
+    float t = distance(eye, x);
+    if (t > 0.0)
+    {
+        vec3 x0 = eye + t * normalize(x - eye);
+        float r0 = length(x0);
+        vec3 N = x0 / r0;
+        float muS = max(dot(N, S), 0.0);
+
+        Result = GetIrradiance(IrradianceLUT, r0, muS);
+    }
+
+    return Result;
 }
 
 #endif

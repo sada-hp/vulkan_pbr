@@ -30,7 +30,7 @@ layout(location = 2) out vec4 outDeferred;
 
 void main()
 {
-#if 1
+#if 0
     vec3 N = normalize(Normal);
 #else
     vec3 dX = dFdxFine(WorldPosition.xyz);
@@ -40,7 +40,7 @@ void main()
 
     // material descriptor
     SMaterial Material;
-#if 1
+#if 0
     vec3 W;
     hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
     // Material.Albedo.rgb = W;
@@ -70,7 +70,7 @@ void main()
         Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
         break;
     }
-    Material.Albedo = vec4(1.0);
+    Material.Albedo = vec4(0.0, 1.0, 0.0, 1.0);
 
     Material.AO = 1.0;
     Material.Roughness = 1.0;
@@ -80,5 +80,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(N, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
 }
