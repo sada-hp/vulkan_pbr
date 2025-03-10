@@ -150,8 +150,8 @@ namespace GR
 				matrix[3][2] = -(Far * Near) / (Far - Near);
 #else
 				// Reversed depth
-				matrix[2][2] = -Near / (Near - Far);
-				matrix[3][2] = -(Far * Near) / (Near - Far);
+				matrix[2][2] = Near / (Far - Near);
+				matrix[3][2] = (Far * Near) / (Far - Near);
 #endif
 				return *this;
 			}

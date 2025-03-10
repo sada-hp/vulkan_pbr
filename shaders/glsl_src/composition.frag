@@ -90,8 +90,8 @@ void main()
             float d = distance(CloudPosition, World);
 
             float a = 1.0 - SkyColor.a;
-            float b = saturate(exp(-d * Clouds.Density * 0.01));
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, a * b);
+            float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
         }
     }
     else
