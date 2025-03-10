@@ -41,7 +41,8 @@ layout(set = 1, binding = 2) uniform sampler3D CloudLowFrequency;
 layout(set = 1, binding = 3) uniform sampler3D CloudHighFrequency;
 layout(set = 1, binding = 4) uniform sampler2D WeatherMap;
 layout(set = 1, binding = 5) uniform sampler2D TransmittanceLUT;
-layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 6) uniform sampler2D IrradianceLUT;
+layout(set = 1, binding = 7) uniform sampler3D InscatteringLUT;
 
 float GetHeightFraction(vec3 p)
 {
@@ -53,11 +54,6 @@ float GetHeightFraction(vec3 p)
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
     return scale * p / topBound + vec3(ubo.Time * Clouds.WindSpeed * speed_mod);
-}
-
-vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
-{
-    return SphereIntersect(Eye, V, vec3(0.0), Rg) ? vec3(0.0) : 3.0 * vec3(smoothstep(0.9998, 1.0, max(dot(V, S), 0.0)));
 }
 
 // Cheaper version of Sample-Density
@@ -138,21 +134,31 @@ float MarchToLight(vec3 rs, vec3 rd, float stepsize)
 
 void FillScattering(float T)
 {
-    SAtmosphere Atmosphere;
+    vec3 Eye = ubo.CameraPosition.xyz;
+    vec3 ViewDir = fromCamera;
+    vec3 SunDir = ubo.SunDirection.xyz;
+    vec3 SkyColor = vec3(0.0), CloudsColor = vec3(0.0);
 
-    // Clouds scattering
-    float t = SphereMinDistance(ubo.CameraPosition.xyz, fromCamera, vec3(0.0), topBound);
-    AtmosphereAtPoint(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, t, fromCamera, ubo.SunDirection.xyz, Atmosphere);
-    vec3 S = T * Atmosphere.S;
-    S = S - S * outScattering.a;
+    if (outScattering.a != 0.0)
+    {
+        SkyColor += SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, ViewDir, SunDir);
+        SkyColor *= MaxLightIntensity;
+    }
 
-    vec3 L = T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, ubo.SunDirection.xyz) * Atmosphere.T;
+    if (outScattering.a != 1.0)
+    {
+        SAtmosphere Atmosphere;
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, marchEnd, SunDir, Atmosphere);
+        
+        Atmosphere.L = T * GetTransmittanceWithShadow(TransmittanceLUT, marchStart, SunDir);
+        Atmosphere.T = T * saturate(Atmosphere.Shadow + 0.1) * Atmosphere.T;
+        Atmosphere.S = T * Atmosphere.S;
 
-    // Sky scattering
-    t = SphereMinDistance(ubo.CameraPosition.xyz, fromCamera, vec3(0.0), Rt);
-    AtmosphereAtPoint_2(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, t, fromCamera, ubo.SunDirection.xyz, Atmosphere);
-    S += (Atmosphere.S + GetSunColor(ubo.CameraPosition.xyz, fromCamera, ubo.SunDirection.xyz) * Atmosphere.T * MaxLightIntensity) * outScattering.a;
-    outScattering.rgb = L * outScattering.rgb + S;
+        CloudsColor += Atmosphere.T * Atmosphere.L * outScattering.rgb;
+        CloudsColor += Atmosphere.S * MaxLightIntensity;
+    }
+    
+    outScattering.rgb = mix(CloudsColor, SkyColor, outScattering.a);
 }
 
 // I doubt it's physically correct but looks nice
