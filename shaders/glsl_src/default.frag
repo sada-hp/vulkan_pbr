@@ -66,7 +66,7 @@ void main()
     // material descriptor
     SMaterial Material;
     Material.Roughness = max(PushConstants.RoughnessMultiplier * ARM.g, 0.01);
-    Material.Metallic = ARM.b * (1.0 - PushConstants.Metallic);
+    Material.Metallic = PushConstants.Metallic == 0 ? ARM.b : PushConstants.Metallic;
     Material.AO = ARM.r;
     Material.Albedo = texture(AlbedoMap, UV);
     Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;

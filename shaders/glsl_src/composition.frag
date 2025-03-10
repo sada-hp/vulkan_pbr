@@ -25,80 +25,72 @@ layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 outColor;
 
 // get specular and ambient part from sunlight
-vec3 DirectSunlight(vec3 Eye, vec3 X, vec3 L, in SMaterial Material)
+vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Material)
 {
     vec3 N = Material.Normal;
-    vec3 V = normalize(Eye - X);
-    vec3 H = normalize(V + L);
+    vec3 V = normalize(Eye - World);
+    vec3 H = normalize(V + Sun);
 
     float NdotV = saturate(dot(N, V));
-    float NdotL = saturate(dot(N, L));
+    float NdotL = saturate(dot(N, Sun));
     float NdotH = saturate(dot(N, H));
-    float LdotH = saturate(dot(L, H));
+    float LdotH = saturate(dot(Sun, H));
     float HdotV = saturate(dot(H, V));
 
-    vec3 F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
-    vec3 F = Material.Specular * F_FresnelSchlick(HdotV, F0);
-    float G = G_GeometrySmith(NdotV, NdotL, Material.Roughness);
-    float D = D_DistributionGGX(NdotH, Material.Roughness);
+    SAtmosphere Atmosphere;
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
 
-    vec3 kD = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
+    vec3  F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
+    vec3  F  = Material.Specular * F_FresnelSchlick(HdotV, F0);
+    float G  = G_GeometrySmith(NdotV, NdotL, Material.Roughness);
+    float D  = D_DistributionGGX(NdotH, Material.Roughness);
+
+    vec3 kD       = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
     vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
-    vec3 diffuse = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
-    vec3 ambient = vec3(mix(0.001, 0.01, Material.Metallic)) * Material.Albedo.rgb;
+    vec3 diffuse  = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
+    vec3 ambient  = vec3(mix(1e-3, 1e-4, Material.Metallic)) * Material.Albedo.rgb;
+    vec3 scatter  = max(Atmosphere.S * Atmosphere.Shadow, 1e-4 * (1.0 - Atmosphere.T));
 
-    vec3 S;
-    if (Eye != X)
-    {
-        float r0 = length(X);
-        float PdotL = dot(X, L) / r0;
+    diffuse  = diffuse  * Atmosphere.Shadow * (Atmosphere.L + Atmosphere.E);
+    specular = specular * Atmosphere.Shadow * Atmosphere.L;
+    ambient  = ambient  * Atmosphere.T;
 
-        float Shadow = smoothstep(0.0, 1.0, max(PdotL, 0.0));
-        vec3 Li = GetTransmittanceWithShadow(TransmittanceLUT, r0, PdotL);
-        vec3 E =  GetIrradiance(IrradianceLUT, r0, PdotL);
-        S = PointScattering(TransmittanceLUT, InscatteringLUT, Eye, X, L);
-
-        diffuse =  MaxLightIntensity * (Li + E) * diffuse;
-        specular = MaxLightIntensity * (Li + E) * specular;
-    }
-
-    return ambient + (Material.AO * (specular + diffuse)) * NdotL / PI + S;
+    return vec3(ambient + MaxLightIntensity * (scatter + (Material.AO * (specular + diffuse) / PI) * NdotL));
 }
 
 vec3 GetWorldPosition(float Depth)
 {
-    vec4 ClipSpace = vec4(2.0 * UV - 1.0, Depth, gl_FragCoord.w);
+    vec4 ClipSpace     = vec4(2.0 * UV - 1.0, Depth, gl_FragCoord.w);
     vec4 WorldPosition = vec4(ubo.ViewMatrixInverse * (ubo.ProjectionMatrixInverse * ClipSpace));
-    WorldPosition = WorldPosition / WorldPosition.w;
 
-    return WorldPosition.xyz;
+    return WorldPosition.xyz / WorldPosition.w;
 }
 
 void main()
 {
-    vec4 SkyColor = texture(SceneBackground, UV);
+    vec4 SkyColor  = texture(SceneBackground, UV);
     float SkyDepth = texture(BackgroundDepth, UV).r;
-    vec4 Color = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
-    float Depth = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
-    vec4 Deferred = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
-    vec3 Normal = normalize(texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb);
+    vec4 Color     = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
+    float Depth    = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
+    vec4 Deferred  = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
+    vec3 Normal    = normalize(texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb);
  
     if (Color.a != 0.0)
     {
-        vec3 Eye = ubo.CameraPosition.xyz;
-        vec3 L = normalize(ubo.SunDirection.xyz);
-        vec3 WorldPosition = GetWorldPosition(Depth);
+        vec3 Eye   = ubo.CameraPosition.xyz;
+        vec3 Sun   = normalize(ubo.SunDirection.xyz);
+        vec3 World = GetWorldPosition(Depth);
         
-#if 1
         SMaterial Material;
-        Material.Roughness = Deferred.g;
-        Material.Metallic = Deferred.b;
-        Material.AO = Deferred.r;
+        Material.Roughness  = Deferred.g;
+        Material.Metallic   = Deferred.b;
+        Material.AO         = Deferred.r;
         Material.Albedo.rgb = pow(Color.rgb, vec3(2.2));
-        Material.Albedo.a = Color.a;
-        Material.Specular = Deferred.a;
-        Material.Normal = Normal;
-        Color.rgb = DirectSunlight(Eye, WorldPosition, L, Material);
+        Material.Albedo.a   = Color.a;
+        Material.Specular   = Deferred.a;
+        Material.Normal     = Normal;
+        
+        Color.rgb = DirectSunlight(Eye, World, Sun, Material);
 
         if (Depth < SkyDepth)
         {
@@ -107,7 +99,6 @@ void main()
 
             Color.rgb = mix(Color.rgb, SkyColor.rgb, 1.0 - saturate(exp(-d * Clouds.Density * 0.025)));
         }
-    #endif
     }
     else
     {
