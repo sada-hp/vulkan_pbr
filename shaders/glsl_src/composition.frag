@@ -58,14 +58,6 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     return vec3(ambient + MaxLightIntensity * (scatter + (Material.AO * (specular + diffuse) / PI) * NdotL));
 }
 
-vec3 GetWorldPosition(float Depth)
-{
-    vec4 ClipSpace     = vec4(2.0 * UV - 1.0, Depth, gl_FragCoord.w);
-    vec4 WorldPosition = vec4(ubo.ViewMatrixInverse * (ubo.ProjectionMatrixInverse * ClipSpace));
-
-    return WorldPosition.xyz / WorldPosition.w;
-}
-
 void main()
 {
     vec4 SkyColor  = texture(SceneBackground, UV);
@@ -79,7 +71,7 @@ void main()
     {
         vec3 Eye   = ubo.CameraPosition.xyz;
         vec3 Sun   = normalize(ubo.SunDirection.xyz);
-        vec3 World = GetWorldPosition(Depth);
+        vec3 World = GetWorldPosition(UV, Depth);
         
         SMaterial Material;
         Material.Roughness  = Deferred.g;
@@ -94,10 +86,12 @@ void main()
 
         if (Depth < SkyDepth)
         {
-            vec3 CloudPosition = GetWorldPosition(SkyDepth);
-            float d = distance(CloudPosition, WorldPosition);
+            vec3 CloudPosition = GetWorldPosition(UV, SkyDepth);
+            float d = distance(CloudPosition, World);
 
-            Color.rgb = mix(Color.rgb, SkyColor.rgb, 1.0 - saturate(exp(-d * Clouds.Density * 0.025)));
+            float a = 1.0 - SkyColor.a;
+            float b = saturate(exp(-d * Clouds.Density * 0.01));
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, a * b);
         }
     }
     else

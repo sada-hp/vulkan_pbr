@@ -144,8 +144,8 @@ namespace GR
 
 			GRAPI ProjectionMatrix& SetDepthRange(float Near, float Far)
 			{
-				// From 0 to 1
 #if 0
+				// From 0 to 1
 				matrix[2][2] = -Far / (Far - Near);
 				matrix[3][2] = -(Far * Near) / (Far - Near);
 #else
