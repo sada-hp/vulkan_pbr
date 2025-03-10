@@ -55,7 +55,7 @@ void main()
     UV = vertUV.xy;
     ivec3 texelId = ivec3(round(UV * (noiseSize - 1)), Level);
 
-    Height = RoundToIncrement(floor(texelFetch(NoiseMap, texelId, 0).r), 2.5f);
+    Height = floor(texelFetch(NoiseMap, texelId, 0).r);
 
 #if 1
         dmat3 Orientation = GetTerrainOrientation();
@@ -69,10 +69,10 @@ void main()
         dvec3 Center = dvec3(0.0, Rg, 0.0);
 #endif
 
-    float u = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y - 1, Level), 0).x;
-    float d = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).x;
-    float r = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).x;
-    float l = Rg + texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).x;
+    float u = floor(texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y - 1, Level), 0).x);
+    float d = floor(texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).x);
+    float r = floor(texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).x);
+    float l = floor(texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).x);
 
     Normal.z = u - d;
     Normal.x = l - r;
@@ -84,4 +84,6 @@ void main()
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
+
+    Height -= MinHeight;
 }

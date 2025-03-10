@@ -17,7 +17,7 @@ layout(binding = 9) uniform sampler3D InscatteringLUT;
 layout(binding = 10) uniform CloudLayer
 {
     float Coverage;
-    float Absorption;
+    float Density;
     float WindSpeed;
 } Clouds;
 
@@ -47,6 +47,7 @@ vec3 DirectSunlight(vec3 Eye, vec3 X, vec3 L, in SMaterial Material)
     vec3 diffuse = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     vec3 ambient = vec3(mix(0.001, 0.01, Material.Metallic)) * Material.Albedo.rgb;
 
+    vec3 S;
     if (Eye != X)
     {
         float r0 = length(X);
@@ -55,13 +56,13 @@ vec3 DirectSunlight(vec3 Eye, vec3 X, vec3 L, in SMaterial Material)
         float Shadow = smoothstep(0.0, 1.0, max(PdotL, 0.0));
         vec3 Li = GetTransmittanceWithShadow(TransmittanceLUT, r0, PdotL);
         vec3 E =  GetIrradiance(IrradianceLUT, r0, PdotL);
-        // vec3 S = PointScattering(TransmittanceLUT, InscatteringLUT, Eye, X, L);
+        S = PointScattering(TransmittanceLUT, InscatteringLUT, Eye, X, L);
 
         diffuse =  MaxLightIntensity * (Li + E) * diffuse;
         specular = MaxLightIntensity * (Li + E) * specular;
     }
 
-    return ambient + (Material.AO * (specular + diffuse)) * NdotL / PI;
+    return ambient + (Material.AO * (specular + diffuse)) * NdotL / PI + S;
 }
 
 vec3 GetWorldPosition(float Depth)
@@ -101,7 +102,10 @@ void main()
 
         if (Depth < SkyDepth)
         {
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, SkyColor.a);
+            vec3 CloudPosition = GetWorldPosition(SkyDepth);
+            float d = distance(CloudPosition, WorldPosition);
+
+            Color.rgb = mix(Color.rgb, SkyColor.rgb, 1.0 - saturate(exp(-d * Clouds.Density * 0.025)));
         }
     #endif
     }

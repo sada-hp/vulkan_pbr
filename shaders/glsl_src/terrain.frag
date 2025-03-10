@@ -70,7 +70,7 @@ void main()
         Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
         break;
     }
-    Material.Albedo = vec4(0.0, 1.0, 0.0, 1.0);
+    Material.Albedo = Height == 0 ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
 
     Material.AO = 1.0;
     Material.Roughness = 1.0;

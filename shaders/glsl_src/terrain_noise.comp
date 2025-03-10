@@ -23,9 +23,48 @@ layout (constant_id = 4) const float MinHeight = 0;
 layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
 
+float terrain_fbm(vec3 n, float octaves)
+{
+    float fbm = 0.0;
+    float Freq = 800.0;
+    float Ampltude = 1.0;
+    float GainA = 0.5;
+    float GainF = 2.0;
+
+    float pole = abs(dot(n, vec3(0, 1, 0)));
+    vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+    vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+    float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+    float right = 1.0 - left;
+
+    float AltitudeF = Ampltude;
+    float SlopeF = Ampltude;
+
+    for (int i = 0; i < octaves; i++)
+    {
+        float np = 0.0;
+        np += left > 0.0 ? left * perlin(uv1, Freq) : 0.0;
+        np += right > 0.0 ? right * perlin(uv2, Freq) : 0.0;
+        fbm += AltitudeF * np;
+
+        Freq *= GainF;
+        AltitudeF *= mix(GainA, GainA * max(0.0, np), 0.3);
+    }
+
+    float nb = abs(fbm);
+    float nr = 1.0 - nb;
+    float w = left * perlin(-uv1, 800.0) + right * perlin(-uv2, 800.0);
+
+    float res = w >= 0 ? mix(fbm, nb, w) : mix(fbm, nr, abs(w));
+    res = 0.5 + 0.5 * res;
+
+    return res * pow(abs(res), 3.0);
+}
+
 float sample_perlin_sphere(vec3 Normal, float freq)
 {
-    return saturate(perlin(Normal.xz, freq) * perlin(Normal.xy, freq) * perlin(Normal.yz, freq));
+    return clamp(perlin(Normal.xz, freq) * perlin(Normal.xy, freq) * perlin(Normal.yz, freq), -1.0, 1.0);
 }
 
 void main()
@@ -37,7 +76,7 @@ void main()
         Vertex vertex = vertices.at[gl_GlobalInvocationID.x];
 
         int Level = int(vertex.Position.y);
-#if 1
+#if 1   
         dmat3 Orientation = GetTerrainOrientation();
         dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(vertex.Position.y));
 #else
@@ -51,14 +90,7 @@ void main()
         vec3 ObjectPosition = vec3(Orientation * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center);
         vec3 Normal = vec3(normalize(ObjectPosition));
 
-        float perlin1 = sample_perlin_sphere(Normal * vec3(0.5, 1.0, 0.5), 250.0);
-        float perlin2 = sample_perlin_sphere(Normal, 350.0);
-        float perlin3 = sample_perlin_sphere(Normal * vec3(0.75, 1.0, 0.25), 480.0);
-        float perlin4 = sample_perlin_sphere(Normal * vec3(0.5, 1.0, 0.5), 100.0);
-        float perlin5 = sample_perlin_sphere(Normal, 1000.0);
-
-        float Height = 1.0 - saturate(0.75 * perlin3 + 0.5 * perlin1 + 0.25 * perlin2);
-        Height = saturate(sqrt(saturate(Height - perlin4)) * perlin5);
+        float Height = saturate(terrain_fbm(Normal, 10));
 
         imageStore(outImage, ivec3(round(vertex.UV.xy * (imageSize(outImage).xy - 1)), Level), vec4(MinHeight + Height * (MaxHeight - MinHeight)));
     }

@@ -19,10 +19,10 @@ float noise(vec2 p)
 
 vec2 noise2(vec2 p)
 {
-    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-    p3 += dot(p3, p3.yzx+33.33);
-
-    return fract((p3.xx+p3.yz)*p3.zy);
+    ivec2 n = ivec2(p.x*ivec2(3,37) + p.y*ivec2(311,113));
+	n = (n << 13) ^ n;
+    n = n * (n * n * 15731 + 789221) + 1376312589;
+    return -1.0+2.0*vec2( n & ivec2(0x0fffffff))/float(0x0fffffff);
 }
 
 vec2 pcg2d(vec2 p)
@@ -103,13 +103,18 @@ float perlin(vec2 x0, float freq)
 
     vec2 of = vec2(0.0, 1.0);
 
-	float va = pcg2d(mod(i + of.xx, freq)).x;
-    float vb = pcg2d(mod(i + of.yx, freq)).x;
-    float vc = pcg2d(mod(i + of.xy, freq)).x;
-    float vd = pcg2d(mod(i + of.yy, freq)).x;
+    vec2 ga = noise2(mod(i + of.xx, freq));
+    vec2 gb = noise2(mod(i + of.yx, freq));
+    vec2 gc = noise2(mod(i + of.xy, freq));
+    vec2 gd = noise2(mod(i + of.yy, freq));
+    
+    float va = dot( ga, f - of.xx );
+    float vb = dot( gb, f - of.yx );
+    float vc = dot( gc, f - of.xy );
+    float vd = dot( gd, f - of.yy );
 
     vec2 u = smoothstep(0.0, 1.0, f);
-
+    
     return mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
 }
 
@@ -130,13 +135,13 @@ float perlin(vec3 x0, float freq)
     vec3 gh = pcg3d(mod(i + of.yyy, freq));
 
     float va = dot(ga, f);
-    float vb = dot(gb, f - vec3(1.0, 0.0, 0.0));
-    float vc = dot(gc, f - vec3(0.0, 1.0, 0.0));
-    float vd = dot(gd, f - vec3(1.0, 1.0, 0.0));
-    float ve = dot(ge, f - vec3(0.0, 0.0, 1.0));
-    float vf = dot(gf, f - vec3(1.0, 0.0, 1.0));
-    float vg = dot(gg, f - vec3(0.0, 1.0, 1.0));
-    float vh = dot(gh, f - vec3(1.0, 1.0, 1.0));
+    float vb = dot(gb, f - of.yxx);
+    float vc = dot(gc, f - of.xyx);
+    float vd = dot(gd, f - of.yyx);
+    float ve = dot(ge, f - of.xxy);
+    float vf = dot(gf, f - of.yxy);
+    float vg = dot(gg, f - of.xyy);
+    float vh = dot(gh, f - of.yyy);
     
     vec3 u = smoothstep(0.0, 1.0, f);
     
@@ -164,7 +169,7 @@ float fbm_worley(vec2 x, float f, uint n)
 		a *= a;
 	}
     
-	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
 }
 
 float fbm_worley(vec3 x, float f, uint n) 
@@ -181,7 +186,7 @@ float fbm_worley(vec3 x, float f, uint n)
 		a *= a;
 	}
     
-	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
 }
 
 float fbm_perlin(vec2 x, float f, uint n) 
@@ -198,7 +203,7 @@ float fbm_perlin(vec2 x, float f, uint n)
 		a *= a;
 	}
 
-	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
 }
 
 float fbm_perlin(vec3 x, float f, uint n) 
@@ -215,5 +220,5 @@ float fbm_perlin(vec3 x, float f, uint n)
 		a *= a;
 	}
 
-	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
 }

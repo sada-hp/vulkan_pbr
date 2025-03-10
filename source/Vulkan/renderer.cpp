@@ -496,7 +496,7 @@ bool VulkanBase::BeginFrame()
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
-#if 1
+#if 0
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_ErosionCompute);
@@ -1561,7 +1561,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
 		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (uint32_t Sample = 2; Sample <= 20; Sample++)
+	for (uint32_t Sample = 2; Sample <= 5; Sample++)
 	{
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 

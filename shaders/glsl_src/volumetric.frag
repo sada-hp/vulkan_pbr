@@ -57,7 +57,7 @@ vec3 GetUV(vec3 p, float scale, float speed_mod)
 
 vec3 GetSunColor(vec3 Eye, vec3 V, vec3 S)
 {
-    return SphereIntersect(Eye, V, vec3(0.0), Rg) ? vec3(0.0) : 3.0 * vec3(smoothstep(0.9998, 1.0, max(dot(V, S), 0.0)));
+    return SphereIntersect(Eye, V, vec3(0.0), Rg) ? vec3(0.0) : 3.0 * vec3(smoothstep(0.99994, 1.0, max(dot(V, S), 0.0)));
 }
 
 // Cheaper version of Sample-Density
