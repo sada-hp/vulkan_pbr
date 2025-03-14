@@ -49,7 +49,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
     vec3 diffuse  = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
     vec3 ambient  = vec3(mix(1e-3, 1e-4, Material.Metallic)) * Material.Albedo.rgb;
-    vec3 scatter  = max(Atmosphere.S * Atmosphere.Shadow, 1e-4 * (1.0 - Atmosphere.T));
+    vec3 scatter  = Atmosphere.S;
 
     diffuse  = diffuse  * Atmosphere.Shadow * (Atmosphere.L + Atmosphere.E);
     specular = specular * Atmosphere.Shadow * Atmosphere.L;

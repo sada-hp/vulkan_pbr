@@ -11,7 +11,7 @@ layout (constant_id = 1) const float Rt = 6420.0 * 1e3;
 
 float Rdelta = Rt - Rg;
 float Rcb = Rg + 0.15 * Rdelta;
-float Rct = Rg + 0.45 * Rdelta;
+float Rct = Rg + 0.7 * Rdelta;
 float Rcdelta = Rct - Rcb;
 
 const float HR = 8.0;

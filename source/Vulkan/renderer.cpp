@@ -1561,7 +1561,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
 		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (uint32_t Sample = 2; Sample <= 5; Sample++)
+	for (uint32_t Sample = 2; Sample < 10; Sample++)
 	{
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
@@ -1623,7 +1623,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	return 1;
 }
 
-VkBool32 VulkanBase::volumetric_precompute()
+VkBool32 VulkanBase::volumetric_precompute() 
 {
 	VmaAllocationCreateInfo allocCreateInfo{};
 	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1635,31 +1635,31 @@ VkBool32 VulkanBase::volumetric_precompute()
 	cloudInfo.size = sizeof(CloudLayerProfile);
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	m_CloudLayer = std::make_unique<Buffer>(m_Scope, cloudInfo, allocCreateInfo);
-
+	 
 	CloudLayerProfile defaultClouds{};
 	m_CloudLayer->Update(&defaultClouds, sizeof (CloudLayerProfile));
 
-	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
+	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 8u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
 	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 8u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
-	m_VolumeWeather.Image = GRNoise::GeneratePerlin(m_Scope, { 128u, 128u, 1u }, 32u, 1u);
+	m_VolumeWeather.Image = GRNoise::GeneratePerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat); 
 	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::LinearClamp);
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_Volumetrics->descriptorSet = DescriptorSetDescriptor()
 		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(2,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(3,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(4,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(5,  VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(6,  VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(7,  VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 		.Allocate(m_Scope);
 
 	VkPipelineColorBlendAttachmentState blendState{};

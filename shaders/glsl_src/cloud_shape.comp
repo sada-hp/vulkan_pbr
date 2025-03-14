@@ -15,26 +15,19 @@ void main()
     NOISE_SEED = seed;
 
     const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
-    float worley01 = 1.0 - worley(cell_loc, frequency_worley * 1.5);
-    float worley02 = 1.0 - worley(cell_loc, frequency_worley * 6.0);
-    float worley03 = 1.0 - worley(cell_loc, frequency_worley * 12.0);
+    float worley01 = 1.0 - worley(cell_loc, frequency_worley * 4);
+    float worley02 = 1.0 - worley(cell_loc, frequency_worley * 8);
+    float worley03 = 1.0 - worley(cell_loc, frequency_worley * 14);
     
-    float perlin = fbm_perlin(cell_loc, frequency_perlin, 2);
-    float perlin_worley = remap(perlin, 0.0, 1.0, worley01 * 0.625 + worley02 * 0.25 + worley03 * 0.125, 1.0);
+    float perlin = fbm_perlin(cell_loc, frequency_perlin, 4);
+    float fbm_worley = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
+    float perlin_worley = remap(perlin, 0.0, 1.0, fbm_worley, 1.0);
 
-    worley01 = 1.0 - worley(cell_loc, frequency_worley);
-    worley02 = 1.0 - worley(cell_loc, frequency_worley * 2.0);
-    worley03 = 1.0 - worley(cell_loc, frequency_worley * 3.0);
-    float worley04 = worley(cell_loc, frequency_worley * 4.0);
-    float worley05 = 1.0 - worley(cell_loc, frequency_worley * 16.0);
+    worley01 = 1.0 - worley(cell_loc, frequency_worley * 6);
+    worley02 = 1.0 - worley(cell_loc, frequency_worley * 12);
+    worley03 = 1.0 - worley(cell_loc, frequency_worley * 18);
+    float low_frequency_fbm = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
 
-    float fbm01 = worley01 * 0.625 + worley02 * 0.25 + worley03 * 0.125;
-    float fbm02 = worley02 * 0.625 + worley03 * 0.25 + worley04 * 0.125;
-    float fbm03 = worley03 * 0.625 + worley04 * 0.25 + worley05 * 0.125;
-    float fbm04 = worley04 * 0.75 + worley05 * 0.25;
-
-    float low_frequency_fbm = fbm02 * 0.625 + fbm03 * 0.25 + fbm04 * 0.125;
-    float base = remap(perlin_worley, low_frequency_fbm, 1.0, 0.0, 1.0);
-
-    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(base, 0.0, 0.0, 0.0));
+    float cloud_noise = remap(perlin_worley, -low_frequency_fbm, 1.0, 0.0, 1.0);
+    imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(cloud_noise, 0.0, 0.0, 0.0));
 }

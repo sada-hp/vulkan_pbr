@@ -70,7 +70,7 @@ float HGDPhase(float a, float ghg, float gd, float kd, float w)
 
 float Powder(float e, float ds)
 {
-    return exp(-ds * e) * (1.0 - exp(-ds * e * 2));
+    return 2.0 * exp(-ds * e) * (1.0 - exp(-ds * e * 2.0));
 }
 
 vec3 GetMie(vec4 RayMie)
@@ -249,15 +249,17 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         }
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
-        Atmosphere.S = max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0);
-
         float Factor = saturate(2.0 * (PdotL + 0.1));
-        Atmosphere.Shadow = PdotL >= 0.5 ? 1.0 : smoothstep(0.0, 1.0, Factor * Factor);
+        Atmosphere.Shadow = PdotL >= 0.5 ? 1.0 : smoothstep(0.0, 1.0, Factor);
+
+        Atmosphere.S = max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0);
+        Atmosphere.S = max(Atmosphere.S * Atmosphere.Shadow, 1e-4 * (1.0 - Atmosphere.T));
     }
 }
 
 vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 Eye, vec3 View, vec3 Sun)
 {
+    vec3 Color = vec3(0.0);
     float Re = length(Eye);
     float EdotV = dot(Eye, View) / Re;
     float EdotL = dot(Eye, Sun) / Re;
@@ -267,7 +269,11 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     float PhaseHGD  = HGDPhase(VdotL, MieG); 
     vec4 Scattering = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
 
-    vec3 Color = max(PhaseR * Scattering.rgb + PhaseHGD * GetMie(Scattering), 0.0);
+    // Sky
+    if (SphereIntersect(Eye, View, vec3(0.0), Rt))
+    {
+        Color += max(PhaseR * Scattering.rgb + PhaseHGD * GetMie(Scattering), 0.0);
+    }
     
     // Sun
     if (!SphereIntersect(Eye, View, vec3(0.0), Rg))
