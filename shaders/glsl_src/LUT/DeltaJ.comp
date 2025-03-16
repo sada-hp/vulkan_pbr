@@ -76,7 +76,7 @@ vec3 ComputeDeltaJ(int Order, float R, float Mu, float MuS, float Nu)
                 vec3 Ray = GetInscattering(DeltaSR, R, W.z, MuS, nu1).rgb;
                 vec3 Mie = GetInscattering(DeltaSM, R, W.z, MuS, nu1).rgb;
 
-                S += Ray * RayleighPhase(nu1) + Mie * MiePhase(nu1);
+                S += Ray * RayleighPhase(nu1) + Mie * HGDPhase(nu1);
             }
             else
             {

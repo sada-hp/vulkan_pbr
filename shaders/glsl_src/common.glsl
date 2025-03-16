@@ -110,6 +110,11 @@ dvec3 RoundToIncrement(dvec3 value, float increment)
     return round(value * (1.0 / increment)) * increment;
 }
 
+float GetScatteringFactor(float CloudCoverage)
+{
+    return saturate(0.1 + smoothstep(0.5, 1.0, saturate(1.0 - pow(CloudCoverage, 5.0) * 5.0)));
+}
+
 #ifdef _UBO_SHADER
 vec3 GetWorldPosition(vec2 UV, float Depth)
 {

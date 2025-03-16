@@ -496,7 +496,7 @@ bool VulkanBase::BeginFrame()
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
-#if 0
+#if 1
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_ErosionCompute);
@@ -1028,6 +1028,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 
 	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
 
 	for (size_t i = 0; i < m_HDRDescriptors.size(); i++)
 	{
@@ -1042,7 +1043,10 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(8, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
-			.AddUniformBuffer(10, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
+			.AddImageSampler(10, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
+			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
+			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+			.AddUniformBuffer(13, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 
 		m_CompositionPipelines[i] = GraphicsPipelineDescriptor()

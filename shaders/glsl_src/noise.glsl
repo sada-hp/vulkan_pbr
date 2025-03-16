@@ -129,6 +129,35 @@ float perlin(vec2 x0, float freq)
     return mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
 }
 
+void perlind(vec2 x0, float freq, out float value, out vec2 d1, out vec2 d2) 
+{
+    vec2 i = floor(x0 * freq);
+    vec2 f = fract(x0 * freq);
+
+    vec2 of = vec2(0.0, 1.0);
+
+    vec2 ga = noise2(mod(i + of.xx, freq));
+    vec2 gb = noise2(mod(i + of.yx, freq));
+    vec2 gc = noise2(mod(i + of.xy, freq));
+    vec2 gd = noise2(mod(i + of.yy, freq));
+    
+    float va = dot( ga, f - of.xx );
+    float vb = dot( gb, f - of.yx );
+    float vc = dot( gc, f - of.xy );
+    float vd = dot( gd, f - of.yy );
+
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+    vec2 du2 = 60.0 * f * (f * (f * 3.0) + 1.0);
+
+    value = mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
+
+    vec2 g = mix(mix(ga, gb, u.x), mix(gc, gd, u.x), u.y);
+    d1.x = g.x + du.x * ((vb - va) + u.y * (va - vb - vc + vd));
+    d1.y = g.y + du.y * ((vc - va) + u.x * (va - vb - vc + vd));
+    d2 = g;
+}
+
 float perlin(vec3 x0, float freq) 
 {
     vec3 i = floor(x0 * freq);

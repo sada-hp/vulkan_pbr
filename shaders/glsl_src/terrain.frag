@@ -30,7 +30,7 @@ layout(location = 2) out vec4 outDeferred;
 
 void main()
 {
-#if 0
+#if 1
     vec3 N = normalize(Normal);
 #else
     vec3 dX = dFdxFine(WorldPosition.xyz);

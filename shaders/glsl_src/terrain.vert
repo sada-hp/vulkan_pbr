@@ -55,7 +55,7 @@ void main()
     UV = vertUV.xy;
     ivec3 texelId = ivec3(round(UV * (noiseSize - 1)), Level);
 
-    Height = floor(texelFetch(NoiseMap, texelId, 0).r);
+    Height = texelFetch(NoiseMap, texelId, 0).r;
 
 #if 1
         dmat3 Orientation = GetTerrainOrientation();
@@ -69,21 +69,28 @@ void main()
         dvec3 Center = dvec3(0.0, Rg, 0.0);
 #endif
 
-    float u = floor(texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y - 1, Level), 0).x);
-    float d = floor(texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).x);
-    float r = floor(texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).x);
-    float l = floor(texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).x);
+    ivec3 texelIdU = clamp_coords(texelId.x, texelId.y - 1, Level);
+    float u = texelFetch(NoiseMap, texelIdU, 0).r;
 
-    Normal.z = u - d;
-    Normal.x = l - r;
-    Normal.y = Height;
+    ivec3 texelIdD = clamp_coords(texelId.x, texelId.y + 1, Level);
+    float d = texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).r;
+
+    ivec3 texelIdR = clamp_coords(texelId.x + 1, texelId.y, Level);
+    float r = texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).r;
+
+    ivec3 texelIdL = clamp_coords(texelId.x - 1, texelId.y, Level);
+    float l = texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).r;
+
+    Normal.x = (l - r) / exp2(max(texelIdR.z, texelIdL.z));
+    Normal.z = (u - d) / exp2(max(texelIdD.z, texelIdU.z));
+    Normal.y = 2.0 * Scale;
     Normal = vec3(Orientation * normalize(Normal));
 
     vec3 ObjectPosition = vec3(Orientation * vec3(vertPosition.x, 0.0, vertPosition.z) + Center);
-    WorldPosition = vec4(vec3(normalize(ObjectPosition)) * (Rg + Height), 1.0);
 
+    WorldPosition = vec4(vec3(normalize(ObjectPosition)) * (Rg + Height), 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 
-    Height -= MinHeight;
+    Height = (Height - MinHeight) / (MaxHeight - MinHeight);
 }

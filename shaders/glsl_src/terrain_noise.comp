@@ -41,15 +41,43 @@ float terrain_fbm(vec3 n, float octaves)
     float AltitudeF = Ampltude;
     float SlopeF = Ampltude;
 
+    vec2 Gp = vec2(0.0);
     for (int i = 0; i < octaves; i++)
     {
-        float np = 0.0;
-        np += left > 0.0 ? left * perlin(uv1, Freq) : 0.0;
-        np += right > 0.0 ? right * perlin(uv2, Freq) : 0.0;
-        fbm += AltitudeF * np;
+        float Np = 0.0;
+        vec2 DNp = vec2(0.0);
+        vec2 DNp2 = vec2(0.0);
 
+        if (left > 0.0)
+        {
+            float _Np = 0.0;
+            vec2 _DNp = vec2(0.0);
+            vec2 _DNp2 = vec2(0.0);
+            perlind(uv1, Freq, _Np, _DNp, _DNp2);
+
+            Np += left * _Np;
+            DNp += left * _DNp;
+            DNp2 += left * _DNp2;
+        }
+
+        if (right > 0.0)
+        {
+            float _Np = 0.0;
+            vec2 _DNp = vec2(0.0);
+            vec2 _DNp2 = vec2(0.0);
+            perlind(uv2, Freq, _Np, _DNp, _DNp2);
+
+            Np += right * _Np;
+            DNp += right * _DNp;
+            DNp2 += right * _DNp2;
+        }
+
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.5 );
+        Gp = Gp + DNp * 0.4;
+        fbm += (1.0 / 1.0 + dot(Gp, Gp)) * AltitudeF * Np;
+
+        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.3);
         Freq *= GainF;
-        AltitudeF *= mix(GainA, GainA * max(0.0, np), 0.3);
     }
 
     float nb = abs(fbm);
