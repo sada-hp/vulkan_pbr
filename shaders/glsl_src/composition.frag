@@ -94,73 +94,47 @@ float SampleCloudShadow(vec3 x1)
     if (Density == 0.0)
         return 1.0;
 
-    return saturate(0.01 + BeerLambert(Density, Stepsize));
+    return saturate(mix(0.1, 0.01, Clouds.Coverage) + BeerLambert(Density, Stepsize));
 }
 
-void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out SAtmosphere Atmosphere)
+void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow)
 {
-    int steps = 64;
+    if (Clouds.Coverage == 0.0)
+    {
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
+        Atmosphere.L *= Atmosphere.Shadow;
+        Atmosphere.E *= Atmosphere.Shadow;
+        // Atmosphere.S *= GetScatteringFactor(Clouds.Coverage);
+        return;
+    }
+
     float len = distance(Eye, World);
+    int steps = int(floor(mix(48, 4, saturate(0.01 * len / 1e4))));
     float Stepsize = len / float(steps);
     vec3 Ray = Eye;
 
-    Atmosphere.S = vec3(0.0);
-    Atmosphere.L = vec3(0.0);
-    Atmosphere.E = vec3(0.0);
-    Atmosphere.T = vec3(0.0);
-    Atmosphere.Shadow = 0.0;
-#if 0
-    for (int i = 0; i < steps; i++)
-    {
-        vec3 Temp = Ray;
-        Ray += View * Stepsize;
-
-        SAtmosphere AtmosphereItter;
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Temp, Ray, Sun, AtmosphereItter);
-
-        float Shadow = AtmosphereItter.Shadow * mix(1.0, SampleCloudShadow(Ray), AtmosphereItter.Shadow * AtmosphereItter.Shadow);
-        
-        Atmosphere.S += AtmosphereItter.S * Shadow;
-        Atmosphere.L += AtmosphereItter.L * Shadow;
-        Atmosphere.E += AtmosphereItter.E * Shadow;
-        Atmosphere.T = AtmosphereItter.T;
-        Atmosphere.Shadow = Shadow;
-    }
-#else
     SAtmosphere AtmosphereStart, AtmosphereEnd;
     AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye + View * Stepsize, World, Sun, AtmosphereEnd);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, AtmosphereEnd);
 
+    Atmosphere.E = AtmosphereEnd.E * AtmosphereEnd.Shadow;
+    Atmosphere.L = AtmosphereEnd.L * AtmosphereEnd.Shadow;
+    Atmosphere.T = AtmosphereEnd.T;
+    
     Atmosphere.S = AtmosphereStart.S;
-    Atmosphere.L = AtmosphereStart.L;
-    Atmosphere.E = AtmosphereStart.E;
-
-    vec3 L = vec3(0.0), S = vec3(0.0), E = vec3(0.0);
     for (int i = 0; i < steps; i++)
     {
-        Ray += View * Stepsize;
+        Ray = Eye + (i + 1) * View * Stepsize;
 
         float w0 = float(i) / float(steps);
         float w1 = float(i + 1) / float(steps);
 
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
-        float Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow * Atmosphere.Shadow);
-
-        S = mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - mix(AtmosphereStart.S, AtmosphereEnd.S, w0);
-        L = mix(AtmosphereStart.L, AtmosphereEnd.L, w1);
-        E = mix(AtmosphereStart.E, AtmosphereEnd.E, w1);
-
-        Atmosphere.S += S * Shadow;
-        Atmosphere.L += L * Atmosphere.Shadow;
-        Atmosphere.E += E * Atmosphere.Shadow;
-        Atmosphere.Shadow = Shadow;
+        Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow * Atmosphere.Shadow);
+        Atmosphere.S += Shadow * (mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
     }
 
-    Atmosphere.T = AtmosphereEnd.T;
-#endif
-    Atmosphere.S *= GetScatteringFactor(Clouds.Coverage);
-    Atmosphere.L /= float(steps);
-    Atmosphere.E /= float(steps);
+    // Atmosphere.S *= GetScatteringFactor(Clouds.Coverage);
 }
 
 // get specular and ambient part from sunlight
@@ -184,7 +158,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 kD       = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
     vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
     vec3 diffuse  = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
-    vec3 ambient  = vec3(mix(1e-3, 1e-4, Material.Metallic)) * Material.Albedo.rgb;
+    vec3 ambient  = vec3(mix(1e-5, 1e-6, Material.Metallic)) * Material.Albedo.rgb;
 
 #if 0
     SAtmosphere Atmosphere;
@@ -196,12 +170,13 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     specular = specular * Shadow * Atmosphere.L;
     ambient  = ambient  * Atmosphere.T;
 #else
+    float Shadow = 1.0;
     SAtmosphere Atmosphere;
-    SampleAtmosphere(Eye, World, -V, Sun, Atmosphere);
+    SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow);
 
     vec3 scatter  = Atmosphere.S;
-    diffuse  = Atmosphere.Shadow * diffuse  * (Atmosphere.L + Atmosphere.E);
-    specular = Atmosphere.Shadow * specular * Atmosphere.L;
+    diffuse  = Shadow * diffuse  * (Atmosphere.L + Atmosphere.E);
+    specular = Shadow * specular * Atmosphere.L;
     ambient  = ambient  * Atmosphere.T;
 #endif
     return vec3(ambient + MaxLightIntensity * (scatter + (Material.AO * (specular + diffuse) / PI) * NdotL));
@@ -240,7 +215,8 @@ void main()
 
             float a = 1.0 - SkyColor.a;
             float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
+            // Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a);
         }
     }
     else

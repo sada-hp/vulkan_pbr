@@ -4,10 +4,10 @@
 layout (constant_id = 0) const float Rg = 6360.0 * 1e3;
 layout (constant_id = 1) const float Rt = 6420.0 * 1e3;
 
-#define TRANSMITTANCE_SAMPLES 500
-#define INSCATTERING_SAMPLES 100
+#define TRANSMITTANCE_SAMPLES 750
+#define INSCATTERING_SAMPLES 750
 #define INSCATTERING_SPHERE_SAMPLES 16
-#define IRRADIANCE_SAMPLES 32
+#define IRRADIANCE_SAMPLES 64
 
 float Rdelta = Rt - Rg;
 float Rcb = Rg + 0.15 * Rdelta;

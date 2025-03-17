@@ -6,6 +6,33 @@
 float topBound;
 float bottomBound;
 
+struct RayMarch
+{
+    vec3 Direction;
+    vec3 Position;
+    vec3 Start;
+    vec3 End;
+    vec3 FirstHit;
+    vec3 LastHit;
+    float Stepsize;
+    float Height;
+    float T;
+    float A;
+};
+
+void UpdateRay(inout RayMarch Ray)
+{
+    Ray.Position += Ray.Direction * Ray.Stepsize;
+    Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
+}
+
+void UpdateRay(inout RayMarch Ray, float Stepsize, float f)
+{
+    Ray.Stepsize = f * f * f * (f * (f * 6.0 - 15.0) + 10.0) * Stepsize;
+    Ray.Position += Ray.Direction * Ray.Stepsize;
+    Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
+}
+
 // used for shadow sampling
 vec3 light_kernel[] =
 {
@@ -18,20 +45,13 @@ vec3 light_kernel[] =
     vec3(0.260733, 0.921748, 0.287052)
 };
 
-struct RayMarch
+struct
 {
-    vec3 Direction;
-    vec3 Position;
-
-    vec3 Start;
-    vec3 End;
-
-    float Stepsize;
-    float Height;
-
-    float T;
-    float A;
-};
+    float Camera;
+    float TopCloud;
+    float BottomCloud;
+    float Ground;
+} Hits;
 
 layout(location = 0) in vec2 ScreenUV;
 layout(location=0) out vec4 outScattering;
@@ -49,12 +69,6 @@ layout(set = 1, binding = 4) uniform sampler2D WeatherMap;
 layout(set = 1, binding = 5) uniform sampler2D TransmittanceLUT;
 layout(set = 1, binding = 6) uniform sampler2D IrradianceLUT;
 layout(set = 1, binding = 7) uniform sampler3D InscatteringLUT;
-
-void UpdateRay(inout RayMarch Ray)
-{
-    Ray.Position += Ray.Direction * Ray.Stepsize;
-    Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
-}
 
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
@@ -114,8 +128,8 @@ void Blend(in RayMarch Ray)
     if (outScattering.a != 1.0)
     {
         SAtmosphere Atmosphere, Atmosphere1, Atmosphere2;
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.Start, SunDir, Atmosphere1);
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.End, SunDir, Atmosphere2);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.FirstHit, SunDir, Atmosphere1);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.LastHit, SunDir, Atmosphere2);
 
         Atmosphere.L = mix(Atmosphere1.L, Atmosphere2.L, Ray.A);
         Atmosphere.T = mix(Atmosphere1.T, Atmosphere2.T, Ray.A);
@@ -123,12 +137,15 @@ void Blend(in RayMarch Ray)
         Atmosphere.Shadow = mix(Atmosphere1.Shadow, Atmosphere2.Shadow, Ray.A);
 
         vec3 Radiance      = Ray.T * Atmosphere.T * Atmosphere.L;
-        vec3 Scattering    = GetScatteringFactor(Clouds.Coverage) * mix(Ray.T, 1.0, Atmosphere.Shadow) * Atmosphere.S  * MaxLightIntensity;
+        vec3 Scattering    = Ray.T * Atmosphere.S  * MaxLightIntensity;
 
         CloudsColor = Scattering + Radiance * outScattering.rgb;
     }
     
-    outScattering.rgb = mix(CloudsColor, SkyColor, outScattering.a);
+    if (Hits.Ground == 0.0)
+        outScattering.rgb = mix(CloudsColor, SkyColor, outScattering.a);
+    else
+        outScattering.rgb = CloudsColor;
 }
 
 // volumetric-cloudscapes-of-horizon-zero-dawn
@@ -141,7 +158,7 @@ float SampleCone(RayMarch Ray, int mip)
         UpdateRay(Ray);
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
 
-        if (outScattering.a > 0.3)
+        if (cone_density < 0.2)
         {
             float density = 0.0;
             if ((density = SampleCloudShape(Ray, mip + 1)) > 0.0)
@@ -194,7 +211,9 @@ void MarchToCloud(inout RayMarch Ray)
 
     // float PhaseF = DualLobeFunction(dot(ubo.SunDirection.xyz, Ray.Direction), -0.2, 0.2, 0.25);
     float PhaseF = HGDPhaseCloud(dot(ubo.SunDirection.xyz, Ray.Direction));
-    float w = saturate(1000.0 * pow(abs(dot(normalize(ubo.CameraPosition.xyz), Ray.Direction)), 5.0));
+
+    float EdotV = dot(normalize(ubo.CameraPosition.xyz), Ray.Direction);
+    float w = saturate(1000.0 * pow(abs(EdotV), 5.0));
 
     float mean_depth = 0.0;
     float sample_density = 0.0;
@@ -202,14 +221,15 @@ void MarchToCloud(inout RayMarch Ray)
 
     // take larger steps and
     // skip empty space until cloud is found
-    int steps = int(ceil(mix(128, 16, w))), i = steps;
-    float len = distance(Ray.Start, Ray.End);
+    int steps = int(ceil(mix(96, 64, w))), i = steps - 1;
 
-    Ray.Stepsize = len / float(steps);
-    for (i; i >= 0 && sample_density == 0.0;)
+    Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
+    for (i; i > 0 && sample_density == 0.0;)
     {
         UpdateRay(Ray);
-        sample_density = SampleCloudShape(Ray, 3);
+
+        if ((sample_density = SampleCloudShape(Ray, 3)) > 0)
+            sample_density = SampleCloudDetail(Ray, sample_density, 3);
         i--;
     }
 
@@ -217,31 +237,32 @@ void MarchToCloud(inout RayMarch Ray)
     {
         return;
     }
-    else
-    {
-        int revert = min(i + 2, steps);
-        Ray.End = Ray.Start - Ray.Stepsize * Ray.Direction * revert;
-        len -= Ray.Stepsize * (steps - revert);
-    }
 
     // go more precise for clouds
-    steps = int(mix(256, 64, w));
-    Ray.Stepsize = len / float(steps);
+    Ray.End = Ray.Position - Ray.Stepsize * Ray.Direction;
+    float Stepsize = 2.0 * distance(Ray.Start, Ray.End) / float(steps);
+    Ray.Stepsize = Stepsize;
     Ray.Position = Ray.End;
 
-    const float I = MaxLightIntensity * PhaseF;
-    for (i = steps; i >= 0; i--)
+    const float I = PI * MaxLightIntensity * PhaseF;
+    float ToCamera = distance(ubo.CameraPosition.xyz, Ray.End);
+    float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
+    for (i = steps - 1; i > 0; i--)
     {
-        UpdateRay(Ray);
-
-        int mip = 4 - int(min(ceil(outScattering.a * 100.0), 4.0));
+        float f = float(steps - i) / float(steps);
+        UpdateRay(Ray, Stepsize, f);
+        
+        int mip = int(floor(mix(5.0, 0.0, outScattering.a)));
         if ((sample_density = SampleCloudShape(Ray, mip)) > 0 && outScattering.a > 0.01)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
         if (sample_density > 0.0) 
         {
             if (outScattering.a == 1.0)
-                Ray.Start = Ray.Position;
+            {
+                Ray.FirstHit = Ray.Position;
+                ToCamera = distance(Ray.FirstHit, ubo.CameraPosition.xyz);
+            }
             
             float extinction = sample_density + 1e-6;
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
@@ -251,20 +272,21 @@ void MarchToCloud(inout RayMarch Ray)
             E = vec3(E - transmittance * E) / extinction;
             outScattering.rgb += E * outScattering.a;
             outScattering.a *= transmittance;
-            Ray.End = Ray.Position;
+            Ray.LastHit = Ray.Position;
 
-            mean_depth += Ray.Height * outScattering.a;
-            mean_transmittance += outScattering.a * (1.0 - Ray.Height);
+            float Dist = ((float(steps - i + 1) * Ray.Stepsize + ToCamera) / ToAEP);
+            mean_depth += mix(Ray.Height, 1.0, Dist) * outScattering.a;
+            mean_transmittance += outScattering.a * mix(1.0 - Ray.Height, 1.0, Dist);
         }
     }
 
     if (outScattering.a != 1.0)
     {
         Ray.T = saturate(mean_depth / mean_transmittance);
-        Ray.A = smoothstep(Ray.T, 1.0, outScattering.a);
+        Ray.A = smoothstep(0.0, 1.0, outScattering.a);
 
-        vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.Start, 1.0));
-        vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.End, 1.0));
+        vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
+        vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
         gl_FragDepth = max(clip1.z / clip1.w, clip2.z / clip2.w);
     }
 }
@@ -286,51 +308,51 @@ void main()
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25));
 
-    float ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-    float top = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
-    float bottom = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
+    Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
+    Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
+    Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 
-    float distanceCamera = length(RayOrigin);
-    float muHoriz = -sqrt(1.0 - pow(Rg / distanceCamera, 2.0));
-    float horizon = dot(RayOrigin, Ray.Direction) / distanceCamera - muHoriz;
+    Hits.Camera = length(RayOrigin);
+    float muHoriz = -sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
+    float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera - muHoriz;
 
-    if (Clouds.Coverage > 0 && (horizon > 0 || distanceCamera > bottomBound))
+    if (Clouds.Coverage > 0 && (horizon > 0 || Hits.Camera > bottomBound))
     {
-        if (distanceCamera < bottomBound)
+        if (Hits.Camera < bottomBound)
         {
-            Ray.End = RayOrigin + Ray.Direction * bottom;
-            Ray.Start = RayOrigin + Ray.Direction * top;
+            Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
+            Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
         }
-        else if (distanceCamera > topBound)
+        else if (Hits.Camera > topBound)
         {
-            if (ground == 0)
+            if (Hits.Ground == 0)
             {
-                Ray.End = RayOrigin + Ray.Direction * top;
+                Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
                 Ray.Start = RayOrigin + Ray.Direction * SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
             }
             else
             {
-                Ray.End = RayOrigin + Ray.Direction * top;
-                Ray.Start = RayOrigin + Ray.Direction * bottom;
+                Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
+                Ray.Start = RayOrigin + Ray.Direction * Hits.BottomCloud;
             }
         }
         else
         {
-            if (ground == 0)
+            if (Hits.Ground == 0)
             {
                 Ray.End = RayOrigin;
-                Ray.Start = RayOrigin + Ray.Direction * top;
+                Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
             }
             else
             {
                 Ray.End = RayOrigin;
-                Ray.Start = RayOrigin + Ray.Direction * bottom;
+                Ray.Start = RayOrigin + Ray.Direction * Hits.BottomCloud;
             }
         }
 
         MarchToCloud(Ray);
     }
-    else if (ground != 0.0)
+    else if (Hits.Ground != 0.0)
     {
         discard;
     }

@@ -37,7 +37,7 @@ void GetIrradienceRMu(vec2 UV, out float R, out float Mu)
 
 vec2 GetUV(ivec2 size)
 {
-    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(size - 1);
+    vec2 UV = vec2(gl_GlobalInvocationID.xy) / vec2(size);
     // UV.y = 1.0 - UV.y;
 
     return clamp(UV, 0.0, 1.0);
@@ -45,7 +45,7 @@ vec2 GetUV(ivec2 size)
 
 vec2 GetUV(ivec2 size, vec2 offset)
 {
-    vec2 UV = (vec2(gl_GlobalInvocationID.xy) + offset) / vec2(size - 1);
+    vec2 UV = (vec2(gl_GlobalInvocationID.xy) + offset) / vec2(size);
     // UV.y = 1.0 - UV.y;
 
     return clamp(UV, 0.0, 1.0);
@@ -53,7 +53,7 @@ vec2 GetUV(ivec2 size, vec2 offset)
 
 vec3 GetUV(ivec3 size)
 {
-    vec3 UV = vec3(gl_GlobalInvocationID.xyz) / vec3(size - 1);
+    vec3 UV = vec3(gl_GlobalInvocationID.xyz) / vec3(size);
     // UV.y = 1.0 - UV.y;
 
     return clamp(UV, 0.0, 1.0);

@@ -124,7 +124,7 @@ float perlin(vec2 x0, float freq)
     float vc = dot( gc, f - of.xy );
     float vd = dot( gd, f - of.yy );
 
-    vec2 u = smoothstep(0.0, 1.0, f);
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
     
     return mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
 }

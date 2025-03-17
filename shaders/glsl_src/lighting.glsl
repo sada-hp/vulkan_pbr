@@ -46,7 +46,7 @@ float DrainePhase(float a, float g, float k)
 //https://research.nvidia.com/labs/rtr/approximate-mie/publications/approximate-mie.pdf
 float HGDPhase(float a)
 {
-    float d = 15.0;
+    float d = int(mix(5.0, 50.0, 1.0 - MieG));
 
     float ghg = exp(-0.0990567/(d - 1.67154));
     float gd = exp(-2.20679/(d + 3.91029) - 0.428934);
@@ -61,7 +61,7 @@ float HGDPhase(float a)
 
 float HGDPhaseCloud(float a)
 {
-    float d = 1.5;
+    float d = int(mix(1.5, 5.0, 1.0 - MieG));
 
     float ghg = 0.0604931 * log(log(d)) + 0.940256;
     float gd =  0.500411 - 0.081287 / (-2 * log(d) + tan(log(d)) + 1.27551);
@@ -71,7 +71,7 @@ float HGDPhaseCloud(float a)
     float dp = DrainePhase(a, gd, kd);
     float hgp = HenyeyGreensteinPhase(a, ghg);
     
-    return PI * mix(hgp, dp, w);
+    return mix(hgp, dp, w);
 }
 
 float HGDPhase(float a, float ghg, float gd, float kd, float w)
@@ -267,7 +267,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         Atmosphere.Shadow = PdotL >= 0.5 ? 1.0 : smoothstep(0.0, 1.0, Factor);
 
         Atmosphere.S = max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0);
-        Atmosphere.S = max(Atmosphere.S * Atmosphere.Shadow, 1e-4 * (1.0 - Atmosphere.T));
+        Atmosphere.S = max(Atmosphere.S * saturate(Atmosphere.Shadow * 7.5), 1e-5 * (1.0 - Atmosphere.T));
     }
 }
 
@@ -280,7 +280,7 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     float VdotL = dot(View, Sun);
 
     float PhaseR    = RayleighPhase(VdotL);
-    float PhaseHGD  = HGDPhase(VdotL); 
+    float PhaseHGD  = HGDPhaseCloud(VdotL); 
     vec4 Scattering = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
 
     // Sky
