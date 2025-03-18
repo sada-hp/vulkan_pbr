@@ -189,6 +189,9 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).AllocateCommandBuffers2(1, &m_TransferCmd[0]);
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).AllocateCommandBuffers2(1, &m_TransferCmd[1]);
+
 	res = CreateFence(m_Scope.GetDevice(), &m_AcquireFence, VK_FALSE) & res;
 
 	res = prepare_renderer_resources() & res;
@@ -327,9 +330,11 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).FreeCommandBuffers(1, &m_TransferCmd[0]);
 
 	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
 		.FreeCommandBuffers(m_AsyncBuffers.size(), m_AsyncBuffers.data());
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).FreeCommandBuffers(1, &m_TransferCmd[1]);
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
@@ -541,6 +546,8 @@ bool VulkanBase::BeginFrame()
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
+		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+
 		{
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -592,36 +599,22 @@ bool VulkanBase::BeginFrame()
 		}
 #endif
 
+		transfer_ownership(VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+
 		{
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
-			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
 			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
 			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
-	}
-
-	{
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
-		barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
-		barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 	}
 
 	{
@@ -1191,6 +1184,37 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 	m_DefaultARM->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultARM->Image);
 
 	return res;
+}
+
+void VulkanBase::transfer_ownership(VkQueueFlagBits queue1, VkQueueFlagBits queue2, const VulkanImage* image, const VkFence fence, const VkSemaphore sem)
+{
+	if (m_Scope.GetQueue(queue1).GetFamilyIndex() == m_Scope.GetQueue(queue2).GetFamilyIndex())
+		return;
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = image->GetImageLayout();
+	barrier.newLayout = image->GetImageLayout();
+	barrier.srcQueueFamilyIndex = m_Scope.GetQueue(queue1).GetFamilyIndex();
+	barrier.dstQueueFamilyIndex = m_Scope.GetQueue(queue2).GetFamilyIndex();
+	barrier.image = image->GetImage();
+	barrier.subresourceRange = image->GetSubResourceRange();
+	barrier.srcAccessMask = 0;
+	barrier.dstAccessMask = 0;
+
+	vkWaitForFences(m_Scope.GetDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
+
+	::BeginOneTimeSubmitCmd(m_TransferCmd[queue1 - 1]);
+	::BeginOneTimeSubmitCmd(m_TransferCmd[queue2 - 1]);
+
+	vkCmdPipelineBarrier(m_TransferCmd[queue1 - 1], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+	vkCmdPipelineBarrier(m_TransferCmd[queue2 - 1], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+	::EndCommandBuffer(m_TransferCmd[queue1 - 1]);
+	::EndCommandBuffer(m_TransferCmd[queue2 - 1]);
+
+	m_Scope.GetQueue(queue1).Submit(m_TransferCmd[queue1 - 1], sem);
+	m_Scope.GetQueue(queue2).Submit2(m_TransferCmd[queue2 - 1], fence, sem);
 }
 #pragma endregion
 

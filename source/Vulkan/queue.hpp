@@ -19,7 +19,13 @@ public:
 
 	const Queue& Submit(const VkCommandBuffer& cmd, const VkFence& fence) const;
 
+	const Queue& Submit(const VkCommandBuffer& cmd, const VkSemaphore& semaphore) const;
+
 	const Queue& Submit(const VkCommandBuffer& cmd, const VkFence& fence, const VkSemaphore& semaphore) const;
+
+	const Queue& Submit2(const VkCommandBuffer& cmd, const VkSemaphore& semaphore) const;
+
+	const Queue& Submit2(const VkCommandBuffer& cmd, const VkFence& fence, const VkSemaphore& semaphore) const;
 
 	void AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const;
 

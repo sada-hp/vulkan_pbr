@@ -188,6 +188,8 @@ private:
 
 	uint32_t m_SwapchainIndex = 0;
 
+	std::array<VkCommandBuffer, 2> m_TransferCmd;
+
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
 #endif
@@ -287,6 +289,8 @@ private:
 	std::unique_ptr<DescriptorSet> create_terrain_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 
 	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const;
+
+	void transfer_ownership(VkQueueFlagBits queue1, VkQueueFlagBits queue2, const VulkanImage* image, const VkFence fence, const VkSemaphore sem);
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;

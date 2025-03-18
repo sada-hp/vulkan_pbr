@@ -60,6 +60,49 @@ const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkFence& inFence, c
 	return *this;
 }
 
+const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkSemaphore& semaphore) const
+{
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &semaphore;
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	return *this;
+}
+
+const Queue& Queue::Submit2(const VkCommandBuffer& cmd, const VkSemaphore& semaphore) const
+{
+	VkPipelineStageFlags mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &semaphore;
+	submitInfo.pWaitDstStageMask = &mask;
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	return *this;
+}
+
+const Queue& Queue::Submit2(const VkCommandBuffer& cmd, const VkFence& inFence, const VkSemaphore& semaphore) const
+{
+	vkResetFences(device, 1, &inFence);
+	VkPipelineStageFlags mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &semaphore;
+	submitInfo.pWaitDstStageMask = &mask;
+	vkQueueSubmit(queue, 1, &submitInfo, inFence);
+	return *this;
+}
+
 const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkFence& inFence) const
 {
 	VkSubmitInfo submitInfo{};
