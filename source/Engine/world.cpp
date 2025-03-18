@@ -72,7 +72,7 @@ namespace GR
 				renderer->_updateTerrain(m_TerrainEntity, Registry);
 			}
 
-			renderer->_drawObject(tro, constants);
+			renderer->_drawTerrain(tro, constants);
 		}
 
 		auto view = Registry.view<PBRObject, Components::WorldMatrix>();

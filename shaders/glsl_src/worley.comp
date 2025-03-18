@@ -5,6 +5,7 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint frequency = 8;
 layout (constant_id = 1) const uint octaves = 1;
+layout (constant_id = 2) const uint seed = 0;
 
 #if local_size_z == 1
 layout (binding = 0, r8) uniform writeonly image2D outImage;
@@ -14,6 +15,8 @@ layout (binding = 0, r8) uniform writeonly image3D outImage;
 
 void main()
 {
+    NOISE_SEED = seed;
+
 #if local_size_z == 1
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(fbm_worley(cell_loc, frequency, octaves)));

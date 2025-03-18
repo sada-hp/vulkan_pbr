@@ -23,25 +23,26 @@ layout(location = 2) out vec2 UV;
 layout(location = 3) out float Height;
 layout(location = 4) out flat int Level;
 
-layout(set = 1, binding = 4) uniform sampler2DArray NoiseMap;
+layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
 ivec3 clamp_coords(int x, int y, int level)
 {
     ivec3 texel = ivec3(x, y, level);
     ivec2 size = textureSize(NoiseMap, 0).xy;
+    ivec2 onefourth = size / 4;
+    ivec2 threefourth = 3 * onefourth;
 
     // if texel is outside the bounds of current level    
     if (x >= size.x || y >= size.y || x < 0 || y < 0)
     {
         texel.z += 1;
-        texel.x = 33 + (x < 0 ? x : int(ceil(float(x) / 2)));
-        texel.y = 33 + (y < 0 ? y : int(ceil(float(y) / 2)));
+        texel.x = onefourth.x + (x < 0 ? x : int(ceil(float(x) / 2)));
+        texel.y = onefourth.y + (y < 0 ? y : int(ceil(float(y) / 2)));
     }
-    else if (texel.z > 0 && texel.x >= 33 && texel.x <= 99 && texel.y >= 33 && texel.y <= 99)
+    else if (texel.z > 0 && texel.x >= onefourth.x && texel.x <= threefourth.x && texel.y >= onefourth.y && texel.y <= threefourth.y)
     {
         texel.z -= 1;
-        texel.x = 2 * (texel.x - 33);
-        texel.y = 2 * (texel.y - 33);
+        texel.xy = 2 * (texel.xy - onefourth);
     }
 
     return texel;
@@ -49,6 +50,7 @@ ivec3 clamp_coords(int x, int y, int level)
 
 void main()
 {
+    NOISE_SEED = Seed;
     Level = int(vertPosition.y);
 
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));

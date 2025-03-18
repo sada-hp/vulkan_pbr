@@ -33,6 +33,8 @@ VkBool32 CreateSemaphore(const VkDevice& device, VkSemaphore* outSemaphore);
 * @return VK_TRUE if allocation was successful, VK_FALSE otherwise
 */
 VkBool32 AllocateCommandBuffers(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers);
+
+VkBool32 AllocateCommandBuffers2(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers);
 /*
 * !@brief Initialize descriptor pool object
 *
@@ -54,6 +56,8 @@ VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize
 * @return collection of family indices ordered respectively to the flags collection
 */
 std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const std::vector<VkQueueFlagBits>& flags);
+
+uint32_t FindDeviceQueues(const VkPhysicalDevice& physicalDevice, int Bits);
 /*
 * !@brief Checks if GPU supports specified extensions
 *

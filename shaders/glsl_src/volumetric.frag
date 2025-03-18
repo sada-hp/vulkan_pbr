@@ -28,7 +28,7 @@ void UpdateRay(inout RayMarch Ray)
 
 void UpdateRay(inout RayMarch Ray, float Stepsize, float f)
 {
-    Ray.Stepsize = f * f * f * (f * (f * 6.0 - 15.0) + 10.0) * Stepsize;
+    Ray.Stepsize = smootherstep(0.0, 2.0, f) * 4.0 * Stepsize;
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
 }
@@ -163,11 +163,11 @@ float SampleCone(RayMarch Ray, int mip)
             float density = 0.0;
             if ((density = SampleCloudShape(Ray, mip + 1)) > 0.0)
             {
-                cone_density += SampleCloudDetail(Ray, density, mip + 1);
+                cone_density += SampleCloudDetail(Ray, density, mip + 1) + 1e-6;
             }
         }
         else
-            cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1);
+            cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1) + 1e-6;
     }
 
     return cone_density;
@@ -222,15 +222,13 @@ void MarchToCloud(inout RayMarch Ray)
     // take larger steps and
     // skip empty space until cloud is found
     int steps = int(ceil(mix(96, 64, w))), i = steps - 1;
-
     Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
-    for (i; i > 0 && sample_density == 0.0;)
+    for (i; i > 0 && sample_density == 0.0;i--)
     {
         UpdateRay(Ray);
 
         if ((sample_density = SampleCloudShape(Ray, 3)) > 0)
             sample_density = SampleCloudDetail(Ray, sample_density, 3);
-        i--;
     }
 
     if (sample_density == 0.0)
@@ -240,30 +238,26 @@ void MarchToCloud(inout RayMarch Ray)
 
     // go more precise for clouds
     Ray.End = Ray.Position - Ray.Stepsize * Ray.Direction;
-    float Stepsize = 2.0 * distance(Ray.Start, Ray.End) / float(steps);
-    Ray.Stepsize = Stepsize;
+    Ray.FirstHit = Ray.Position;
     Ray.Position = Ray.End;
 
+    steps = i;
+    float incr = 1.0 / float(steps);
+    float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
+    Ray.Stepsize = Stepsize;
     const float I = PI * MaxLightIntensity * PhaseF;
-    float ToCamera = distance(ubo.CameraPosition.xyz, Ray.End);
+    float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
     float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
     for (i = steps - 1; i > 0; i--)
     {
-        float f = float(steps - i) / float(steps);
-        UpdateRay(Ray, Stepsize, f);
+        UpdateRay(Ray, Stepsize, float(steps - i) * incr);
         
         int mip = int(floor(mix(5.0, 0.0, outScattering.a)));
-        if ((sample_density = SampleCloudShape(Ray, mip)) > 0 && outScattering.a > 0.01)
+        if ((sample_density = SampleCloudShape(Ray, mip)) > 0 && outScattering.a > 1e-2)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
         if (sample_density > 0.0) 
         {
-            if (outScattering.a == 1.0)
-            {
-                Ray.FirstHit = Ray.Position;
-                ToCamera = distance(Ray.FirstHit, ubo.CameraPosition.xyz);
-            }
-            
             float extinction = sample_density + 1e-6;
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
             float luminance = MarchToLight(Ray.Position, ubo.SunDirection.xyz, 12, mip) * I;
@@ -277,6 +271,9 @@ void MarchToCloud(inout RayMarch Ray)
             float Dist = ((float(steps - i + 1) * Ray.Stepsize + ToCamera) / ToAEP);
             mean_depth += mix(Ray.Height, 1.0, Dist) * outScattering.a;
             mean_transmittance += outScattering.a * mix(1.0 - Ray.Height, 1.0, Dist);
+
+            if (outScattering.a <= 1e-5)
+                break;
         }
     }
 

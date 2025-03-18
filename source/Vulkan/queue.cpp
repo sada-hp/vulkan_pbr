@@ -30,6 +30,12 @@ const Queue& Queue::Wait() const
 	return *this;
 }
 
+const Queue& Queue::Wait(const VkFence& inFence) const
+{
+	vkWaitForFences(device, 1, &inFence, VK_TRUE, UINT64_MAX);
+	return *this;
+}
+
 const Queue& Queue::Submit(const VkCommandBuffer& cmd) const
 {
 	vkResetFences(device, 1, &fence);
@@ -41,7 +47,36 @@ const Queue& Queue::Submit(const VkCommandBuffer& cmd) const
 	return *this;
 }
 
+const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkFence& inFence, const VkSemaphore& semaphore) const
+{
+	vkResetFences(device, 1, &inFence);
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &semaphore;
+	vkQueueSubmit(queue, 1, &submitInfo, inFence);
+	return *this;
+}
+
+const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkFence& inFence) const
+{
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	vkQueueSubmit(queue, 1, &submitInfo, inFence);
+	return *this;
+}
+
+
 void Queue::AllocateCommandBuffers(uint32_t count, VkCommandBuffer* outBuffers) const
+{
+	::AllocateCommandBuffers(device, pool, count, outBuffers);
+}
+
+void Queue::AllocateCommandBuffers2(uint32_t count, VkCommandBuffer* outBuffers) const
 {
 	::AllocateCommandBuffers(device, pool, count, outBuffers);
 }

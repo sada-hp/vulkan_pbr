@@ -141,6 +141,9 @@ private:
 	std::vector<VkSemaphore> m_PresentSemaphores = {};
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
+	std::vector<VkCommandBuffer> m_AsyncBuffers = {};
+	std::vector<VkSemaphore> m_AsyncSemaphores = {};
+	std::vector<VkFence> m_AsyncFences = {};
 
 	std::vector<std::unique_ptr<GraphicsPipeline>> m_CompositionPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
@@ -172,8 +175,10 @@ private:
 	VulkanTexture m_IrradianceLUT = {};
 	VulkanTexture m_TransmittanceLUT = {};
 
-	VulkanTexture m_TerrainLUT = {};
-	std::unique_ptr<DescriptorSet> m_TerrainSet = {};
+	std::vector<VulkanTexture> m_TerrainLUT = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
+
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
 	std::unique_ptr<ComputePipeline> m_ErosionCompute = {};
 	std::unique_ptr<Buffer> m_ErosionPoints = {};
@@ -243,6 +248,10 @@ public:
 	* 
 	*/
 	void _drawObject(const PBRObject& gro, const PBRConstants& constants) const;
+	/*
+	*
+	*/
+	void _drawTerrain(const PBRObject& gro, const PBRConstants& constants) const;
 	/*
 	* 
 	*/

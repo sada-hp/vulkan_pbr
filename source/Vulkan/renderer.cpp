@@ -154,16 +154,26 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		.SetFOV(glm::radians(45.f))
 		.SetDepthRange(1e-2f, 1e4f);
 
+	m_AsyncBuffers.resize(m_SwapchainImages.size());
 	m_PresentBuffers.resize(m_SwapchainImages.size());
 	m_PresentSemaphores.resize(m_SwapchainImages.size());
 	m_SwapchainSemaphores.resize(m_SwapchainImages.size());
+	m_AsyncSemaphores.resize(m_SwapchainImages.size());
 	m_PresentFences.resize(m_SwapchainImages.size());
+	m_AsyncFences.resize(m_SwapchainImages.size());
 
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.AllocateCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
 
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+		.AllocateCommandBuffers2(m_AsyncBuffers.size(), m_AsyncBuffers.data());
+
+	std::for_each(m_AsyncSemaphores.begin(), m_AsyncSemaphores.end(), [&, this](VkSemaphore& it) {
+		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
+	});
+
 	std::for_each(m_PresentSemaphores.begin(), m_PresentSemaphores.end(), [&, this](VkSemaphore& it) {
-			res = CreateSemaphore(m_Scope.GetDevice(),  &it) & res;
+		res = CreateSemaphore(m_Scope.GetDevice(),  &it) & res;
 	});
 
 	std::for_each(m_SwapchainSemaphores.begin(), m_SwapchainSemaphores.end(), [&, this](VkSemaphore& it) {
@@ -171,6 +181,11 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	});
 
 	std::for_each(m_PresentFences.begin(), m_PresentFences.end(), [&, this](VkFence& it) {
+		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
+	});
+
+
+	std::for_each(m_AsyncFences.begin(), m_AsyncFences.end(), [&, this](VkFence& it) {
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
@@ -236,8 +251,10 @@ VulkanBase::~VulkanBase() noexcept
 	m_ErosionPoints.reset();
 	m_TerrainCompute.reset();
 	m_ErosionCompute.reset();
-	m_TerrainSet.reset();
-	m_TerrainLUT.reset();
+
+	m_TerrainDrawSet.resize(0);
+	m_TerrainSet.resize(0);
+	m_TerrainLUT.resize(0);
 
 	m_Volumetrics.reset();
 	m_UBOBuffers.resize(0);
@@ -258,8 +275,18 @@ VulkanBase::~VulkanBase() noexcept
 
 	vkDestroyFence(m_Scope.GetDevice(), m_AcquireFence, VK_NULL_HANDLE);
 
+	std::erase_if(m_AsyncFences, [&, this](VkFence& it) {
+		vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
+		return true;
+	});
+
 	std::erase_if(m_PresentFences, [&, this](VkFence& it) {
 		vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
+		return true;
+	});
+
+	std::erase_if(m_AsyncSemaphores, [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 		return true;
 	});
 
@@ -300,6 +327,9 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
+
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+		.FreeCommandBuffers(m_AsyncBuffers.size(), m_AsyncBuffers.data());
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
@@ -399,11 +429,13 @@ bool VulkanBase::BeginFrame()
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
-	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	vkBeginCommandBuffer(cmd, &beginInfo);
+	vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
+	vkBeginCommandBuffer(ComputeCmd, &beginInfo);
 
 	// Prepare render targets
 	{
@@ -419,7 +451,7 @@ bool VulkanBase::BeginFrame()
 		barriers[0].subresourceRange.baseMipLevel = 0;
 		barriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barriers[0].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		barriers[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[0].srcAccessMask = 0;
 		barriers[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
 		barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -433,7 +465,7 @@ bool VulkanBase::BeginFrame()
 		barriers[1].subresourceRange.baseMipLevel = 0;
 		barriers[1].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barriers[1].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		barriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[1].srcAccessMask = 0;
 		barriers[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
 		barriers[2].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -447,7 +479,7 @@ bool VulkanBase::BeginFrame()
 		barriers[2].subresourceRange.baseMipLevel = 0;
 		barriers[2].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barriers[2].newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		barriers[2].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[2].srcAccessMask = 0;
 		barriers[2].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		 
 		barriers[3].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -461,69 +493,10 @@ bool VulkanBase::BeginFrame()
 		barriers[3].subresourceRange.baseMipLevel = 0;
 		barriers[3].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barriers[3].newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		barriers[3].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barriers[3].srcAccessMask = 0;
 		barriers[3].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 2, &barriers[0]);
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 2, &barriers[2]);
-	}
-
-	// Start async compute to update terrain height
-	if (m_TerrainCompute.get())
-	{
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		// barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		// barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
-		barrier.image = m_TerrainLUT.Image->GetImage();
-		barrier.subresourceRange = m_TerrainLUT.Image->GetSubResourceRange();
-		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_TerrainCompute);
-		m_TerrainSet->BindSet(1, cmd, *m_TerrainCompute);
-		m_TerrainCompute->BindPipeline(cmd);
-		vkCmdDispatch(cmd, m_TerrainDispatches, 1, 1);
-
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-
-#if 0
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_ErosionCompute);
-		m_TerrainSet->BindSet(1, cmd, *m_ErosionCompute);
-		m_ErosionCompute->BindPipeline(cmd);
-
-		for (uint32_t i = 0; i < points.size() / 25; i++)
-		{
-			glm::vec4 it = { i, 0, 0, 0 };
-			m_ErosionCompute->PushConstants(cmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
-			// vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 10, m_TerrainLUT.Image->GetExtent().height / 10, 1);
-			vkCmdDispatch(cmd, 1, 1, 1);
-
-			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-			// vkDeviceWaitIdle(m_Scope.GetDevice());
-		}
-#endif
-
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		// barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		// barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 4, &barriers[0]);
 	}
 
 	// Draw Low Resolution Background
@@ -548,21 +521,107 @@ bool VulkanBase::BeginFrame()
 		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height / 2);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(cmd, 0, 1, &viewport);
+		vkCmdSetViewport(GraphicsCmd, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = { m_Scope.GetSwapchainExtent().width / 2, m_Scope.GetSwapchainExtent().height / 2 };
-		vkCmdSetScissor(cmd, 0, 1, &scissor);
+		vkCmdSetScissor(GraphicsCmd, 0, 1, &scissor);
 
-		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(GraphicsCmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *m_Volumetrics->pipeline);
-		m_Volumetrics->descriptorSet->BindSet(1, cmd, *m_Volumetrics->pipeline);
-		m_Volumetrics->pipeline->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->descriptorSet->BindSet(1, GraphicsCmd, *m_Volumetrics->pipeline);
+		m_Volumetrics->pipeline->BindPipeline(GraphicsCmd);
+		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
 
-		vkCmdEndRenderPass(cmd);
+		vkCmdEndRenderPass(GraphicsCmd);
+	}
+
+	// Start async compute to update terrain height
+	if (m_TerrainCompute.get())
+	{
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		}
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_TerrainCompute);
+		m_TerrainSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_TerrainCompute);
+		m_TerrainCompute->BindPipeline(ComputeCmd);
+		vkCmdDispatch(ComputeCmd, m_TerrainDispatches, 1, 1);
+
+#if 0
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = m_TerrainLUT.Image->GetImage();
+		barrier.subresourceRange = m_TerrainLUT.Image->GetSubResourceRange();
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+		m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_ErosionCompute);
+		m_TerrainSet->BindSet(1, ComputeCmd, *m_ErosionCompute);
+		m_ErosionCompute->BindPipeline(ComputeCmd);
+
+		for (uint32_t i = 0; i < points.size() / 25; i++)
+		{
+			glm::vec4 it = { i, 0, 0, 0 };
+			m_ErosionCompute->PushConstants(ComputeCmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+			// vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 10, m_TerrainLUT.Image->GetExtent().height / 10, 1);
+			vkCmdDispatch(ComputeCmd, 1, 1, 1);
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			// vkDeviceWaitIdle(m_Scope.GetDevice());
+		}
+#endif
+
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		}
+	}
+
+	{
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+		barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+		barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 	}
 
 	{
@@ -594,14 +653,14 @@ bool VulkanBase::BeginFrame()
 		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(cmd, 0, 1, &viewport);
+		vkCmdSetViewport(GraphicsCmd, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = m_Scope.GetSwapchainExtent();
-		vkCmdSetScissor(cmd, 0, 1, &scissor);
+		vkCmdSetScissor(GraphicsCmd, 0, 1, &scissor);
 
-		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(GraphicsCmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 #if DEBUG == 1
 		m_InFrame = true;
@@ -618,11 +677,12 @@ void VulkanBase::EndFrame()
 
 	assert(m_InFrame);
 
-	VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer& ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
 
 	// Draw High Resolution Objects
 	{
-		vkCmdEndRenderPass(cmd);
+		vkCmdEndRenderPass(GraphicsCmd);
 	}
 
 	// Process the scene data
@@ -646,26 +706,26 @@ void VulkanBase::EndFrame()
 		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(cmd, 0, 1, &viewport);
+		vkCmdSetViewport(GraphicsCmd, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = m_Scope.GetSwapchainExtent();
-		vkCmdSetScissor(cmd, 0, 1, &scissor);
+		vkCmdSetScissor(GraphicsCmd, 0, 1, &scissor);
 
-		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(GraphicsCmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		m_CompositionDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_CompositionPipelines[m_SwapchainIndex]);
-		m_CompositionPipelines[m_SwapchainIndex]->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		m_CompositionDescriptors[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_CompositionPipelines[m_SwapchainIndex]);
+		m_CompositionPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
+		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
 
-		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdNextSubpass(GraphicsCmd, VK_SUBPASS_CONTENTS_INLINE);
 
-		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_HDRPipelines[m_SwapchainIndex]);
-		m_HDRPipelines[m_SwapchainIndex]->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_HDRPipelines[m_SwapchainIndex]);
+		m_HDRPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
+		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
 
-		vkCmdEndRenderPass(cmd);
+		vkCmdEndRenderPass(GraphicsCmd);
 	}
 
 	{
@@ -688,36 +748,37 @@ void VulkanBase::EndFrame()
 		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(cmd, 0, 1, &viewport);
+		vkCmdSetViewport(GraphicsCmd, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = m_Scope.GetSwapchainExtent();
-		vkCmdSetScissor(cmd, 0, 1, &scissor);
+		vkCmdSetScissor(GraphicsCmd, 0, 1, &scissor);
 
-		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(GraphicsCmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		m_PostProcessDescriptors[m_SwapchainIndex]->BindSet(0, cmd, *m_PostProcessPipelines[m_SwapchainIndex]);
-		m_PostProcessPipelines[m_SwapchainIndex]->BindPipeline(cmd);
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		m_PostProcessDescriptors[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_PostProcessPipelines[m_SwapchainIndex]);
+		m_PostProcessPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
+		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
 
-		vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdNextSubpass(GraphicsCmd, VK_SUBPASS_CONTENTS_INLINE);
 
 #ifdef INCLUDE_GUI
 		ImGui::Render();
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), GraphicsCmd);
 #endif
 
-		vkCmdEndRenderPass(cmd);
+		vkCmdEndRenderPass(GraphicsCmd);
 	}
 
-	vkEndCommandBuffer(cmd);
+	vkEndCommandBuffer(ComputeCmd);
+	vkEndCommandBuffer(GraphicsCmd);
 
 	VkSubmitInfo submitInfo{};
-	std::array<VkSemaphore, 1> waitSemaphores = { m_SwapchainSemaphores[m_SwapchainIndex] };
-	std::array<VkSemaphore, 1> signalSemaphores = { m_PresentSemaphores[m_SwapchainIndex] };
+	std::vector<VkSemaphore> waitSemaphores = { m_SwapchainSemaphores[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex] };
+	std::vector<VkSemaphore> signalSemaphores = { m_PresentSemaphores[m_SwapchainIndex] };
 
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = waitSemaphores.size();
 	submitInfo.pWaitSemaphores = waitSemaphores.data();
@@ -726,6 +787,10 @@ void VulkanBase::EndFrame()
 	submitInfo.pCommandBuffers = &m_PresentBuffers[m_SwapchainIndex];
 	submitInfo.signalSemaphoreCount = signalSemaphores.size();
 	submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+		.Wait(m_AsyncFences[m_SwapchainIndex])
+		.Submit(ComputeCmd, m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
 
 	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
 
@@ -1175,6 +1240,30 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 	return ent;
 }
 
+void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constants) const
+{
+	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
+		return;
+
+	assert(m_InFrame, "Call BeginFrame first!");
+
+	const VkCommandBuffer& cmd = m_PresentBuffers[m_SwapchainIndex];
+	const VkDeviceSize offsets[] = { 0 };
+
+	m_UBOSets[m_SwapchainIndex]->BindSet(0, cmd, *gro.pipeline);
+
+	gro.descriptorSet->BindSet(1, cmd, *gro.pipeline);
+	m_TerrainDrawSet[m_SwapchainIndex]->BindSet(2, cmd, *gro.pipeline);
+
+	gro.pipeline->PushConstants(cmd, &constants.Offset, PBRConstants::VertexSize(), 0u, VK_SHADER_STAGE_VERTEX_BIT);
+	gro.pipeline->PushConstants(cmd, &constants.Color, PBRConstants::FragmentSize(), PBRConstants::VertexSize(), VK_SHADER_STAGE_FRAGMENT_BIT);
+	gro.pipeline->BindPipeline(cmd);
+
+	vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
+	vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
+}
+
 void VulkanBase::_drawObject(const PBRObject& gro, const PBRConstants& constants) const
 {
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
@@ -1279,7 +1368,7 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_terrain_set(const VulkanImageV
 		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
 		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
 		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
-		.AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
+		// .AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
 
@@ -1315,6 +1404,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.SetShaderStage("terrain_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(set.GetLayout())
+		.AddDescriptorLayout(m_TerrainDrawSet[0]->GetLayout())
 		.AddPushConstant({ VK_SHADER_STAGE_VERTEX_BIT, 0, static_cast<uint32_t>(PBRConstants::VertexSize()) })
 		.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, static_cast<uint32_t>(PBRConstants::VertexSize()), static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
@@ -1533,7 +1623,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VkCommandBuffer cmd;
 	const Queue& Queue = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
 
-	Queue.AllocateCommandBuffers(1, &cmd);
+	Queue.AllocateCommandBuffers2(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 
 	GenTrLUT->BindPipeline(cmd);
@@ -1693,7 +1783,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap& shape)
 {
-	std::vector<uint32_t> queueFamilies = FindDeviceQueues(m_Scope.GetPhysicalDevice(), { VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT });
+	std::vector<uint32_t> queueFamilies = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex() };
 	const uint32_t VertexCount = VB.GetDescriptor().range / sizeof(TerrainVertex);
 
 	const uint32_t m = (glm::max(shape.m_VerPerRing, 7u) + 1) / 4;
@@ -1720,13 +1810,10 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	m_TerrainLUT.Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
-	m_TerrainLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT.Image);
-
 	points.reserve(2500);
 
-	uint32_t w = m_TerrainLUT.Image->GetExtent().width;
-	uint32_t h = m_TerrainLUT.Image->GetExtent().height;
+	uint32_t w = LUTExtent;
+	uint32_t h = LUTExtent;
 	uint32_t dw = w / 5;
 	uint32_t dh = h / 5;
 
@@ -1755,15 +1842,29 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	m_ErosionPoints = std::make_unique<Buffer>(m_Scope, sbInfo, sbAlloc);
 	m_ErosionPoints->Update(points.data());
 
-	m_TerrainSet = DescriptorSetDescriptor()
-		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT.View->GetImageView())
-		.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
-		.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_ErosionPoints)
-		.Allocate(m_Scope);
+	m_TerrainLUT.resize(m_SwapchainImages.size());
+	m_TerrainSet.resize(m_SwapchainImages.size());
+	m_TerrainDrawSet.resize(m_SwapchainImages.size());
+
+	for (uint32_t i = 0; i < m_TerrainLUT.size(); i++)
+	{
+		m_TerrainLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
+		m_TerrainLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT[i].Image);
+
+		m_TerrainSet[i] = DescriptorSetDescriptor()
+			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
+			.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
+			.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_ErosionPoints)
+			.Allocate(m_Scope);
+
+		m_TerrainDrawSet[i] = DescriptorSetDescriptor()
+			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp))
+			.Allocate(m_Scope);
+	}
 
 	m_TerrainCompute = ComputePipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_TerrainSet->GetLayout())
+		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt)
 		.AddSpecializationConstant(2, VertexCount)
@@ -1780,7 +1881,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 
 	m_ErosionCompute = ComputePipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_TerrainSet->GetLayout())
+		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
 		.AddPushConstant(pushConstants)
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt)

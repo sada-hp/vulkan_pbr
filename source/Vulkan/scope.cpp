@@ -16,7 +16,7 @@ RenderScope& RenderScope::CreateLogicalDevice(const VkPhysicalDeviceFeatures& fe
 	::CreateLogicalDevice(m_PhysicalDevice, features, device_extensions, FindDeviceQueues(m_PhysicalDevice, queues), &m_LogicalDevice, pNext);
 
 	for (const auto& queue : queues) {
-		uint32_t queueFamilies = FindDeviceQueues(m_PhysicalDevice, { queue })[0];
+		uint32_t queueFamilies = FindDeviceQueues(m_PhysicalDevice, std::vector<VkQueueFlagBits>{ queue })[0];
 		m_Queues.emplace(std::piecewise_construct, std::forward_as_tuple(queue), std::forward_as_tuple(m_LogicalDevice, queueFamilies));
 	}
 	return *this;

@@ -47,7 +47,7 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 
 	VkCommandBuffer cmd;
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-		.AllocateCommandBuffers(1, &cmd);
+		.AllocateCommandBuffers2(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 	pipeline->BindPipeline(cmd);
 	noise_set->BindSet(0, cmd, *pipeline);
@@ -86,12 +86,16 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateSolidColor(const RenderScope& Scop
 
 std::unique_ptr<VulkanImage> GRNoise::GeneratePerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate("perlin_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
+	uint32_t seed = 0;
+	seed = (uint32_t)&seed;
+	return generate("perlin_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves, seed });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateWorley(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
-	return generate("worley_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves });
+	uint32_t seed = 0;
+	seed = (uint32_t)&seed;
+	return generate("worley_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, octaves, seed });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)

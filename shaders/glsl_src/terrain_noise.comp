@@ -26,7 +26,7 @@ layout (constant_id = 6) const uint Seed = 0;
 float terrain_fbm(vec3 n, float octaves)
 {
     float fbm = 0.0;
-    float Freq = 800.0;
+    float Freq = 1000.0;
     float Ampltude = 1.0;
     float GainA = 0.5;
     float GainF = 2.0;
@@ -72,10 +72,11 @@ float terrain_fbm(vec3 n, float octaves)
             DNp2 += right * _DNp2;
         }
 
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.5 );
-        Gp = Gp + DNp * 0.4;
-        fbm += (1.0 / 1.0 + dot(Gp, Gp)) * AltitudeF * Np;
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.25 );
+        fbm += SlopeF * AltitudeF * Np;
 
+        Gp = Gp + DNp * 0.4;
+        SlopeF = (1.0 / 1.0 + dot(Gp, Gp));
         AltitudeF *= mix(gi, gi * max(0.0, Np), 0.3);
         Freq *= GainF;
     }

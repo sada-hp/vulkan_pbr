@@ -74,7 +74,7 @@ float SampleCloud(vec3 x0)
 
 float SampleCloudShadow(vec3 x1)
 {
-    const int steps = 5;
+    const int steps = 3;
     float bottomBound = Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25));
 
     float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), bottomBound);
@@ -104,12 +104,11 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
         AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
         Atmosphere.L *= Atmosphere.Shadow;
         Atmosphere.E *= Atmosphere.Shadow;
-        // Atmosphere.S *= GetScatteringFactor(Clouds.Coverage);
         return;
     }
 
     float len = distance(Eye, World);
-    int steps = int(floor(mix(48, 4, saturate(0.01 * len / 1e4))));
+    int steps = int(floor(mix(32, 16, saturate(0.01 * len / 1e4))));
     float Stepsize = len / float(steps);
     vec3 Ray = Eye;
 
@@ -121,20 +120,20 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
     Atmosphere.L = AtmosphereEnd.L * AtmosphereEnd.Shadow;
     Atmosphere.T = AtmosphereEnd.T;
     
+    float w0 = 0.0;
+    float incr = 1.0 / float(steps);
     Atmosphere.S = AtmosphereStart.S;
-    for (int i = 0; i < steps; i++)
+    for (int i = 1; i <= steps; i++)
     {
-        Ray = Eye + (i + 1) * View * Stepsize;
+        Ray += View * Stepsize;
 
-        float w0 = float(i) / float(steps);
-        float w1 = float(i + 1) / float(steps);
+        float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
 
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
         Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow * Atmosphere.Shadow);
         Atmosphere.S += Shadow * (mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
+        w0 = w1;
     }
-
-    // Atmosphere.S *= GetScatteringFactor(Clouds.Coverage);
 }
 
 // get specular and ambient part from sunlight

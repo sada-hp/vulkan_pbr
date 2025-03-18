@@ -16,7 +16,7 @@ PushConstants;
 layout(set = 1, binding = 1) uniform sampler2D AlbedoMap;
 layout(set = 1, binding = 2) uniform sampler2D NormalHeightMap;
 layout(set = 1, binding = 3) uniform sampler2D ARMMap;
-layout(set = 1, binding = 4) uniform sampler2D NoiseMap;
+layout(set = 2, binding = 0) uniform sampler2D NoiseMap;
 
 layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec3 Normal;
@@ -40,7 +40,7 @@ void main()
 
     // material descriptor
     SMaterial Material;
-#if 1
+#if 0
     vec3 W;
     hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
     // Material.Albedo.rgb = W;

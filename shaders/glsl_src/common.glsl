@@ -6,6 +6,12 @@
 #define ONE_OVER_2PI 1.0 / (2.0 * PI)
 #define ONE_OVER_4PI 1.0 / (4.0 * PI)
 
+float smootherstep(float e0, float e1, float x)
+{
+	x = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+	return x * x * x * (x * (6.0 * x - 15.0) + 10.0);
+}
+
 float remap(float orig, float old_min, float old_max, float new_min, float new_max)
 {
     return new_min + (((orig - old_min) / (old_max - old_min)) * (new_max - new_min));

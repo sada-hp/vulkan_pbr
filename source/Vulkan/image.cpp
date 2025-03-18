@@ -109,7 +109,7 @@ VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout n
 	barrier.subresourceRange = subRange;
 	barrier.srcAccessMask = accessTable.at(barrier.oldLayout);
 	barrier.dstAccessMask = accessTable.at(barrier.newLayout);
-	vkCmdPipelineBarrier(cmd, stageTable.at(barrier.oldLayout), stageTable.at(barrier.newLayout), 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+	vkCmdPipelineBarrier(cmd, stageTable.at(barrier.oldLayout), stageTable.at(barrier.newLayout), VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	descriptorInfo.imageLayout = newLayout;
 

@@ -44,6 +44,17 @@ VkBool32 AllocateCommandBuffers(const VkDevice& device, const VkCommandPool& poo
 	return vkAllocateCommandBuffers(device, &allocInfo, outBuffers) == VK_SUCCESS;
 }
 
+VkBool32 AllocateCommandBuffers2(const VkDevice& device, const VkCommandPool& pool, const uint32_t count, VkCommandBuffer* outBuffers)
+{
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandBufferCount = count;
+	allocInfo.commandPool = pool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+
+	return vkAllocateCommandBuffers(device, &allocInfo, outBuffers) == VK_SUCCESS;
+}
+
 VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize* poolSizes, const size_t poolSizesCount, const uint32_t setsCount, VkDescriptorPool* outPool)
 {
 	VkDescriptorPoolCreateInfo dpoolInfo{};
@@ -116,6 +127,26 @@ std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, c
 	}
 
 	return output;
+}
+
+uint32_t FindDeviceQueues(const VkPhysicalDevice& physicalDevice, int Bits)
+{
+	uint32_t familiesCount;
+	std::vector<VkQueueFamilyProperties> queueFamilies;
+
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familiesCount, VK_NULL_HANDLE);
+	queueFamilies.resize(familiesCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familiesCount, queueFamilies.data());
+
+	for (int i = 0; i < queueFamilies.size(); i++)
+	{
+		if ((queueFamilies[i].queueFlags & Bits) != 0)
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 VkBool32 EnumerateDeviceExtensions(const VkPhysicalDevice& physicalDevice, const std::vector<const char*>& desired_extensions)
