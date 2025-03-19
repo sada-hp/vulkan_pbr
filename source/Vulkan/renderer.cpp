@@ -251,7 +251,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 
 VulkanBase::~VulkanBase() noexcept
 {
-	Wait();
+	vkDeviceWaitIdle(m_Scope.GetDevice());
 
 #ifdef INCLUDE_GUI
 	ImGui_ImplVulkan_Shutdown();
@@ -580,13 +580,12 @@ bool VulkanBase::BeginFrame()
 
 
 	GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
+	vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
 
 
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
-		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
-		vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
 
 		{
 			VkImageMemoryBarrier barrier{};
@@ -666,10 +665,6 @@ bool VulkanBase::BeginFrame()
 
 			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
-	}
-	else
-	{
-		vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
 	}
 
 	{
@@ -841,6 +836,8 @@ void VulkanBase::EndFrame()
 
 	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
 
+	if (m_TerrainCompute.get())
+		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
