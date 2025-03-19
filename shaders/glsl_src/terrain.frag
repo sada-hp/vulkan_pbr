@@ -40,7 +40,7 @@ void main()
 
     // material descriptor
     SMaterial Material;
-#if 0
+#if 1
     vec3 W;
     hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
     // Material.Albedo.rgb = W;

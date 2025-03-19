@@ -251,7 +251,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 
 VulkanBase::~VulkanBase() noexcept
 {
-	vkDeviceWaitIdle(m_Scope.GetDevice());
+	Wait();
 
 #ifdef INCLUDE_GUI
 	ImGui_ImplVulkan_Shutdown();
@@ -578,12 +578,16 @@ bool VulkanBase::BeginFrame()
 
 	vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex]);
 
+
 	GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
-	vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
+
 
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
+		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+		vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
+
 		{
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -662,6 +666,10 @@ bool VulkanBase::BeginFrame()
 
 			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
+	}
+	else
+	{
+		vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
 	}
 
 	{
@@ -833,7 +841,6 @@ void VulkanBase::EndFrame()
 
 	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
 
-	transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
@@ -857,7 +864,7 @@ void VulkanBase::EndFrame()
 
 void VulkanBase::_handleResize()
 {
-	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
+	Wait();
 
 	std::erase_if(m_FramebuffersHR, [&, this](VkFramebuffer& fb) {
 		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
@@ -923,9 +930,9 @@ void VulkanBase::_handleResize()
 
 void VulkanBase::Wait() const
 {
-	std::vector<VkFence> Fences = { m_PresentFences[m_SwapchainIndex], m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex], m_AsyncFences[m_SwapchainIndex] };
-	vkWaitForFences(m_Scope.GetDevice(), Fences.size(), Fences.data(), VK_TRUE, UINT64_MAX);
-	vkResetFences(m_Scope.GetDevice(), Fences.size(), Fences.data());
+	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_Scope.GetDevice(), m_AsyncFences.size(), m_AsyncFences.data(), VK_TRUE, UINT64_MAX);
+	// vkResetFences(m_Scope.GetDevice(), Fences.size(), Fences.data());
 }
 
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
