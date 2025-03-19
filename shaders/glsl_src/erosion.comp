@@ -1,10 +1,10 @@
  #version 460
 #extension GL_EXT_shader_atomic_float : enable
 
-#include "constants.glsl"
-#include "common.glsl"
 #include "ubo.glsl"
 #include "noise.glsl"
+#include "common.glsl"
+#include "constants.glsl"
 
 struct Vertex
 {
@@ -12,7 +12,8 @@ struct Vertex
     vec4 UV;
 };
 
-layout(local_size_x = 25, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 25, local_size_y = 4, local_size_z = 1) in;
+layout (constant_id = 2) const float Scale = 0;
 
 layout (set = 1, binding = 0, r32f) uniform image2DArray target;
 
@@ -81,9 +82,9 @@ float sample_target(int x, int z)
     return imageAtomicAdd(target, texel, 0.0);
 }
 
-void main()
+void erosion_loop(vec2 point)
 {
-    int xi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].x), zi = int(points.at[int(data.iter.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x].y);
+    int xi = int(point.x), zi = int(point.y);
 
     float random = noise(vec2(xi, zi));
 
@@ -96,10 +97,12 @@ void main()
     float g = 20.0;
     float Kg = g * 2.0;
 
-    dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, 1e3);
+    dvec3 Center = normalize(RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale)) * Rg;
+    double a11 = dot(Center, dvec3(1.0, 0.0, 0.0));
+    double a12 = dot(Center, dvec3(0.0, 0.0, 1.0));
 
-    xi -= int(floor(Center.x / 500.0)) % imageSize(target).x;
-    zi -= int(floor(Center.z / 500.0)) % imageSize(target).y;
+    xi -= int(round(a11 / Scale)) % imageSize(target).x;
+    zi -= int(round(a12 / Scale)) % imageSize(target).y;
 
     xi = xi < 0 ? imageSize(target).x + xi : xi;
     zi = zi < 0 ? imageSize(target).y + zi : zi;
@@ -120,7 +123,7 @@ void main()
     float dx = 0.0, dz = 0.0;
     float s = 0.0, v = 0.0, w = 1.0;
 
-    int steps = 100;
+    int steps = 1000;
     while (w > 0.01 && steps > 0)
     {
         steps--;
@@ -223,5 +226,20 @@ void main()
         h10=nh10;
         h01=nh01;
         h11=nh11;
+    }
+}
+
+void main()
+{
+    int index = int(gl_GlobalInvocationID.x);
+    int itter = int(data.iter[gl_GlobalInvocationID.y]);
+
+    if (index % 2 == 0)
+    {
+        erosion_loop(points.at[int(itter * gl_WorkGroupSize.x) + index].xy);
+    }
+    else
+    {
+        erosion_loop(points.at[int(itter * gl_WorkGroupSize.x) + index].zw);
     }
 }

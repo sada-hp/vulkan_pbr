@@ -214,8 +214,7 @@ void main()
 
             float a = 1.0 - SkyColor.a;
             float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
-            // Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a);
+            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
         }
     }
     else

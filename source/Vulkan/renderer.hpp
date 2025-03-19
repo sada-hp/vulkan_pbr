@@ -142,6 +142,7 @@ private:
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkCommandBuffer> m_PresentBuffers = {};
 	std::vector<VkCommandBuffer> m_AsyncBuffers = {};
+	std::vector<VkCommandBuffer> m_OwnershipBuffers = {};;
 	std::vector<VkSemaphore> m_AsyncSemaphores = {};
 	std::vector<VkFence> m_AsyncFences = {};
 
@@ -187,8 +188,6 @@ private:
 	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_SwapchainIndex = 0;
-
-	std::array<VkCommandBuffer, 2> m_TransferCmd;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;

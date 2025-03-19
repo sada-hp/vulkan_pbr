@@ -154,19 +154,29 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		.SetFOV(glm::radians(45.f))
 		.SetDepthRange(1e-2f, 1e4f);
 
-	m_AsyncBuffers.resize(m_SwapchainImages.size());
+	m_AsyncBuffers.resize(2 * m_SwapchainImages.size());
 	m_PresentBuffers.resize(m_SwapchainImages.size());
+	m_OwnershipBuffers.resize(2 * m_SwapchainImages.size());
 	m_PresentSemaphores.resize(m_SwapchainImages.size());
 	m_SwapchainSemaphores.resize(m_SwapchainImages.size());
-	m_AsyncSemaphores.resize(m_SwapchainImages.size());
+	m_AsyncSemaphores.resize(2 * m_SwapchainImages.size());
 	m_PresentFences.resize(m_SwapchainImages.size());
-	m_AsyncFences.resize(m_SwapchainImages.size());
+	m_AsyncFences.resize(2 * m_SwapchainImages.size());
 
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
 		.AllocateCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
 
 	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-		.AllocateCommandBuffers2(m_AsyncBuffers.size(), m_AsyncBuffers.data());
+		.AllocateCommandBuffers2(m_SwapchainImages.size(), m_AsyncBuffers.data());
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(m_SwapchainImages.size(), m_AsyncBuffers.data() + m_SwapchainImages.size());
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers2(m_SwapchainImages.size(), m_OwnershipBuffers.data());
+
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+		.AllocateCommandBuffers2(m_SwapchainImages.size(), m_OwnershipBuffers.data() + m_SwapchainImages.size());
 
 	std::for_each(m_AsyncSemaphores.begin(), m_AsyncSemaphores.end(), [&, this](VkSemaphore& it) {
 		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
@@ -188,9 +198,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	std::for_each(m_AsyncFences.begin(), m_AsyncFences.end(), [&, this](VkFence& it) {
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
-
-	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).AllocateCommandBuffers2(1, &m_TransferCmd[0]);
-	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).AllocateCommandBuffers2(1, &m_TransferCmd[1]);
 
 	res = CreateFence(m_Scope.GetDevice(), &m_AcquireFence, VK_FALSE) & res;
 
@@ -329,12 +336,19 @@ VulkanBase::~VulkanBase() noexcept
 	});
 
 	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
-		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());
-	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).FreeCommandBuffers(1, &m_TransferCmd[0]);
+		.FreeCommandBuffers(m_PresentBuffers.size(), m_PresentBuffers.data());	
 
 	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-		.FreeCommandBuffers(m_AsyncBuffers.size(), m_AsyncBuffers.data());
-	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).FreeCommandBuffers(1, &m_TransferCmd[1]);
+		.FreeCommandBuffers(m_SwapchainImages.size(), m_AsyncBuffers.data());
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.FreeCommandBuffers(m_SwapchainImages.size(), m_AsyncBuffers.data() + m_SwapchainImages.size());
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.FreeCommandBuffers(m_SwapchainImages.size(), m_OwnershipBuffers.data());
+
+	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
+		.FreeCommandBuffers(m_SwapchainImages.size(), m_OwnershipBuffers.data() + m_SwapchainImages.size());
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
@@ -380,8 +394,9 @@ bool VulkanBase::BeginFrame()
 
 	uint32_t OldIndex = m_SwapchainIndex;
 
-	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentFences[m_SwapchainIndex]);
+	std::vector<VkFence> Fences = { m_PresentFences[m_SwapchainIndex], m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex], m_AsyncFences[m_SwapchainIndex] };
+	vkWaitForFences(m_Scope.GetDevice(), Fences.size(), Fences.data(), VK_TRUE, UINT64_MAX);
+	vkResetFences(m_Scope.GetDevice(), Fences.size(), Fences.data());
 
 	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], m_AcquireFence, &m_SwapchainIndex);
 
@@ -394,6 +409,15 @@ bool VulkanBase::BeginFrame()
 		std::iter_swap(m_PresentSemaphores.begin() + OldIndex, m_PresentSemaphores.begin() + m_SwapchainIndex);
 		std::iter_swap(m_SwapchainSemaphores.begin() + OldIndex, m_SwapchainSemaphores.begin() + m_SwapchainIndex);
 		std::iter_swap(m_PresentBuffers.begin() + OldIndex, m_PresentBuffers.begin() + m_SwapchainIndex);
+
+		std::iter_swap(m_AsyncBuffers.begin() + OldIndex + m_SwapchainImages.size(), m_AsyncBuffers.begin() + m_SwapchainIndex + m_SwapchainImages.size());
+		std::iter_swap(m_AsyncBuffers.begin() + OldIndex, m_AsyncBuffers.begin() + m_SwapchainIndex);
+
+		std::iter_swap(m_AsyncFences.begin() + OldIndex + m_SwapchainImages.size(), m_AsyncFences.begin() + m_SwapchainIndex + m_SwapchainImages.size());
+		std::iter_swap(m_AsyncFences.begin() + OldIndex, m_AsyncFences.begin() + m_SwapchainIndex);
+
+		std::iter_swap(m_AsyncSemaphores.begin() + OldIndex + m_SwapchainImages.size(), m_AsyncSemaphores.begin() + m_SwapchainIndex + m_SwapchainImages.size());
+		std::iter_swap(m_AsyncSemaphores.begin() + OldIndex, m_AsyncSemaphores.begin() + m_SwapchainIndex);
 	}
 
 	// Udpate UBO
@@ -434,8 +458,8 @@ bool VulkanBase::BeginFrame()
 		m_UBOBuffers[m_SwapchainIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
 	}
 
-	VkCommandBuffer& GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
-	VkCommandBuffer& ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
+	VkCommandBuffer GraphicsCmd = m_AsyncBuffers[m_SwapchainImages.size() + m_SwapchainIndex];
+	VkCommandBuffer ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -543,11 +567,23 @@ bool VulkanBase::BeginFrame()
 		vkCmdEndRenderPass(GraphicsCmd);
 	}
 
+	vkEndCommandBuffer(GraphicsCmd);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &GraphicsCmd;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &m_AsyncSemaphores[m_SwapchainImages.size() + m_SwapchainIndex];
+
+	vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex]);
+
+	GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
+	vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
+
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
-		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
-
 		{
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -568,38 +604,49 @@ bool VulkanBase::BeginFrame()
 		m_TerrainCompute->BindPipeline(ComputeCmd);
 		vkCmdDispatch(ComputeCmd, m_TerrainDispatches, 1, 1);
 
-#if 0
+#if 1
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
 		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = m_TerrainLUT.Image->GetImage();
-		barrier.subresourceRange = m_TerrainLUT.Image->GetSubResourceRange();
+		barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+		barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 		vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_ErosionCompute);
-		m_TerrainSet->BindSet(1, ComputeCmd, *m_ErosionCompute);
+		m_TerrainSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_ErosionCompute);
 		m_ErosionCompute->BindPipeline(ComputeCmd);
 
-		for (uint32_t i = 0; i < points.size() / 25; i++)
+		uint32_t ErosionSize = points.size() / 25;
+		for (uint32_t i = 0; i < ErosionSize / 4; i++)
 		{
-			glm::vec4 it = { i, 0, 0, 0 };
+			glm::vec4 it = { i, ErosionSize - i - 1, ErosionSize / 2 - i - 1, ErosionSize / 2 + i };
 			m_ErosionCompute->PushConstants(ComputeCmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
-			// vkCmdDispatch(cmd, m_TerrainLUT.Image->GetExtent().width / 10, m_TerrainLUT.Image->GetExtent().height / 10, 1);
 			vkCmdDispatch(ComputeCmd, 1, 1, 1);
 
-			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-			// vkDeviceWaitIdle(m_Scope.GetDevice());
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
 #endif
 
-		transfer_ownership(VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		}
 
 		{
 			VkImageMemoryBarrier barrier{};
@@ -670,8 +717,8 @@ void VulkanBase::EndFrame()
 
 	assert(m_InFrame);
 
-	VkCommandBuffer& GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
-	VkCommandBuffer& ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
+	VkCommandBuffer GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
+	VkCommandBuffer ComputeCmd = m_AsyncBuffers[m_SwapchainIndex];
 
 	// Draw High Resolution Objects
 	{
@@ -768,10 +815,10 @@ void VulkanBase::EndFrame()
 	vkEndCommandBuffer(GraphicsCmd);
 
 	VkSubmitInfo submitInfo{};
-	std::vector<VkSemaphore> waitSemaphores = { m_SwapchainSemaphores[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex] };
+	std::vector<VkSemaphore> waitSemaphores = { m_SwapchainSemaphores[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainImages.size() + m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex] };
 	std::vector<VkSemaphore> signalSemaphores = { m_PresentSemaphores[m_SwapchainIndex] };
 
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = waitSemaphores.size();
 	submitInfo.pWaitSemaphores = waitSemaphores.data();
@@ -782,10 +829,11 @@ void VulkanBase::EndFrame()
 	submitInfo.pSignalSemaphores = signalSemaphores.data();
 
 	m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
-		.Wait(m_AsyncFences[m_SwapchainIndex])
 		.Submit(ComputeCmd, m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
 
 	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
+
+	transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
@@ -875,7 +923,9 @@ void VulkanBase::_handleResize()
 
 void VulkanBase::Wait() const
 {
-	vkWaitForFences(m_Scope.GetDevice(), m_PresentFences.size(), m_PresentFences.data(), VK_TRUE, UINT64_MAX);
+	std::vector<VkFence> Fences = { m_PresentFences[m_SwapchainIndex], m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex], m_AsyncFences[m_SwapchainIndex] };
+	vkWaitForFences(m_Scope.GetDevice(), Fences.size(), Fences.data(), VK_TRUE, UINT64_MAX);
+	vkResetFences(m_Scope.GetDevice(), Fences.size(), Fences.data());
 }
 
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
@@ -1204,17 +1254,17 @@ void VulkanBase::transfer_ownership(VkQueueFlagBits queue1, VkQueueFlagBits queu
 
 	vkWaitForFences(m_Scope.GetDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
 
-	::BeginOneTimeSubmitCmd(m_TransferCmd[queue1 - 1]);
-	::BeginOneTimeSubmitCmd(m_TransferCmd[queue2 - 1]);
+	::BeginOneTimeSubmitCmd(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue1 - 1))]);
+	::BeginOneTimeSubmitCmd(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue2 - 1))]);
 
-	vkCmdPipelineBarrier(m_TransferCmd[queue1 - 1], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-	vkCmdPipelineBarrier(m_TransferCmd[queue2 - 1], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+	vkCmdPipelineBarrier(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue1 - 1))], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+	vkCmdPipelineBarrier(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue2 - 1))], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
-	::EndCommandBuffer(m_TransferCmd[queue1 - 1]);
-	::EndCommandBuffer(m_TransferCmd[queue2 - 1]);
+	::EndCommandBuffer(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue1 - 1))]);
+	::EndCommandBuffer(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue2 - 1))]);
 
-	m_Scope.GetQueue(queue1).Submit(m_TransferCmd[queue1 - 1], sem);
-	m_Scope.GetQueue(queue2).Submit2(m_TransferCmd[queue2 - 1], fence, sem);
+	m_Scope.GetQueue(queue1).Submit(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue1 - 1))], sem);
+	m_Scope.GetQueue(queue2).Submit2(m_OwnershipBuffers[m_SwapchainIndex + (m_SwapchainImages.size() * (queue2 - 1))], fence, sem);
 }
 #pragma endregion
 
@@ -1437,7 +1487,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
-		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
+		//.SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
 #pragma endregion
@@ -1836,18 +1886,24 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 
 	points.reserve(2500);
 
+	uint32_t d = 5;
 	uint32_t w = LUTExtent;
 	uint32_t h = LUTExtent;
-	uint32_t dw = w / 5;
-	uint32_t dh = h / 5;
+	uint32_t dw = w / d;
+	uint32_t dh = h / d;
 
 	for (uint32_t i = 0; i < points.capacity();)
 	{
-		for (uint32_t j = 0; j < 5; j++)
+		for (uint32_t j = 0; j < d; j++)
 		{
-			for (uint32_t k = 0; k < 5; k++, i++)
+			for (uint32_t k = 0; k < d; k++, i++)
 			{
-				points.emplace_back(glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j), 0, 0);
+				glm::vec4 point = {
+					glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j),
+					glm::abs(rand() % dw + dw * (d - k - 1)), glm::abs(rand() % dh + dh * (d - j - 1))
+				};
+
+				points.emplace_back(point);
 			}
 		}
 	}
@@ -1909,6 +1965,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AddPushConstant(pushConstants)
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt)
+		.AddSpecializationConstant(2, shape.m_Scale)
 		.SetShaderName("erosion_comp")
 		.Construct(m_Scope);
 
