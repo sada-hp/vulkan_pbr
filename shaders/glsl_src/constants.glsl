@@ -29,7 +29,7 @@ const float MieG = 0.8;
 // const vec3 BetaMEx = BetaMSca / 0.9;
 // const float MieG = 0.65;
 
-const float MaxLightIntensity = 50.0;
+const float MaxLightIntensity = 100.0;
 const int DIM_MU = 128;
 const int DIM_MU_S = 32;
 const int DIM_R = 32;

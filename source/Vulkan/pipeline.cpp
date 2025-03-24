@@ -283,6 +283,26 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetRenderPass(const VkRe
 	return *this;
 }
 
+GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetAttachmentCount(uint32_t Count)
+{
+	uint32_t Size = blendAttachments.size();
+	int diff = Count - Size;
+	blendAttachments.resize(Count);
+
+	if (diff > 0)
+	{
+		for (uint32_t i = Size; i < Count; i++)
+			blendAttachments[i] = defaultAttachment;
+	}
+
+	return *this;
+}
+
+VkPipelineColorBlendAttachmentState& GraphicsPipelineDescriptor::GetAttachment(uint32_t Index)
+{
+	return blendAttachments[Index];
+}
+
 //TODO: Check pipeline cache?
 std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const RenderScope& Scope)
 {
@@ -297,6 +317,9 @@ std::unique_ptr<GraphicsPipeline> GraphicsPipelineDescriptor::Construct(const Re
 	pipelineLayoutCI.pushConstantRangeCount = pushConstants.size();
 	pipelineLayoutCI.pPushConstantRanges = pushConstants.data();
 	vkCreatePipelineLayout(Scope.GetDevice(), &pipelineLayoutCI, VK_NULL_HANDLE, &out->pipelineLayout);
+
+	blendState.attachmentCount = blendAttachments.size();
+	blendState.pAttachments = blendAttachments.data();
 
 	std::vector<VkShaderModule> shaders;
 	std::vector<VkSpecializationInfo> specInfos;

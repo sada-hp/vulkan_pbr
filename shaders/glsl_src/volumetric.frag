@@ -73,14 +73,14 @@ layout(set = 1, binding = 7) uniform sampler3D InscatteringLUT;
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
     vec3 uv = p / topBound;
-    vec3 anim = vec3(ubo.Time * Clouds.WindSpeed * speed_mod);
+    vec3 anim = vec3(ubo.Time * speed_mod);
     return scale * uv + anim;
 }
 
 // Cheaper version of Sample-Density
 float SampleCloudShape(in RayMarch Ray, int lod)
 {
-    vec3 uv = GetUV(Ray.Position, 50.0, 0.01);
+    vec3 uv = GetUV(Ray.Position, 50.0, Clouds.WindSpeed * 0.01);
     float height = 1.0 - Ray.Height;
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
@@ -103,11 +103,11 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
 {
     float height = 1.0 - Ray.Height;
-    vec3 uv =  GetUV(Ray.Position, 400.0, 0.2);
+    vec3 uv =  GetUV(Ray.Position, 400.0, -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, lod);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate((1.0 - height) * 5.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
     base = remap(base, high_frequency_modifier * mix(0.15, 0.45, Clouds.Coverage), 1.0, 0.0, 1.0);
     return saturate(height * Clouds.Density * base);
@@ -133,11 +133,11 @@ void Blend(in RayMarch Ray)
 
         Atmosphere.L = mix(Atmosphere1.L, Atmosphere2.L, Ray.A);
         Atmosphere.T = mix(Atmosphere1.T, Atmosphere2.T, Ray.A);
-        Atmosphere.S = mix(Atmosphere1.S, Atmosphere2.S, Ray.A);
+        Atmosphere.S = mix(Atmosphere1.S, Atmosphere2.S, Ray.T);
         Atmosphere.Shadow = mix(Atmosphere1.Shadow, Atmosphere2.Shadow, Ray.A);
 
-        vec3 Radiance      = Ray.T * Atmosphere.T * Atmosphere.L;
-        vec3 Scattering    = Ray.T * Atmosphere.S  * MaxLightIntensity;
+        vec3 Radiance      = Atmosphere.T * Atmosphere.L;
+        vec3 Scattering    = Atmosphere.S  * MaxLightIntensity;
 
         CloudsColor = Scattering + Radiance * outScattering.rgb;
     }

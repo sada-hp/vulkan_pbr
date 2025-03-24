@@ -163,6 +163,10 @@ public:
 
 	GraphicsPipelineDescriptor& SetRenderPass(const VkRenderPass& RenderPass, uint32_t Subpass);
 
+	GraphicsPipelineDescriptor& SetAttachmentCount(uint32_t Count);
+
+	VkPipelineColorBlendAttachmentState& GetAttachment(uint32_t Index);
+
 	std::unique_ptr<GraphicsPipeline> Construct(const RenderScope& Scope);
 
 private:

@@ -37,7 +37,7 @@ void main()
     if (gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
     {
         float R, Mu;
-        vec2 UV = GetUV(imageSize(outImage).xy, vec2(0.5));
+        vec2 UV = GetUV(imageSize(outImage).xy);
 
         GetTransmittanceRMu(UV, R, Mu);
         vec3 Depth = BetaR * GetOpticalDepth(HR, R, Mu) + BetaMEx * GetOpticalDepth(HM, R, Mu);

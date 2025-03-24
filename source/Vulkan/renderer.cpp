@@ -359,6 +359,9 @@ VulkanBase::~VulkanBase() noexcept
 	m_DeferredAttachments.resize(0);
 	m_DeferredViews.resize(0);
 
+	m_BlurAttachments.resize(0);
+	m_BlurViews.resize(0);
+
 	m_HdrAttachmentsHR.resize(0);
 	m_HdrViewsHR.resize(0);
 
@@ -368,14 +371,14 @@ VulkanBase::~VulkanBase() noexcept
 	m_DepthAttachmentsLR.resize(0);
 	m_DepthViewsLR.resize(0);
 
-	m_HDRDescriptors.resize(0);
-	m_HDRPipelines.resize(0);
-
 	m_CompositionDescriptors.resize(0);
 	m_CompositionPipelines.resize(0);
 
 	m_PostProcessDescriptors.resize(0);
 	m_PostProcessPipelines.resize(0);
+
+	m_BlurDescriptors.resize(0);
+	m_BlurPipelines.resize(0);
 
 	m_UBOSets.resize(0);
 
@@ -468,7 +471,7 @@ bool VulkanBase::BeginFrame()
 
 	// Prepare render targets
 	{
-		std::array<VkImageMemoryBarrier, 4> barriers = {};
+		std::array<VkImageMemoryBarrier, 6> barriers = {};
 		barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barriers[0].image = m_HdrAttachmentsHR[m_SwapchainIndex]->GetImage();
 		barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -525,7 +528,35 @@ bool VulkanBase::BeginFrame()
 		barriers[3].srcAccessMask = 0;
 		barriers[3].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-		vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 4, &barriers[0]);
+		barriers[4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[4].image = m_BlurAttachments[2 * m_SwapchainIndex]->GetImage();
+		barriers[4].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[4].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[4].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[4].subresourceRange.baseArrayLayer = 0;
+		barriers[4].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barriers[4].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		barriers[4].subresourceRange.baseMipLevel = 0;
+		barriers[4].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barriers[4].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barriers[4].srcAccessMask = 0;
+		barriers[4].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+		barriers[5].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[5].image = m_BlurAttachments[2 * m_SwapchainIndex + 1]->GetImage();
+		barriers[5].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[5].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[5].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[5].subresourceRange.baseArrayLayer = 0;
+		barriers[5].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barriers[5].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		barriers[5].subresourceRange.baseMipLevel = 0;
+		barriers[5].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barriers[5].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barriers[5].srcAccessMask = 0;
+		barriers[5].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+		vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barriers.size(), barriers.data());
 	}
 
 	// Draw Low Resolution Background
@@ -607,7 +638,7 @@ bool VulkanBase::BeginFrame()
 		m_TerrainCompute->BindPipeline(ComputeCmd);
 		vkCmdDispatch(ComputeCmd, m_TerrainDispatches, 1, 1);
 
-#if 1
+#if 0
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -625,9 +656,10 @@ bool VulkanBase::BeginFrame()
 		m_ErosionCompute->BindPipeline(ComputeCmd);
 
 		uint32_t ErosionSize = points.size() / 25;
-		for (uint32_t i = 0; i < ErosionSize / 4; i++)
+		uint32_t GridStep = ErosionSize / 4;
+		for (uint32_t i = 0; i < GridStep; i++)
 		{
-			glm::vec4 it = { i, ErosionSize - i - 1, ErosionSize / 2 - i - 1, ErosionSize / 2 + i };
+			glm::vec4 it = { i, GridStep + i, 2 * GridStep + i, 3 * GridStep + i };
 			m_ErosionCompute->PushConstants(ComputeCmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 			vkCmdDispatch(ComputeCmd, 1, 1, 1);
 
@@ -762,13 +794,50 @@ void VulkanBase::EndFrame()
 		m_CompositionPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
 		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
 
-		vkCmdNextSubpass(GraphicsCmd, VK_SUBPASS_CONTENTS_INLINE);
-
-		m_HDRDescriptors[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_HDRPipelines[m_SwapchainIndex]);
-		m_HDRPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
-		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
-
 		vkCmdEndRenderPass(GraphicsCmd);
+	}
+
+	{
+		std::array<VkImageMemoryBarrier, 2> barrier{};
+		barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[0].image = m_BlurAttachments[2 * m_SwapchainIndex]->GetImage();
+		barrier[0].subresourceRange = m_BlurAttachments[2 * m_SwapchainIndex]->GetSubResourceRange();
+		barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		barrier[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[1].image = m_BlurAttachments[2 * m_SwapchainIndex + 1]->GetImage();
+		barrier[1].subresourceRange = m_BlurAttachments[2 * m_SwapchainIndex + 1]->GetSubResourceRange();
+		barrier[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		const int Radius = 5;
+		m_BlurPipelines[m_SwapchainIndex]->BindPipeline(GraphicsCmd);
+		m_BlurDescriptors[m_SwapchainIndex]->BindSet(0, GraphicsCmd, *m_BlurPipelines[m_SwapchainIndex]);
+		for (int i = 0; i <= Radius; i++)
+		{
+			float Order = float(i);
+			m_BlurPipelines[m_SwapchainIndex]->PushConstants(GraphicsCmd, &Order, sizeof(float), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+			vkCmdDispatch(GraphicsCmd, m_Scope.GetSwapchainExtent().width / 32 + static_cast<uint32_t>(m_Scope.GetSwapchainExtent().width % 32 > 0),
+				m_Scope.GetSwapchainExtent().height / 32 + static_cast<uint32_t>(m_Scope.GetSwapchainExtent().height % 32 > 0), 1);
+
+			if (i == Radius)
+			{
+				barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				barrier[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			}
+
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
+		}
 	}
 
 	{
@@ -894,6 +963,9 @@ void VulkanBase::_handleResize()
 	m_DeferredAttachments.resize(0);
 	m_DeferredViews.resize(0);
 
+	m_BlurAttachments.resize(0);
+	m_BlurViews.resize(0);
+
 	m_NormalAttachments.resize(0);
 	m_NormalViews.resize(0);
 
@@ -907,8 +979,6 @@ void VulkanBase::_handleResize()
 	m_DepthViewsLR.resize(0);
 
 	m_SwapchainImages.resize(0);
-	m_HDRPipelines.resize(0);
-	m_HDRDescriptors.resize(0);
 
 	m_Scope.RecreateSwapchain(m_Surface);
 
@@ -1007,6 +1077,9 @@ VkBool32 VulkanBase::create_swapchain_images()
 	m_DeferredAttachments.resize(imagesCount);
 	m_DeferredViews.resize(imagesCount);
 
+	m_BlurAttachments.resize(2 * imagesCount);
+	m_BlurViews.resize(2 * imagesCount);
+
 	m_NormalAttachments.resize(imagesCount);
 	m_NormalViews.resize(imagesCount);
 
@@ -1074,6 +1147,15 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_HdrViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsHR[i]);
 
 		hdrInfo.usage &= ~VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+		hdrInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+
+		m_BlurAttachments[2 * i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_BlurViews[2 * i] = std::make_unique<VulkanImageView>(m_Scope, *m_BlurAttachments[2 * i]);
+
+		m_BlurAttachments[2 * i + 1] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_BlurViews[2 * i + 1] = std::make_unique<VulkanImageView>(m_Scope, *m_BlurAttachments[2 * i + 1]);
+
+		hdrInfo.usage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
 		hdrInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		m_DeferredAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_DeferredViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DeferredAttachments[i]);
@@ -1129,20 +1211,24 @@ VkBool32 VulkanBase::create_frame_pipelines()
 {
 	VkBool32 res = 1;
 
-	m_HDRPipelines.resize(m_SwapchainImages.size());
-	m_HDRDescriptors.resize(m_SwapchainImages.size());
-
 	m_CompositionPipelines.resize(m_SwapchainImages.size());
 	m_CompositionDescriptors.resize(m_SwapchainImages.size());
 
 	m_PostProcessPipelines.resize(m_SwapchainImages.size());
 	m_PostProcessDescriptors.resize(m_SwapchainImages.size());
 
+	m_BlurPipelines.resize(m_SwapchainImages.size());
+	m_BlurDescriptors.resize(m_SwapchainImages.size());
+
 	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
 
-	for (size_t i = 0; i < m_HDRDescriptors.size(); i++)
+	VkPushConstantRange BlurConst{};
+	BlurConst.size = sizeof(float);
+	BlurConst.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
 	{
 		m_CompositionDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
@@ -1168,21 +1254,10 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.SetRenderPass(m_Scope.GetCompositionPass(), 0)
 			.Construct(m_Scope);
 
-		m_HDRDescriptors[i] = DescriptorSetDescriptor()
-			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
-			.AddSubpassAttachment(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
-			.Allocate(m_Scope);
-
-		m_HDRPipelines[i] = GraphicsPipelineDescriptor()
-			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
-			.SetShaderStage("hdr_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
-			.AddDescriptorLayout(m_HDRDescriptors[i]->GetLayout())
-			.SetRenderPass(m_Scope.GetCompositionPass(), 1)
-			.Construct(m_Scope);
-
 		m_PostProcessDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
-			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView(), SamplerLinear)
+			.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_BlurViews[2 * i + 1]->GetImageView(), SamplerLinear)
 			.Allocate(m_Scope);
 
 		m_PostProcessPipelines[i] = GraphicsPipelineDescriptor()
@@ -1190,6 +1265,18 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.SetShaderStage("post_process_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.AddDescriptorLayout(m_PostProcessDescriptors[i]->GetLayout())
 			.SetRenderPass(m_Scope.GetPostProcessPass(), 0)
+			.Construct(m_Scope);
+
+		m_BlurDescriptors[i] = DescriptorSetDescriptor()
+			.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsHR[i]->GetImageView(), SamplerPoint)
+			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_BlurViews[2 * i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
+			.AddStorageImage(2, VK_SHADER_STAGE_COMPUTE_BIT, m_BlurViews[2 * i + 1]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
+			.Allocate(m_Scope);
+
+		m_BlurPipelines[i] = ComputePipelineDescriptor()
+			.AddDescriptorLayout(m_BlurDescriptors[i]->GetLayout())
+			.AddPushConstant(BlurConst)
+			.SetShaderName("blur_comp")
 			.Construct(m_Scope);
 	}
 
@@ -1701,7 +1788,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VkCommandBuffer cmd;
 	const Queue& Queue = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
 
-	Queue.AllocateCommandBuffers2(1, &cmd);
+	Queue.AllocateCommandBuffers(1, &cmd);
 	::BeginOneTimeSubmitCmd(cmd);
 
 	GenTrLUT->BindPipeline(cmd);
@@ -1733,8 +1820,14 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		m_ScatteringLUT.Image->GetExtent().height / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().height % 4u > 0),
 		m_ScatteringLUT.Image->GetExtent().depth / 4u + uint32_t(m_ScatteringLUT.Image->GetExtent().depth % 4u > 0));
 
-	for (uint32_t Sample = 2; Sample < 10; Sample++)
+	::EndCommandBuffer(cmd);
+	Queue.Submit(cmd)
+		.Wait();
+
+	for (uint32_t Sample = 2; Sample < 25; Sample++)
 	{
+		::BeginOneTimeSubmitCmd(cmd);
+
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		GenDeltaJLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
@@ -1781,12 +1874,13 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		vkCmdDispatch(cmd, DeltaSR.Image->GetExtent().width / 4u + uint32_t(DeltaSR.Image->GetExtent().width % 4u > 0),
 			DeltaSR.Image->GetExtent().height / 4u + uint32_t(DeltaSR.Image->GetExtent().height % 4u > 0),
 			DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
+
+		::EndCommandBuffer(cmd);
+		Queue.Submit(cmd)
+			.Wait();
 	}
 
-	::EndCommandBuffer(cmd);
-	Queue.Submit(cmd)
-		.Wait()
-		.FreeCommandBuffers(1, &cmd);
+	Queue.FreeCommandBuffers(1, &cmd);
 
 	m_TransmittanceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_ScatteringLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -1885,12 +1979,28 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	noiseInfo.imageType = VK_IMAGE_TYPE_2D;
 
+	VkImageCreateInfo erosionInfo{};
+	erosionInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	erosionInfo.arrayLayers = 1;
+	erosionInfo.extent = { LUTExtent, LUTExtent, 1 };
+	erosionInfo.format = VK_FORMAT_R32_SFLOAT;
+	erosionInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+	erosionInfo.mipLevels = 1u;
+	erosionInfo.flags = 0u;
+	erosionInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	erosionInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	erosionInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	erosionInfo.queueFamilyIndexCount = queueFamilies.size();
+	erosionInfo.pQueueFamilyIndices = queueFamilies.data();
+	erosionInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	erosionInfo.imageType = VK_IMAGE_TYPE_2D;
+
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
 	points.reserve(2500);
 
-	uint32_t d = 5;
+	uint32_t d = 25;
 	uint32_t w = LUTExtent;
 	uint32_t h = LUTExtent;
 	uint32_t dw = w / d;
@@ -1904,7 +2014,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			{
 				glm::vec4 point = {
 					glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j),
-					glm::abs(rand() % dw + dw * (d - k - 1)), glm::abs(rand() % dh + dh * (d - j - 1))
+					glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j)
 				};
 
 				points.emplace_back(point);

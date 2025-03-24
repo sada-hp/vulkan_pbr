@@ -29,7 +29,7 @@ layout(location = 0) out vec4 outColor;
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
     vec3 uv = p / Rct;
-    vec3 anim = vec3(ubo.Time * Clouds.WindSpeed * speed_mod);
+    vec3 anim = vec3(ubo.Time * speed_mod);
     return scale * uv + anim;
 }
 
@@ -40,7 +40,7 @@ float GetHeightFraction(vec3 x0, float bottomBound, float topBound)
 
 float SampleCloud(vec3 x0)
 {
-    vec3 uv = GetUV(x0, 50.0, 0.01);
+    vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed * 0.01);
     float height = 1.0 - GetHeightFraction(x0, Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25)), Rct);
 
     float base = textureLod(CloudLowFrequency, uv, 3).r;
@@ -62,13 +62,13 @@ float SampleCloud(vec3 x0)
         return base;
     }
 
-    uv =  GetUV(x0, 400.0, 0.2);
+    uv =  GetUV(x0, 400.0, -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, 3);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate((1.0 - height) * 5.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    base = remap(base, high_frequency_modifier * mix(0.15, 0.45, Clouds.Coverage), 1.0, 0.0, 1.0);
+    base = remap(base, high_frequency_modifier * mix(0.35, 0.55, Clouds.Coverage), 1.0, 0.0, 1.0);
     return saturate(height * Clouds.Density * base);
 }
 
@@ -116,8 +116,8 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
     AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
     AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, AtmosphereEnd);
 
-    Atmosphere.E = AtmosphereEnd.E * AtmosphereEnd.Shadow;
-    Atmosphere.L = AtmosphereEnd.L * AtmosphereEnd.Shadow;
+    Atmosphere.E = AtmosphereEnd.E;
+    Atmosphere.L = AtmosphereEnd.L;
     Atmosphere.T = AtmosphereEnd.T;
     
     float w0 = 0.0;
@@ -130,7 +130,7 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
         float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
 
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
-        Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow * Atmosphere.Shadow);
+        Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow);
         Atmosphere.S += Shadow * (mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
         w0 = w1;
     }
@@ -157,28 +157,17 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 kD       = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
     vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
     vec3 diffuse  = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
-    vec3 ambient  = vec3(mix(1e-5, 1e-6, Material.Metallic)) * Material.Albedo.rgb;
+    vec3 ambient  = vec3(mix(0.1, 0.05, Material.Metallic)) * Material.Albedo.rgb;
 
-#if 0
-    SAtmosphere Atmosphere;
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
-
-    float Shadow = Atmosphere.Shadow * mix(1.0, SampleCloudShadow(World), Atmosphere.Shadow * Atmosphere.Shadow);
-    vec3 scatter  = GetScatteringFactor(Clouds.Coverage) * Atmosphere.S;
-    diffuse  = diffuse  * Shadow * (Atmosphere.L + Atmosphere.E);
-    specular = specular * Shadow * Atmosphere.L;
-    ambient  = ambient  * Atmosphere.T;
-#else
     float Shadow = 1.0;
     SAtmosphere Atmosphere;
     SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow);
 
-    vec3 scatter  = Atmosphere.S;
-    diffuse  = Shadow * diffuse  * (Atmosphere.L + Atmosphere.E);
-    specular = Shadow * specular * Atmosphere.L;
-    ambient  = ambient  * Atmosphere.T;
-#endif
-    return vec3(ambient + MaxLightIntensity * (scatter + (Material.AO * (specular + diffuse) / PI) * NdotL));
+    diffuse  = Atmosphere.T * Shadow * diffuse  * (Atmosphere.L + Atmosphere.E);
+    specular = Atmosphere.T * Shadow * specular * Atmosphere.L;
+    ambient  = Atmosphere.T * ambient  * saturate(Atmosphere.Shadow + 0.01);
+    
+    return vec3(ambient + MaxLightIntensity * (Atmosphere.S + (Material.AO * (specular + diffuse) / PI) * NdotL));
 }
 
 void main()

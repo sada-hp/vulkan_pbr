@@ -122,6 +122,9 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_DeferredAttachments = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DeferredViews = {};
 
+	std::vector<std::unique_ptr<VulkanImage>> m_BlurAttachments = {};
+	std::vector<std::unique_ptr<VulkanImageView>> m_BlurViews = {};
+
 	std::vector<std::unique_ptr<VulkanImage>> m_NormalAttachments = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_NormalViews = {};
 
@@ -149,8 +152,8 @@ private:
 	std::vector<std::unique_ptr<GraphicsPipeline>> m_CompositionPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 
-	std::vector<std::unique_ptr<GraphicsPipeline>> m_HDRPipelines = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_HDRDescriptors = {};
+	std::vector<std::unique_ptr<ComputePipeline>> m_BlurPipelines = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors = {};
 
 	std::vector<std::unique_ptr<GraphicsPipeline>> m_PostProcessPipelines = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
