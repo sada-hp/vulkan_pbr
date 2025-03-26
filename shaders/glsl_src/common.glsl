@@ -2,6 +2,7 @@
 #define _COMMON_SHADER
 
 #define PI 3.14159265359
+#define TWO_PI 2 * 3.14159265359
 #define ONE_OVER_PI 1.0 / PI
 #define ONE_OVER_2PI 1.0 / (2.0 * PI)
 #define ONE_OVER_4PI 1.0 / (4.0 * PI)

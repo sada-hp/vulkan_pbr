@@ -209,7 +209,7 @@ float fbm_worley(vec2 x, float f, uint n)
 		a *= a;
 	}
     
-	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }
 
 float fbm_worley(vec3 x, float f, uint n) 
@@ -226,7 +226,7 @@ float fbm_worley(vec3 x, float f, uint n)
 		a *= a;
 	}
     
-	return clamp(v / as * 0.5 + 0.5, -1.0, 1.0);
+	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
 }
 
 float fbm_perlin(vec2 x, float f, uint n) 
