@@ -51,10 +51,19 @@ void main()
 
     // material descriptor
     SMaterial Material;
+
+    float w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
+    float r = SampleWater(vec3(UV, Level));
+    w = saturate(w + mix(5.0, 1.0, r) * r);
+
 #if 1
     vec3 W;
     hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 3e-4, Material, W);
     // Material.Albedo.rgb = W;
+
+    Material.Albedo.rgb = mix(Material.Albedo.rgb, vec3(0.0, 0.0, 0.5), w);
+    Material.Roughness = mix(Material.Roughness, 0.0, w);
+    Material.AO = mix(Material.AO, 1.0, w);
 #else
     // Material.Albedo = texture(NoiseMap, UV);
     switch (Level)
@@ -82,9 +91,6 @@ void main()
         break;
     }
 
-    float w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
-    float r = SampleWater(vec3(UV, Level));
-    w = saturate(w + mix(5.0, 1.0, r) * r);
     Material.Albedo = mix(vec4(0.0, 1.0, 0.0, 1.0), vec4(0.0, 0.0, 1.0, 1.0), w * 0.5);
 
     Material.AO = 1.0;

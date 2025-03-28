@@ -164,5 +164,5 @@ void erosion_loop()
 void main()
 {
     if (gl_GlobalInvocationID.x < imageSize(target).x && gl_GlobalInvocationID.y < imageSize(target).y)
-    erosion_loop();
+        erosion_loop();
 }

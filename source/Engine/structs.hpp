@@ -42,7 +42,7 @@ struct CloudLayerProfile
 
 	float Coverage = 0.5;
 	float Density = 0.015;
-	float WindSpeed = 0.25;
+	float WindSpeed = 1.0;
 };
 /*
 * !@brief Dummy to inherit from

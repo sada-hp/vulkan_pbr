@@ -1095,21 +1095,6 @@ void VulkanBase::_handleResize()
 		return true;
 	});
 
-	std::erase_if(m_FramebuffersCM, [&, this](VkFramebuffer& fb) {
-		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
-		return true;
-	});
-
-	std::erase_if(m_FramebuffersDC, [&, this](VkFramebuffer& fb) {
-		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
-		return true;
-	});
-
-	std::erase_if(m_FramebuffersSC, [&, this](VkFramebuffer& fb) {
-		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
-		return true;
-	});
-
 	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
 		vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 		return true;
@@ -1247,11 +1232,6 @@ VkBool32 VulkanBase::create_swapchain_images()
 	m_DepthAttachmentsLR.resize(imagesCount);
 	m_DepthViewsLR.resize(imagesCount);
 
-	m_DiffuseIrradience.resize(imagesCount);
-	m_SpecularLUT.resize(imagesCount);
-	m_CubemapLUT.resize(imagesCount);
-	m_BRDFLUT.resize(imagesCount);
-
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
 	std::vector<uint32_t> queueFamilies = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
@@ -1338,45 +1318,66 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_HdrAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_HdrViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsLR[i]);
 
-		hdrInfo.extent.width = 512;
-		hdrInfo.extent.height = 512;
-		m_BRDFLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_BRDFLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_BRDFLUT[i].Image);
-
-		hdrInfo.extent.width = CubeR;
-		hdrInfo.extent.height = CubeR;
-		hdrInfo.arrayLayers = 6;
-		hdrInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-		m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_CubemapLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image);
-
-		m_DiffuseIrradience[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_DiffuseIrradience[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_DiffuseIrradience[i].Image);
-
-		hdrInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(CubeR))) + 1;
-		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		m_SpecularLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-
-		m_SpecularLUT[i].Views.reserve(hdrInfo.mipLevels + 1);
-		VkImageSubresourceRange subRes = m_SpecularLUT[i].Image->GetSubResourceRange();
-		subRes.baseMipLevel = 0;
-		subRes.levelCount = hdrInfo.mipLevels;
-		m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image, subRes));
-		for (uint32_t j = 0; j < hdrInfo.mipLevels; j++)
-		{
-			subRes.baseMipLevel = j;
-			subRes.levelCount = 1u;
-			m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image, subRes));
-		}
-
-		int u = m_SpecularLUT[i].Views.size();
-
 		depthInfo.extent.width /= LRr;
 		depthInfo.extent.height /= LRr;
 		depthInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		depthInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		m_DepthAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
 		m_DepthViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsLR[i]);
+	}
+
+	if (m_DiffuseIrradience.size() == 0)
+	{
+		m_DiffuseIrradience.resize(imagesCount);
+		m_SpecularLUT.resize(imagesCount);
+		m_CubemapLUT.resize(imagesCount);
+		m_BRDFLUT.resize(imagesCount);
+
+		for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+		{
+			VkImageCreateInfo hdrInfo{};
+			hdrInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			hdrInfo.format = m_Scope.GetHDRFormat();
+			hdrInfo.arrayLayers = 1;
+			hdrInfo.extent = { 512, 512, 1 };
+			hdrInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+			hdrInfo.imageType = VK_IMAGE_TYPE_2D;
+			hdrInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+			hdrInfo.mipLevels = 1;
+			hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+			hdrInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			hdrInfo.queueFamilyIndexCount = queueFamilies.size();
+			hdrInfo.pQueueFamilyIndices = queueFamilies.data();
+
+			m_BRDFLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+			m_BRDFLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_BRDFLUT[i].Image);
+
+			hdrInfo.extent.width = CubeR;
+			hdrInfo.extent.height = CubeR;
+			hdrInfo.arrayLayers = 6;
+			hdrInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+			m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+			m_CubemapLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image);
+
+			m_DiffuseIrradience[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+			m_DiffuseIrradience[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_DiffuseIrradience[i].Image);
+
+			hdrInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(CubeR))) + 1;
+			m_SpecularLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+
+			m_SpecularLUT[i].Views.reserve(hdrInfo.mipLevels + 1);
+			VkImageSubresourceRange subRes = m_SpecularLUT[i].Image->GetSubResourceRange();
+			subRes.baseMipLevel = 0;
+			subRes.levelCount = hdrInfo.mipLevels;
+			m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image, subRes));
+			for (uint32_t j = 0; j < hdrInfo.mipLevels; j++)
+			{
+				subRes.baseMipLevel = j;
+				subRes.levelCount = 1u;
+				m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image, subRes));
+			}
+		}
 	}
 
 	return res;
@@ -1390,10 +1391,6 @@ VkBool32 VulkanBase::create_framebuffers()
 	m_FramebuffersLR.resize(m_SwapchainImages.size());
 	m_FramebuffersCP.resize(m_SwapchainImages.size());
 	m_FramebuffersPP.resize(m_SwapchainImages.size());
-	m_FramebuffersCM.resize(m_SwapchainImages.size());
-	m_FramebuffersDC.resize(m_SwapchainImages.size());
-	m_FramebuffersBRDF.resize(m_SwapchainImages.size());
-	m_FramebuffersSC.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_SwapchainImages.size());
 
 	VkBool32 res = 1;
 	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
@@ -1402,13 +1399,26 @@ VkBool32 VulkanBase::create_framebuffers()
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / LRr, m_Scope.GetSwapchainExtent().height / LRr, 1 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView()}, &m_FramebuffersLR[i]) & res;
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCompositionPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView() }, &m_FramebuffersCP[i]);
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetPostProcessPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_SwapchainViews[i] }, &m_FramebuffersPP[i]);
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_CubemapLUT[i].View->GetImageView() }, &m_FramebuffersCM[i]);
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_DiffuseIrradience[i].View->GetImageView() }, &m_FramebuffersDC[i]);
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { m_BRDFLUT[i].Image->GetExtent().width, m_BRDFLUT[i].Image->GetExtent().height, 1}, {m_BRDFLUT[i].View->GetImageView()}, &m_FramebuffersBRDF[i]);
-
-		for (uint32_t j = 0; j < m_SpecularLUT[i].Image->GetMipLevelsCount(); j++)
-			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR >> j, CubeR >> j, 6 }, { m_SpecularLUT[i].Views[j + 1]->GetImageView()}, &m_FramebuffersSC[m_SpecularLUT[0].Image->GetMipLevelsCount() * i + j]);
 	}
+
+	if (m_FramebuffersCM.size() == 0)
+	{
+		m_FramebuffersCM.resize(m_SwapchainImages.size());
+		m_FramebuffersDC.resize(m_SwapchainImages.size());
+		m_FramebuffersBRDF.resize(m_SwapchainImages.size());
+		m_FramebuffersSC.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_SwapchainImages.size());
+
+		for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+		{
+			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_CubemapLUT[i].View->GetImageView() }, &m_FramebuffersCM[i]);
+			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_DiffuseIrradience[i].View->GetImageView() }, &m_FramebuffersDC[i]);
+			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { m_BRDFLUT[i].Image->GetExtent().width, m_BRDFLUT[i].Image->GetExtent().height, 1 }, { m_BRDFLUT[i].View->GetImageView() }, &m_FramebuffersBRDF[i]);
+
+			for (uint32_t j = 0; j < m_SpecularLUT[i].Image->GetMipLevelsCount(); j++)
+				res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR >> j, CubeR >> j, 6 }, { m_SpecularLUT[i].Views[j + 1]->GetImageView() }, &m_FramebuffersSC[m_SpecularLUT[0].Image->GetMipLevelsCount() * i + j]);
+		}
+	}
+
 
 	return res;
 }
