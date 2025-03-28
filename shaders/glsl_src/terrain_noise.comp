@@ -123,4 +123,11 @@ void main()
         float Noise = terrain_fbm(Normal, 10);
         imageStore(terrainImage, ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level), vec4(MinHeight + Noise * (MaxHeight - MinHeight), 0.0, 0.0, 0.0));
     }
+    else if (gl_GlobalInvocationID.x < VertexCount)
+    {
+        Vertex vertex = vertices.at[gl_GlobalInvocationID.x];
+        int Level = int(vertex.Position.y);
+
+        imageStore(terrainImage, ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level), vec4(MinHeight, 0.0, 0.0, 0.0));
+    }
 }

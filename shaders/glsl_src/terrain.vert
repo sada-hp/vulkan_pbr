@@ -94,5 +94,5 @@ void main()
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 
-    Height = (Height - MinHeight) / (MaxHeight - MinHeight);
+    Height = Seed == 0 ? 1.0 : (Height - MinHeight) / (MaxHeight - MinHeight);
 }

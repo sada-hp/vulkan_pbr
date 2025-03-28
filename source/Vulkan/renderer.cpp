@@ -2318,6 +2318,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AddSpecializationConstant(2, shape.m_Scale)
 		.AddSpecializationConstant(3, shape.m_MinHeight)
 		.AddSpecializationConstant(4, shape.m_MaxHeight)
+		.AddSpecializationConstant(5, shape.m_NoiseSeed)
 		.SetShaderName("erosion_comp")
 		.Construct(m_Scope);
 
