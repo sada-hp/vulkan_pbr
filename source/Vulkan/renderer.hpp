@@ -210,14 +210,15 @@ private:
 	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
 
 	std::vector<VulkanTexture> m_TerrainLUT = {};
+	std::vector<VulkanTexture> m_WaterLUT = {};
+
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_WaterSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
 
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
-	std::unique_ptr<ComputePipeline> m_ErosionCompute = {};
-	std::unique_ptr<Buffer> m_ErosionPoints = {};
+	std::unique_ptr<ComputePipeline> m_WaterCompute = {};
 
-	std::vector<glm::vec4> points;
 	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_SwapchainIndex = 0;

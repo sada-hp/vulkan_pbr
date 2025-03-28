@@ -12,120 +12,99 @@ struct Vertex
     vec4 UV;
 };
 
-layout(local_size_x = 25, local_size_y = 4, local_size_z = 1) in;
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 layout (constant_id = 2) const float Scale = 0;
+layout (constant_id = 3) const float MinHeight = 0;
+layout (constant_id = 4) const float MaxHeight = 0;
 
-layout (set = 1, binding = 0, r32f) uniform image2DArray target;
+layout (set = 1, binding = 0) uniform sampler2DArray NoiseMap;
+layout (set = 1, binding = 1, r32f) uniform image2DArray target;
 
-layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
-	Vertex at[];
-} vertices;
-
-layout (std140, set = 1, binding = 2) readonly buffer RandomPoints{
-	vec4 at[];
-} points;
-
-layout(push_constant) uniform constants
+ivec3 clamp_coords(ivec3 texel)
 {
-    vec4 iter;
-} data;
+    ivec2 size = textureSize(NoiseMap, 0).xy;
+    ivec2 onefourth = size / 4;
+    ivec2 threefourth = 3 * onefourth;
 
-ivec3 clamp_coords(int x, int z)
-{
-    ivec3 texel = ivec3(x, z, 0);
-    ivec2 size = imageSize(target).xy;
-    
-    if (x >= size.x || z >= size.y || x < 0 || z < 0)
+    // if texel is outside the bounds of current level    
+    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
     {
-        texel.z = 1;
-        texel.x = int(floor(float(size.x) / 4)) + (x < 0 ? x : int(ceil(float(x) / 2)));
-        texel.y = int(floor(float(size.y) / 4)) + (z < 0 ? z : int(ceil(float(z) / 2)));
+        texel.z += 1;
+        texel.x = onefourth.x + (texel.x < 0 ? texel.x : int(ceil(float(texel.x) / 2)));
+        texel.y = onefourth.y + (texel.y < 0 ? texel.y : int(ceil(float(texel.y) / 2)));
+    }
+    else if (texel.z > 0 && texel.x >= onefourth.x && texel.x <= threefourth.x && texel.y >= onefourth.y && texel.y <= threefourth.y)
+    {
+        texel.z -= 1;
+        texel.xy = 2 * (texel.xy - onefourth);
     }
 
     return texel;
 }
 
-void deposit(inout float h, float ds, float xf, float zf, int xi, int zi)
+float sample_height(ivec3 texel, ivec3 Offset)
 {
-    float delta = ds * (1.0 - xf) * (1.0 - zf);
-
-    ivec3 texel = clamp_coords(xi, zi);
-    imageAtomicAdd(target, texel, delta);
-
-    texel = clamp_coords(xi + 1, zi);
-    delta = ds * xf * (1.0 - zf);
-    imageAtomicAdd(target, texel, delta);
-
-    texel = clamp_coords(xi, zi + 1);
-    delta = ds * (1.0 - xf) * zf;
-    imageAtomicAdd(target, texel, delta);
- 
-    texel = clamp_coords(xi + 1, zi + 1);
-    delta = ds * xf * zf;
-    imageAtomicAdd(target, texel, delta);
-
-    h += ds;
+    texel = clamp_coords(texel + Offset);
+    return texelFetch(NoiseMap, texel, 0).r;
 }
 
-void erode(int x, int z, float w, float ds)
+void spill(ivec3 Texel, float xp, float zp, float w)
 {
-    ivec3 texel = clamp_coords(x, z);
-    float delta = ds * w;
+    const int radius = 4;
+    for (int z = Texel.y - radius; z <= Texel.y + radius; z++)
+    {
+        float zo = z - zp;
+        float zo2 = zo * zo;
 
-    imageAtomicAdd(target, texel, -delta);
+        for (int x = Texel.x - radius; x <= Texel.x + radius; x++)
+        {
+            float xo = x - xp;
+            float nw = 1.0 - saturate((xo * xo + zo2) * 0.25);
+            
+            if (nw <= 0.0)
+                continue;
+
+            nw *= ONE_OVER_2PI;
+
+            imageAtomicAdd(target, clamp_coords(Texel), nw * w);
+        }
+    }
 }
 
-float sample_target(int x, int z)
+void erosion_loop()
 {
-    ivec3 texel = clamp_coords(x, z);
+    ivec3 Texel = clamp_coords(ivec3(gl_GlobalInvocationID.xyz));
 
-    return imageAtomicAdd(target, texel, 0.0);
-}
+    if (Texel.z != gl_GlobalInvocationID.z)
+        return;
 
-void erosion_loop(vec2 point)
-{
-    int xi = int(point.x), zi = int(point.y);
-
-    float random = noise(vec2(xi, zi));
-
-    float Kq = 15.f * random;
-    float Kw = random;
+    float Kq = 15.f;
+    float Kw = 0.5;
     float Kr = 1.0 - Kw;
-    float Kd = 0.1 * random;
-    float Ki = 0.5 * random;
+    float Kd = 0.1;
+    float Ki = 0.5;
     float minSlope = 0.1;
-    float g = 20.0;
+    float g = 10.0;
     float Kg = g * 2.0;
 
-    dvec3 Center = normalize(RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale)) * Rg;
-    double a11 = dot(Center, dvec3(1.0, 0.0, 0.0));
-    double a12 = dot(Center, dvec3(0.0, 0.0, 1.0));
-
-    xi -= int(round(a11 / Scale)) % imageSize(target).x;
-    zi -= int(round(a12 / Scale)) % imageSize(target).y;
-
-    xi = xi < 0 ? imageSize(target).x + xi : xi;
-    zi = zi < 0 ? imageSize(target).y + zi : zi;
-
-    // imageStore(target, clamp_coords(xi, zi), vec4(0.0));
-    // return;
-
     float xf = 0.0, zf = 0.0;
-    float xp = xi, zp = zi;
+    float xp = Texel.x, zp = Texel.y;
 
-    float h = sample_target(xi, zi);
+    float h = sample_height(Texel, ivec3(0));
 
     float h00 = h;
-    float h10 = sample_target(xi + 1, zi);
-    float h01 = sample_target(xi, zi + 1);
-    float h11 = sample_target(xi + 1, zi + 1);
+    float h10 = sample_height(Texel, ivec3(1, 0, 0));
+    float h01 = sample_height(Texel, ivec3(0, 1, 0));
+    float h11 = sample_height(Texel, ivec3(1, 1, 0));
 
     float dx = 0.0, dz = 0.0;
-    float s = 0.0, v = 0.0, w = 1.0;
+    float s = 0.0, v = 0.0, w = (1.0 - (h - MinHeight) / (MaxHeight - MinHeight)) * 1000.0;
 
     int steps = 1000;
     while (w > 0.01 && steps > 0)
     {
+        spill(Texel, xp, zp, Kw * w);
+
         steps--;
         float gx = h00 + h01 - h10 - h11;
         float gz = h00 + h10 - h01 - h11;
@@ -147,78 +126,29 @@ void erosion_loop(vec2 point)
         float nxp = xp + dx;
         float nzp = zp + dz;
 
-        int nxi = int(floor(nxp));
-        int nzi = int(floor(nzp));
+        Texel = ivec3(int(floor(nxp)), int(floor(nzp)), Texel.z);
+
         float nxf = fract(nxp);
         float nzf = fract(nzp);
 
-        float nh00 = sample_target(nxi, nzi);
-        float nh10 = sample_target(nxi + 1, nzi);
-        float nh01 = sample_target(nxi, nzi + 1);
-        float nh11 = sample_target(nxi + 1, nzi + 1);
+        float nh00 = sample_height(Texel, ivec3(0));
+        float nh10 = sample_height(Texel, ivec3(1, 0, 0));
+        float nh01 = sample_height(Texel, ivec3(0, 1, 0));
+        float nh11 = sample_height(Texel, ivec3(1, 1, 0));
 
         float nh = mix(nh00, nh10, nxf) * (1-nzf) + mix(nh01, nh11, nxf) * nzf;
 
         if (nh >= h)
         {
-            float ds=(nh-h)+0.001f;
-
-            if (ds >= s)
-            {
-                deposit(h, s, xf, zf, xi, zi);
-            }
-            else
-            {
-                deposit(h, ds, xf, zf, xi, zi);
-            }
-            
             break;
         }
 
         float dh = h - nh;
         float slope = dh;
 
-        float q = max(slope, minSlope) * v * w * Kq;
-        float ds = s - q;
-        if (ds >= 0)
-        {
-            ds *= Kd;
-            deposit(dh, ds, xf, zf, xi, zi);
-            s -= ds;
-        }
-        else
-        {
-            ds *= -Kr;
-            ds = min(ds, dh);
-
-            for (int z = zi - 2; z <= zi + 2; z++)
-            {
-                float zo = z - zp;
-                float zo2 = zo * zo;
-
-                for (int x = xi - 2; x <= xi + 2; x++)
-                {
-                    float xo = x - xp;
-                    float nw = 1.0 - saturate((xo * xo + zo2) * 0.25);
-                    
-                    if (nw <= 0.0)
-                        continue;
-
-                    nw *= 0.1591549430918953f;
-
-                    erode(x, z, nw, ds);
-                }
-            }
-
-            dh -= ds;
-            s += ds;
-        }
-
-        v=sqrt(v * v + Kg * dh);
         w *= 1 - Kw;
 
         xp=nxp; zp=nzp;
-        xi=nxi; zi=nzi;
         xf=nxf; zf=nzf;
 
         h=nh;
@@ -227,19 +157,12 @@ void erosion_loop(vec2 point)
         h01=nh01;
         h11=nh11;
     }
+
+    spill(Texel, xp, zp, Kw * w);
 }
 
 void main()
 {
-    int index = int(gl_GlobalInvocationID.x);
-    int itter = int(data.iter[gl_GlobalInvocationID.y]);
-
-    if (index % 2 == 0)
-    {
-        erosion_loop(points.at[int(itter * gl_WorkGroupSize.x) + index].xy);
-    }
-    else
-    {
-        erosion_loop(points.at[int(itter * gl_WorkGroupSize.x) + index].zw);
-    }
+    if (gl_GlobalInvocationID.x < imageSize(target).x && gl_GlobalInvocationID.y < imageSize(target).y)
+    erosion_loop();
 }

@@ -16,7 +16,8 @@ PushConstants;
 layout(set = 1, binding = 1) uniform sampler2D AlbedoMap;
 layout(set = 1, binding = 2) uniform sampler2D NormalHeightMap;
 layout(set = 1, binding = 3) uniform sampler2D ARMMap;
-layout(set = 2, binding = 0) uniform sampler2D NoiseMap;
+layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
+layout(set = 2, binding = 1) uniform sampler2DArray WaterMap;
 
 layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec3 Normal;
@@ -27,6 +28,16 @@ layout(location = 4) in flat int Level;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outDeferred;
+
+float SampleWater(vec3 UVW)
+{
+    float r = textureLod(WaterMap, UVW, 0).r;
+    r += textureLod(WaterMap, vec3(UV, Level), 1).r * 0.5;
+    r += textureLod(WaterMap, vec3(UV, Level), 2).r * 0.25;
+    r += textureLod(WaterMap, vec3(UV, Level), 3).r * 0.1;
+
+    return saturate(pow(1.0 - Height, 2.0) * saturate(max(r - 1500.0, 0.0) / 2850.0 - 0.1));
+}
 
 void main()
 {
@@ -70,7 +81,11 @@ void main()
         Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
         break;
     }
-    Material.Albedo = Height == 0 ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
+
+    float w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
+    float r = SampleWater(vec3(UV, Level));
+    w = saturate(w + mix(5.0, 1.0, r) * r);
+    Material.Albedo = mix(vec4(0.0, 1.0, 0.0, 1.0), vec4(0.0, 0.0, 1.0, 1.0), w * 0.5);
 
     Material.AO = 1.0;
     Material.Roughness = 1.0;

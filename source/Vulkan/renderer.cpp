@@ -260,9 +260,8 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
-	m_ErosionPoints.reset();
 	m_TerrainCompute.reset();
-	m_ErosionCompute.reset();
+	m_WaterCompute.reset();
 
 	m_TerrainDrawSet.resize(0);
 	m_TerrainSet.resize(0);
@@ -271,6 +270,8 @@ VulkanBase::~VulkanBase() noexcept
 	m_SpecularLUT.resize(0);
 	m_CubemapLUT.resize(0);
 	m_BRDFLUT.resize(0);
+	m_WaterSet.resize(0);
+	m_WaterLUT.resize(0);
 
 	m_Volumetrics.reset();
 	m_UBOBuffers.resize(0);
@@ -738,10 +739,8 @@ bool VulkanBase::BeginFrame()
 
 	vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_AsyncFences[m_SwapchainImages.size() + m_SwapchainIndex]);
 
-
 	GraphicsCmd = m_PresentBuffers[m_SwapchainIndex];
 	vkBeginCommandBuffer(GraphicsCmd, &beginInfo);
-
 
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
@@ -758,57 +757,18 @@ bool VulkanBase::BeginFrame()
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.image = m_WaterLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_WaterLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
 
 		m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_TerrainCompute);
 		m_TerrainSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_TerrainCompute);
 		m_TerrainCompute->BindPipeline(ComputeCmd);
 		vkCmdDispatch(ComputeCmd, m_TerrainDispatches, 1, 1);
-
-#if 0
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
-		barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-		vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-
-		m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_ErosionCompute);
-		m_TerrainSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_ErosionCompute);
-		m_ErosionCompute->BindPipeline(ComputeCmd);
-
-		uint32_t ErosionSize = points.size() / 25;
-		uint32_t GridStep = ErosionSize / 4;
-		for (uint32_t i = 0; i < GridStep; i++)
-		{
-			glm::vec4 it = { i, GridStep + i, 2 * GridStep + i, 3 * GridStep + i };
-			m_ErosionCompute->PushConstants(ComputeCmd, &it, sizeof(it), 0, VK_SHADER_STAGE_COMPUTE_BIT);
-			vkCmdDispatch(ComputeCmd, 1, 1, 1);
-
-			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-		}
-#endif
-
-		{
-			VkImageMemoryBarrier barrier{};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
-			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
-			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
-			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
-			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-
-			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
-		}
 
 		{
 			VkImageMemoryBarrier barrier{};
@@ -819,11 +779,64 @@ bool VulkanBase::BeginFrame()
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
 			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
-			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
+
+#if 1
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_WaterLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_WaterLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+			VkClearColorValue Color;
+			Color.float32[0] = 0.0;
+			vkCmdClearColorImage(ComputeCmd, m_WaterLUT[m_SwapchainIndex].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_WaterLUT[m_SwapchainIndex].Image->GetSubResourceRange());
+
+			m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_WaterCompute);
+			m_WaterSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_WaterCompute);
+			m_WaterCompute->BindPipeline(ComputeCmd);
+			vkCmdDispatch(ComputeCmd, m_WaterLUT[0].Image->GetExtent().width / 32 + 1, m_WaterLUT[0].Image->GetExtent().height / 32 + 1, m_WaterLUT[0].Image->GetArrayLayers());
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		}
+#endif
+
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+			barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex();
+			barrier.dstQueueFamilyIndex = m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex();
+			barrier.image = m_WaterLUT[m_SwapchainIndex].Image->GetImage();
+			barrier.subresourceRange = m_WaterLUT[m_SwapchainIndex].Image->GetSubResourceRange();
+
+			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+			vkCmdPipelineBarrier(GraphicsCmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		}
+
+		m_TerrainLUT[m_SwapchainIndex].Image->GenerateMipMaps(GraphicsCmd);
+		m_WaterLUT[m_SwapchainIndex].Image->GenerateMipMaps(GraphicsCmd);
 	}
 
 	{
@@ -1033,7 +1046,10 @@ void VulkanBase::EndFrame()
 	VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_PresentFences[m_SwapchainIndex]);
 
 	if (m_TerrainCompute.get())
+	{
 		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_TerrainLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+		transfer_ownership(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_COMPUTE_BIT, m_WaterLUT[m_SwapchainIndex].Image.get(), m_AsyncFences[m_SwapchainIndex], m_AsyncSemaphores[m_SwapchainIndex]);
+	}
 
 	assert(res != VK_ERROR_DEVICE_LOST);
 
@@ -2028,7 +2044,10 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	const Queue& Queue = m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT);
 
 	Queue.AllocateCommandBuffers(1, &cmd);
-	::BeginOneTimeSubmitCmd(cmd);
+	VkCommandBufferBeginInfo cmdBegin{};
+	cmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	Queue.AllocateCommandBuffers2(1, &cmd);
+	vkBeginCommandBuffer(cmd, &cmdBegin);
 
 	GenTrLUT->BindPipeline(cmd);
 	TrDSO->BindSet(0, cmd, *GenTrLUT);
@@ -2065,7 +2084,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 
 	for (uint32_t Sample = 2; Sample < 25; Sample++)
 	{
-		::BeginOneTimeSubmitCmd(cmd);
+		Queue.Wait();
+		vkBeginCommandBuffer(cmd, &cmdBegin);
 
 		DeltaJ.Image->TransitionLayout(cmd, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
@@ -2114,12 +2134,12 @@ VkBool32 VulkanBase::atmosphere_precompute()
 			DeltaSR.Image->GetExtent().height / 4u + uint32_t(DeltaSR.Image->GetExtent().height % 4u > 0),
 			DeltaSR.Image->GetExtent().depth / 4u + uint32_t(DeltaSR.Image->GetExtent().depth % 4u > 0));
 
-		::EndCommandBuffer(cmd);
-		Queue.Submit(cmd)
-			.Wait();
+		vkEndCommandBuffer(cmd);
+		Queue.Submit(cmd);
 	}
 
-	Queue.FreeCommandBuffers(1, &cmd);
+	Queue.Wait()
+		.FreeCommandBuffers(1, &cmd);
 
 	m_TransmittanceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_ScatteringLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -2208,73 +2228,37 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseInfo.extent = { LUTExtent, LUTExtent, 1 };
 	noiseInfo.format = VK_FORMAT_R32_SFLOAT;
 	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	noiseInfo.mipLevels = 1u;
+	noiseInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(LUTExtent))) + 1;
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	noiseInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	noiseInfo.queueFamilyIndexCount = queueFamilies.size();
 	noiseInfo.pQueueFamilyIndices = queueFamilies.data();
-	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	noiseInfo.imageType = VK_IMAGE_TYPE_2D;
 
-	VkImageCreateInfo erosionInfo{};
-	erosionInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	erosionInfo.arrayLayers = 1;
-	erosionInfo.extent = { LUTExtent, LUTExtent, 1 };
-	erosionInfo.format = VK_FORMAT_R32_SFLOAT;
-	erosionInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-	erosionInfo.mipLevels = 1u;
-	erosionInfo.flags = 0u;
-	erosionInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	erosionInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	erosionInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	erosionInfo.queueFamilyIndexCount = queueFamilies.size();
-	erosionInfo.pQueueFamilyIndices = queueFamilies.data();
-	erosionInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-	erosionInfo.imageType = VK_IMAGE_TYPE_2D;
+	VkImageCreateInfo waterInfo{};
+	waterInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	waterInfo.arrayLayers = shape.m_Rings;
+	waterInfo.extent = { LUTExtent, LUTExtent, 1 };
+	waterInfo.format = VK_FORMAT_R32_SFLOAT;
+	waterInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	waterInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(LUTExtent))) + 1;
+	waterInfo.flags = 0u;
+	waterInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	waterInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	waterInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	waterInfo.queueFamilyIndexCount = queueFamilies.size();
+	waterInfo.pQueueFamilyIndices = queueFamilies.data();
+	waterInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	waterInfo.imageType = VK_IMAGE_TYPE_2D;
 
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	points.reserve(2500);
-
-	uint32_t d = 25;
-	uint32_t w = LUTExtent;
-	uint32_t h = LUTExtent;
-	uint32_t dw = w / d;
-	uint32_t dh = h / d;
-
-	for (uint32_t i = 0; i < points.capacity();)
-	{
-		for (uint32_t j = 0; j < d; j++)
-		{
-			for (uint32_t k = 0; k < d; k++, i++)
-			{
-				glm::vec4 point = {
-					glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j),
-					glm::abs(rand() % dw + dw * k), glm::abs(rand() % dh + dh * j)
-				};
-
-				points.emplace_back(point);
-			}
-		}
-	}
-
-	VkBufferCreateInfo sbInfo{};
-	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	sbInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-	sbInfo.queueFamilyIndexCount = queueFamilies.size();
-	sbInfo.pQueueFamilyIndices = queueFamilies.data();
-	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	sbInfo.size = points.size() * sizeof(points[0]);
-
-	VmaAllocationCreateInfo sbAlloc{};
-	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
-	sbAlloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	m_ErosionPoints = std::make_unique<Buffer>(m_Scope, sbInfo, sbAlloc);
-	m_ErosionPoints->Update(points.data());
-
+	m_WaterSet.resize(m_SwapchainImages.size());
+	m_WaterLUT.resize(m_SwapchainImages.size());
 	m_TerrainLUT.resize(m_SwapchainImages.size());
 	m_TerrainSet.resize(m_SwapchainImages.size());
 	m_TerrainDrawSet.resize(m_SwapchainImages.size());
@@ -2284,14 +2268,22 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		m_TerrainLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
 		m_TerrainLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT[i].Image);
 
+		m_WaterLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, waterInfo, noiseAllocCreateInfo);
+		m_WaterLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_WaterLUT[i].Image);
+
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
 			.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
-			.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_ErosionPoints)
+			.Allocate(m_Scope);
+
+		m_WaterSet[i] = DescriptorSetDescriptor()
+			.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_WaterLUT[i].View->GetImageView())
 			.Allocate(m_Scope);
 
 		m_TerrainDrawSet[i] = DescriptorSetDescriptor()
-			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp))
+			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
+			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
 			.Allocate(m_Scope);
 	}
 
@@ -2308,17 +2300,14 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.SetShaderName("terrain_noise_comp")
 		.Construct(m_Scope);
 
-	VkPushConstantRange pushConstants{};
-	pushConstants.size = sizeof(glm::vec4);
-	pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	m_ErosionCompute = ComputePipelineDescriptor()
+	m_WaterCompute = ComputePipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
-		.AddPushConstant(pushConstants)
+		.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt)
 		.AddSpecializationConstant(2, shape.m_Scale)
+		.AddSpecializationConstant(3, shape.m_MinHeight)
+		.AddSpecializationConstant(4, shape.m_MaxHeight)
 		.SetShaderName("erosion_comp")
 		.Construct(m_Scope);
 
