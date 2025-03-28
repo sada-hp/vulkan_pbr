@@ -21,7 +21,7 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	noiseInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+	noiseInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	noiseInfo.queueFamilyIndexCount = queueFamilies.size();
 	noiseInfo.pQueueFamilyIndices = queueFamilies.data();
 	noiseInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;

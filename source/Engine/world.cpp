@@ -37,21 +37,7 @@ namespace GR
 
 	void World::BindTexture(Components::Resource<Texture>& Resource, const std::string& path)
 	{
-		VkFormat format;
-		if (dynamic_cast<Components::NormalDisplacementMap*>(&Resource))
-		{
-			format = VK_FORMAT_R8G8B8A8_UNORM;
-		}
-		else if (dynamic_cast<Components::AORoughnessMetallicMap*>(&Resource))
-		{
-			format = VK_FORMAT_R8G8B8A8_UNORM;
-		}
-		else
-		{
-			format = VK_FORMAT_R8G8B8A8_SRGB;
-		}
-
-		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage(path, format));
+		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage(path, VK_FORMAT_R8G8B8A8_UNORM));
 	}
 
 	void World::DrawScene(double Delta)

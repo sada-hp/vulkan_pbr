@@ -20,20 +20,40 @@ vec3 F_FresnelSchlick(float Mu, vec3 f0, vec3 f90)
 
 float D_DistributionGGX(float NdotH, float roughness)
 {
-    float a2 = pow(roughness, 4.0);
+    float a = roughness * roughness;
+    float a2 = a * a;
     float det = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	
     return a2 / max((det * det), 0.001);
 }
 
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float a = roughness;
+    float k = (a * a) / 2.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+
 float G_GeometrySmith(float NdotV, float NdotL, float roughness)
 {
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
-    float SchlickV = NdotV / (NdotV * (1.0 - k) + k);
-    float SchlickL = NdotL / (NdotL * (1.0 - k) + k);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
 
-    return SchlickV * SchlickL;
+    return ggx1 * ggx2;
+}
+
+float G_GeometrySmithCorrelated(float NdotV, float NdotL, float roughness)
+{
+    float a2 = roughness * roughness;
+
+    float Lambda_GGXV = NdotL * sqrt((-NdotV * a2 + NdotV) * NdotV + a2);
+    float Lambda_GGXL = NdotV * sqrt((-NdotL * a2 + NdotL) * NdotL + a2);
+
+    return 0.5 / (Lambda_GGXV + Lambda_GGXL);
 }
 
 // course-notes-moving-frostbite-to-pbr-v2
@@ -48,4 +68,42 @@ vec3 DisneyDiffuse(vec3 Albedo, float NdotL, float NdotV, float LdotH, float Rou
     float ViewScatter = F_FresnelSchlick(NdotV, F0, F90).r;
 
     return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
+}
+
+vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
+{
+    float a = roughness * roughness;
+	
+    float phi = 6.28318530718 * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
+	
+    // from spherical coordinates to cartesian coordinates
+    vec3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+	
+    // from tangent-space vector to world-space sample vector
+    vec3 up        = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent   = normalize(cross(up, N));
+    vec3 bitangent = cross(N, tangent);
+	
+    vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+    return normalize(sampleVec);
+}  
+
+float RadicalInverse_VdC(uint bits) 
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+vec2 Hammersley(uint i, uint N)
+{
+    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
 }

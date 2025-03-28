@@ -35,6 +35,19 @@ public:
 	}
 };
 
+struct VulkanTextureMultiView : Texture
+{
+	std::shared_ptr<VulkanImage> Image = VK_NULL_HANDLE;
+	std::vector<std::unique_ptr<VulkanImageView>> Views = {};
+
+public:
+	void reset()
+	{
+		Image.reset();
+		Views.resize(0);
+	}
+};
+
 namespace GR
 {
 	class Window;
@@ -107,6 +120,9 @@ namespace GR
 class VulkanBase final : public GR::Renderer
 {
 private:
+	const uint32_t LRr = 2;
+	const uint32_t CubeR = 128;
+
 	friend class GR::Window;
 
 	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME };
@@ -134,10 +150,28 @@ private:
 	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
-	std::vector<VkFramebuffer> m_FramebuffersHR = {};
-	std::vector<VkFramebuffer> m_FramebuffersLR = {};
-	std::vector<VkFramebuffer> m_FramebuffersCP = {};
-	std::vector<VkFramebuffer> m_FramebuffersPP = {};
+	std::vector<VkFramebuffer> m_FramebuffersHR   = {};
+	std::vector<VkFramebuffer> m_FramebuffersLR   = {};
+	std::vector<VkFramebuffer> m_FramebuffersCP   = {};
+	std::vector<VkFramebuffer> m_FramebuffersPP   = {};
+	std::vector<VkFramebuffer> m_FramebuffersCM   = {};
+	std::vector<VkFramebuffer> m_FramebuffersDC   = {};
+	std::vector<VkFramebuffer> m_FramebuffersSC   = {};
+	std::vector<VkFramebuffer> m_FramebuffersBRDF = {};
+
+	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_BlurPipeline         = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsPipeline> m_CubemapPipeline     = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsPipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsPipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<GraphicsPipeline> m_IntegrationPipeline = VK_NULL_HANDLE;
+
+	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors     = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
 
 	std::vector<VkFence> m_PresentFences = {};
 	VkFence m_AcquireFence = VK_NULL_HANDLE;
@@ -148,15 +182,6 @@ private:
 	std::vector<VkCommandBuffer> m_OwnershipBuffers = {};;
 	std::vector<VkSemaphore> m_AsyncSemaphores = {};
 	std::vector<VkFence> m_AsyncFences = {};
-
-	std::vector<std::unique_ptr<GraphicsPipeline>> m_CompositionPipelines = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
-
-	std::vector<std::unique_ptr<ComputePipeline>> m_BlurPipelines = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors = {};
-
-	std::vector<std::unique_ptr<GraphicsPipeline>> m_PostProcessPipelines = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
@@ -178,6 +203,11 @@ private:
 	VulkanTexture m_ScatteringLUT = {};
 	VulkanTexture m_IrradianceLUT = {};
 	VulkanTexture m_TransmittanceLUT = {};
+
+	std::vector<VulkanTexture> m_BRDFLUT = {};
+	std::vector<VulkanTexture> m_CubemapLUT = {};
+	std::vector<VulkanTexture> m_DiffuseIrradience = {};
+	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
 
 	std::vector<VulkanTexture> m_TerrainLUT = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};

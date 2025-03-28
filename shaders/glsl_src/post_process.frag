@@ -11,7 +11,7 @@ layout(location = 0) out vec4 outColor;
 // snatched from precomputed-atmospheric-scattering code
 vec3 Tonemap(vec3 L) 
 {
-    const float exposure = 0.4;
+    const float exposure = 1.0;
     const float gamma = 2.2;
 
     L = L * exposure;
@@ -31,6 +31,6 @@ vec3 Tonemap2(vec3 L)
 void main()
 {
     vec3 Color = fxaa_apply(HDRColor, UV, ubo.Resolution);
-    Color = Tonemap(Color + 0.025 * texture(Blurred, UV).rgb);
+    Color = Tonemap(Color + texture(Blurred, UV).rgb);
     outColor = vec4(Color, 1.0);
 }

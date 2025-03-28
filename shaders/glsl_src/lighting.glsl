@@ -95,7 +95,7 @@ vec4 GetInscattering(sampler3D LUT, float R, float Mu, float MuS, float DotVL)
     vec4 Cst = ((RMu < 0.0 && Delta > 0.0) ? vec4 (1.0, 0.0, 0.0, 0.5 - 0.5 / DIM_MU) : vec4(-1.0, H * H, H, 0.5 + 0.5 / DIM_MU));
     
     float uR = 0.5 / DIM_R + Rho / H * ( 1.0 - 1.0 / DIM_R );
-    float uMu = 1.0 - Cst.w + (RMu * Cst.x + sqrt(Delta + Cst.y)) / (Rho + Cst.z) * (0.5 - 1.0 / DIM_MU);
+    float uMu = Cst.w + (RMu * Cst.x + sqrt(Delta + Cst.y)) / (Rho + Cst.z) * (0.5 - 1.0 / DIM_MU);
     float uMuS = 0.5 / DIM_MU_S + (atan(max(MuS, -0.1975) * tan(1.26 * 1.1)) / 1.1 + (1.0 - 0.26)) * 0.5 * (1.0 - 1.0 / DIM_MU_S);
     float Weight = (DotVL + 1.0) * 0.5 * (DIM_NU - 1.0);
     float uNu = floor(Weight);
@@ -195,7 +195,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 {
     float Re = length(Eye);
 
-    if (Re <= Rg + 1e-2)
+    if (Re <= Rg + 1e-2) 
     {
         Atmosphere.S      = vec3(0.0);
         Atmosphere.L      = vec3(0.0);
@@ -208,6 +208,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         vec3 View = normalize(Target - Eye);
         float EdotV = dot(Eye, View) / Re;
 
+#if 0
         float d = -Re * EdotV - sqrt(Re * Re * (EdotV * EdotV - 1.0) + Rt * Rt);
         if (d > 0.0)
         {
@@ -215,8 +216,9 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
             EdotV = (Re * EdotV + d) / Rt;
             Re = Rt;
         }
-        
-        float Rp = length(Target);
+#endif
+
+        float Rp = max(length(Target), Rg);
         float VdotL = dot(View, sun);
         float EdotL = dot(Eye, sun) / Re;
         float PdotV = dot(Target, View) / Rp;
@@ -272,14 +274,15 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     float VdotL = dot(View, Sun);
 
     float PhaseR    = RayleighPhase(VdotL);
-    float PhaseHGD  = HGDPhaseCloud(VdotL); 
+    float PhaseHGD  = HGDPhase(VdotL); 
     vec3 Transmittance = GetTransmittance(TransmittanceLUT, Re, EdotV);
     vec4 Scattering = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
+    Scattering.w *= smoothstep(0.00, 0.02, EdotL);
 
     // Sky
     if (SphereIntersect(Eye, View, vec3(0.0), Rt))
     {
-        Color += max(PhaseR * Scattering.rgb + PhaseHGD * GetMie(Scattering), 0.0);
+        Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
     }
     
     // Sun

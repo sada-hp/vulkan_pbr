@@ -294,6 +294,112 @@ RenderScope& RenderScope::CreatePostProcessRenderPass()
 	return *this;
 }
 
+RenderScope& RenderScope::CreateCubemapRenderPass()
+{
+	VkRenderPassCreateInfo createInfo{};
+	std::array<VkAttachmentDescription, 1> attachments;
+
+	attachments[0].format = GetHDRFormat();
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].flags = 0;
+
+	VkAttachmentReference color_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+	std::array<VkSubpassDescription, 1> subpassDescriptions{};
+	subpassDescriptions[0].colorAttachmentCount = 1;
+	subpassDescriptions[0].pColorAttachments = &color_ref;
+	subpassDescriptions[0].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	std::array<VkSubpassDependency, 2> dependencies;
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = attachments.size();
+	createInfo.pAttachments = attachments.data();
+	createInfo.dependencyCount = dependencies.size();
+	createInfo.pDependencies = dependencies.data();
+	createInfo.subpassCount = subpassDescriptions.size();
+	createInfo.pSubpasses = subpassDescriptions.data();
+
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_CubemapPass);
+
+	return *this;
+}
+
+RenderScope& RenderScope::CreateSimpleRenderPass()
+{
+	VkRenderPassCreateInfo createInfo{};
+	std::array<VkAttachmentDescription, 1> attachments;
+
+	attachments[0].format = GetHDRFormat();
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].flags = 0;
+
+	VkAttachmentReference color_ref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+	std::array<VkSubpassDescription, 1> subpassDescriptions{};
+	subpassDescriptions[0].colorAttachmentCount = 1;
+	subpassDescriptions[0].pColorAttachments = &color_ref;
+	subpassDescriptions[0].pDepthStencilAttachment = nullptr;
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+	std::array<VkSubpassDependency, 2> dependencies;
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = attachments.size();
+	createInfo.pAttachments = attachments.data();
+	createInfo.dependencyCount = dependencies.size();
+	createInfo.pDependencies = dependencies.data();
+	createInfo.subpassCount = subpassDescriptions.size();
+	createInfo.pSubpasses = subpassDescriptions.data();
+
+	::CreateRenderPass(m_LogicalDevice, createInfo, &m_SimplePass);
+
+	return *this;
+}
+
 RenderScope& RenderScope::CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes)
 {
 	if (m_DescriptorPool != VK_NULL_HANDLE) {
@@ -331,6 +437,10 @@ void RenderScope::Destroy()
 		vkDestroyRenderPass(m_LogicalDevice, m_CompositionPass, VK_NULL_HANDLE);
 	if (m_PostProcessPass != VK_NULL_HANDLE)
 		vkDestroyRenderPass(m_LogicalDevice, m_PostProcessPass, VK_NULL_HANDLE);
+	if (m_CubemapPass != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_CubemapPass, VK_NULL_HANDLE);
+	if (m_SimplePass != VK_NULL_HANDLE)
+		vkDestroyRenderPass(m_LogicalDevice, m_SimplePass, VK_NULL_HANDLE);
 	if (m_Swapchain != VK_NULL_HANDLE)
 		vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, VK_NULL_HANDLE);
 	if (m_Allocator != VK_NULL_HANDLE)
@@ -343,6 +453,8 @@ void RenderScope::Destroy()
 	m_RenderPassLR = VK_NULL_HANDLE;
 	m_CompositionPass = VK_NULL_HANDLE;
 	m_PostProcessPass = VK_NULL_HANDLE;
+	m_CubemapPass = VK_NULL_HANDLE;
+	m_SimplePass = VK_NULL_HANDLE;
 	m_Swapchain = VK_NULL_HANDLE;
 	m_Allocator = VK_NULL_HANDLE;
 	m_LogicalDevice = VK_NULL_HANDLE;
@@ -394,7 +506,7 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 		samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0;
 		samplerInfo.minLod = 0.0;
-		samplerInfo.maxLod = 1.0;
+		samplerInfo.maxLod = 20.0;
 		vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &m_Samplers[Type]);
 	}
 

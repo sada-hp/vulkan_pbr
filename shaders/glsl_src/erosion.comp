@@ -1,4 +1,4 @@
- #version 460
+#version 460
 #extension GL_EXT_shader_atomic_float : enable
 
 #include "ubo.glsl"

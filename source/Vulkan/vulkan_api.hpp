@@ -99,7 +99,7 @@ VkSurfaceFormatKHR GetSurfaceFormat(const VkPhysicalDevice& physicalDevice, cons
 */
 VkBool32 CreateCommandPool(const VkDevice& device, const uint32_t targetQueueIndex, VkCommandPool* outPool);
 
-VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer);
+VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent3D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer);
 /*
 * !@brief Initialize Vulkan Memmory Allocator to handle allocations
 *

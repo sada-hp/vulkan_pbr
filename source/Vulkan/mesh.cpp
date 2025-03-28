@@ -37,7 +37,7 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size
 	VkBufferCreateInfo sbInfo{};
 	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-	sbInfo.sharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	sbInfo.queueFamilyIndexCount = queueFamilies.size();
 	sbInfo.pQueueFamilyIndices = queueFamilies.data();
 	sbInfo.size = sizeof(TerrainVertex) * numVertices;

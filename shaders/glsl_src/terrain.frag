@@ -40,9 +40,9 @@ void main()
 
     // material descriptor
     SMaterial Material;
-#if 0
+#if 1
     vec3 W;
-    hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 1e-4, Material, W);
+    hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 3e-4, Material, W);
     // Material.Albedo.rgb = W;
 #else
     // Material.Albedo = texture(NoiseMap, UV);
@@ -77,8 +77,9 @@ void main()
     Material.Metallic = 0.0;
 #endif
     Material.Albedo.rgb = PushConstants.ColorMask.rgb * Material.Albedo.rgb;
+    Material.Roughness = max(PushConstants.RoughnessMultiplier * Material.Roughness, 0.01);
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(N, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
 }

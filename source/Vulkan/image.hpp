@@ -67,6 +67,8 @@ struct VulkanImage
 
 	const VkImageLayout GetImageLayout() const { return descriptorInfo.imageLayout; };
 
+	const VkImageCreateFlags GetImageFlags() const { return flags; };
+
 private:
 	VkImage image = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;
@@ -77,6 +79,7 @@ private:
 	VkExtent3D imageSize = {};
 	VkFormat imageFormat = {};
 	VkImageType imageType = {};
+	VkImageCreateFlags flags;
 
 	const RenderScope* Scope = VK_NULL_HANDLE;
 };

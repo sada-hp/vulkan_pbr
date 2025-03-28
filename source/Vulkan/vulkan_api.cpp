@@ -190,7 +190,7 @@ VkBool32 CreateSwapchain(const VkDevice& device, const VkPhysicalDevice& physica
 	createInfo.surface = surface;
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	createInfo.imageArrayLayers = 1;
-	createInfo.imageSharingMode = queueFamilies.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	createInfo.preTransform = capabilities.currentTransform;
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.clipped = VK_TRUE;
@@ -245,13 +245,13 @@ VkBool32 CreateCommandPool(const VkDevice& device, const uint32_t targetQueueInd
 	return vkCreateCommandPool(device, &createInfo, VK_NULL_HANDLE, outPool) == VK_SUCCESS;
 }
 
-VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer)
+VkBool32 CreateFramebuffer(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent3D extents, const std::vector<VkImageView>& attachments, VkFramebuffer* outFramebuffer)
 {
 	VkFramebufferCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	createInfo.attachmentCount = attachments.size();
 	createInfo.pAttachments = attachments.data();
-	createInfo.layers = 1;
+	createInfo.layers = extents.depth;
 	createInfo.width = extents.width;
 	createInfo.height = extents.height;
 	createInfo.renderPass = renderPass;

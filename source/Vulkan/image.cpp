@@ -41,6 +41,7 @@ VulkanImage& VulkanImage::CreateImage(VkImageCreateInfo imgInfo, VmaAllocationCr
 		|| imageFormat == VK_FORMAT_D24_UNORM_S8_UINT
 		|| imageFormat == VK_FORMAT_D32_SFLOAT_S8_UINT
 		|| imageFormat == VK_FORMAT_D16_UNORM) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+	flags = imgInfo.flags;
 
 	assert(res);
 
@@ -253,8 +254,28 @@ VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, cons
 	Info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	Info.image = Image.GetImage();
 	Info.format = Image.GetFormat();
-	Info.subresourceRange = SubResource;
-	Info.viewType = Image.GetImageType() == VK_IMAGE_TYPE_2D ? (Image.GetSubResourceRange().layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D) : VK_IMAGE_VIEW_TYPE_3D;
+	Info.subresourceRange.aspectMask = SubResource.aspectMask;
+	Info.subresourceRange.baseArrayLayer = SubResource.baseArrayLayer;
+	Info.subresourceRange.baseMipLevel = SubResource.baseMipLevel;
+	Info.subresourceRange.layerCount = SubResource.layerCount;
+	Info.subresourceRange.levelCount = SubResource.levelCount;
+
+	if ((Image.GetImageFlags() & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0)
+	{
+		Info.viewType = SubResource.layerCount > 6 ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
+	}
+	else if (Image.GetImageType() == VK_IMAGE_TYPE_2D)
+	{
+		Info.viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
+	}
+	else if (Image.GetImageType() == VK_IMAGE_TYPE_3D)
+	{
+		Info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+	}
+	else
+	{
+		Info.viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_1D_ARRAY : VK_IMAGE_VIEW_TYPE_1D;
+	}
 
 	VkBool32 res = vkCreateImageView(Scope->GetDevice(), &Info, VK_NULL_HANDLE, &m_View) == VK_SUCCESS;
 

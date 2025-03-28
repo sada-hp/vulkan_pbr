@@ -38,6 +38,10 @@ public:
 
 	RenderScope& CreatePostProcessRenderPass();
 
+	RenderScope& CreateCubemapRenderPass();
+
+	RenderScope& CreateSimpleRenderPass();
+
 	RenderScope& CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes);
 
 	void RecreateSwapchain(const VkSurfaceKHR& surface);
@@ -59,6 +63,10 @@ public:
 	inline const VkRenderPass& GetCompositionPass() const { return m_CompositionPass; };
 
 	inline const VkRenderPass& GetPostProcessPass() const { return m_PostProcessPass; };
+
+	inline const VkRenderPass& GetCubemapPass() const { return m_CubemapPass; };
+
+	inline const VkRenderPass& GetSimplePass() const { return m_SimplePass; };
 
 	inline const VkSwapchainKHR& GetSwapchain() const { return m_Swapchain; };
 
@@ -98,6 +106,8 @@ private:
 	VkRenderPass m_RenderPassLR = VK_NULL_HANDLE;
 	VkRenderPass m_CompositionPass = VK_NULL_HANDLE;
 	VkRenderPass m_PostProcessPass = VK_NULL_HANDLE;
+	VkRenderPass m_CubemapPass = VK_NULL_HANDLE;
+	VkRenderPass m_SimplePass = VK_NULL_HANDLE;
 
 	VkExtent2D m_SwapchainExtent = { 0, 0 };
 };

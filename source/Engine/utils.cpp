@@ -67,18 +67,20 @@ namespace GR
 		}
 	}
 
-	void Utils::ConvertImage_ARM(const std::string& Roughness, const std::string& Metallic, const std::string& Ambient, const std::string& Target)
+	void Utils::ConvertImage_ARMT(const std::string& Roughness, const std::string& Metallic, const std::string& Ambient, const std::string& Transmittance, const std::string& Target)
 	{
 		assert(Target != "");
 
-		int wr = 0, hr = 0, wm = 0, hm = 0, wa = 0, ha = 0, c = 0;
+		int wr = 0, hr = 0, wm = 0, hm = 0, wa = 0, ha = 0, wt = 0, ht = 0, c = 0;
 		unsigned char* rm = nullptr;
 		unsigned char* mm = nullptr;
 		unsigned char* am = nullptr;
+		unsigned char* tm = nullptr;
 
 		bool use_r = Roughness != "";
 		bool use_m = Metallic != "";
 		bool use_a = Ambient != "";
+		bool use_t = Transmittance != "";
 
 		if (!use_r && !use_m && !use_a)
 			return;
@@ -89,6 +91,8 @@ namespace GR
 			mm = stbi_load(Metallic.c_str(), &wm, &hm, &c, 1);
 		if (use_a)
 			am = stbi_load(Ambient.c_str(), &wa, &ha, &c, 1);
+		if (use_t)
+			tm = stbi_load(Transmittance.c_str(), &wt, &ht, &c, 1);
 
 		if (!use_r)
 		{
@@ -108,9 +112,15 @@ namespace GR
 			ha = use_r ? hr : hm;
 		}
 
-		assert(wr == wm && wm == wa && hr == hm && hm == ha);
+		if (!use_t)
+		{
+			wt = use_r ? wr : wa;
+			ht = use_r ? hr : ha;
+		}
 
-		if (!(wr == wm && wm == wa && hr == hm && hm == ha) || use_r && !rm || use_m && !mm || use_a && !am)
+		assert(wr == wm && wm == wa && wa == wt && hr == hm && hm == ha && ha == ht);
+
+		if (!(wr == wm && wm == wa && wa == wt && hr == hm && hm == ha && ha == ht) || use_r && !rm || use_m && !mm || use_a && !am || use_t && !tm)
 		{
 			if (rm)
 				free(rm);
@@ -118,21 +128,24 @@ namespace GR
 				free(mm);
 			if (am)
 				free(am);
+			if (tm)
+				free(tm);
 
 			return;
 		}
 
 		size_t j = 0;
-		size_t is = wr * hr * 3;
+		size_t is = wr * hr * 4;
 		uint8_t* pixels = (uint8_t*)malloc(is);
-		for (size_t i = 0; i < is; i += 3, ++j)
+		for (size_t i = 0; i < is; i += 4, j++)
 		{
 			pixels[i] = use_a ? am[j] : uint8_t(255);
 			pixels[i + 1] = use_r ? rm[j] : uint8_t(255);
 			pixels[i + 2] = use_m ? mm[j] : uint8_t(0);
+			pixels[i + 3] = use_t ? tm[j] : uint8_t(255);
 		}
 
-		stbi_write_jpg(Target.c_str(), wr, hr, 3, pixels, wr * 3);
+		stbi_write_png(Target.c_str(), wr, hr, 4, pixels, wr * 4);
 		free(pixels);
 	}
 

@@ -13,10 +13,13 @@ layout(binding = 6) uniform sampler2D BackgroundDepth;
 layout(binding = 7) uniform sampler2D TransmittanceLUT;
 layout(binding = 8) uniform sampler2D IrradianceLUT;
 layout(binding = 9) uniform sampler3D InscatteringLUT;
-layout(binding = 10) uniform sampler3D CloudLowFrequency;
-layout(binding = 11) uniform sampler3D CloudHighFrequency;
-layout(binding = 12) uniform sampler2D WeatherMap;
-layout(binding = 13) uniform CloudLayer
+layout(binding = 10) uniform samplerCube DiffuseLUT;
+layout(binding = 11) uniform samplerCube SpecularLUT;
+layout(binding = 12) uniform sampler2D BRDFLUT;
+layout(binding = 13) uniform sampler3D CloudLowFrequency;
+layout(binding = 14) uniform sampler3D CloudHighFrequency;
+layout(binding = 15) uniform sampler2D WeatherMap;
+layout(binding = 16) uniform CloudLayer
 {
     float Coverage;
     float Density;
@@ -94,7 +97,7 @@ float SampleCloudShadow(vec3 x1)
     if (Density == 0.0)
         return 1.0;
 
-    return saturate(mix(0.1, 0.01, Clouds.Coverage) + BeerLambert(Density, Stepsize));
+    return saturate(0.2 + BeerLambert(Density, Stepsize));
 }
 
 void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow)
@@ -102,8 +105,9 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
     if (Clouds.Coverage == 0.0)
     {
         AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
-        Atmosphere.L *= Atmosphere.Shadow;
-        Atmosphere.E *= Atmosphere.Shadow;
+        Atmosphere.S *= MaxLightIntensity;
+        Atmosphere.E *= MaxLightIntensity;
+        Atmosphere.L *= MaxLightIntensity;
         return;
     }
 
@@ -116,58 +120,75 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
     AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
     AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, AtmosphereEnd);
 
-    Atmosphere.E = AtmosphereEnd.E;
-    Atmosphere.L = AtmosphereEnd.L;
     Atmosphere.T = AtmosphereEnd.T;
+    Atmosphere.Shadow = AtmosphereEnd.Shadow;
     
     float w0 = 0.0;
     float incr = 1.0 / float(steps);
     Atmosphere.S = AtmosphereStart.S;
+
     for (int i = 1; i <= steps; i++)
     {
         Ray += View * Stepsize;
 
         float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
 
-        Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
-        Shadow = mix(1.0, SampleCloudShadow(Ray), Atmosphere.Shadow);
-        Atmosphere.S += Shadow * (mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
+        Shadow = mix(1.0, SampleCloudShadow(Ray), mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1));
+        Atmosphere.S += Shadow * (mix(MaxLightIntensity * AtmosphereStart.S, MaxLightIntensity * AtmosphereEnd.S, w1) - mix(MaxLightIntensity * AtmosphereStart.S, MaxLightIntensity * AtmosphereEnd.S, w0));
         w0 = w1;
     }
+
+    Atmosphere.E = AtmosphereEnd.E * Shadow * MaxLightIntensity;
+    Atmosphere.L = AtmosphereEnd.L * Shadow * MaxLightIntensity;
 }
 
 // get specular and ambient part from sunlight
 vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Material)
 {
+    vec3 Lo = vec3(0.0);
     vec3 N = Material.Normal;
+    vec3 S = Sun;
     vec3 V = normalize(Eye - World);
-    vec3 H = normalize(V + Sun);
+    vec3 H = normalize(V + S);
 
-    float NdotV = saturate(dot(N, V));
-    float NdotL = saturate(dot(N, Sun));
+    float NdotV = abs(dot(N, V)) + 1e-5;
+    float NdotL = saturate(dot(N, S));
     float NdotH = saturate(dot(N, H));
-    float LdotH = saturate(dot(Sun, H));
+    float LdotH = saturate(dot(S, H));
     float HdotV = saturate(dot(H, V));
-
-    vec3  F0 = mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
-    vec3  F  = Material.Specular * F_FresnelSchlick(HdotV, F0);
-    float G  = G_GeometrySmith(NdotV, NdotL, Material.Roughness);
-    float D  = D_DistributionGGX(NdotH, Material.Roughness);
-
-    vec3 kD       = (vec3(1.0) - F) * vec3(1.0 - Material.Metallic);
-    vec3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.001);
-    vec3 diffuse  = kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, Material.Roughness);
-    vec3 ambient  = vec3(mix(0.1, 0.05, Material.Metallic)) * Material.Albedo.rgb;
 
     float Shadow = 1.0;
     SAtmosphere Atmosphere;
     SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow);
+    vec3 Illumination = Atmosphere.L * Atmosphere.T * NdotL;
 
-    diffuse  = Atmosphere.T * Shadow * diffuse  * (Atmosphere.L + Atmosphere.E);
-    specular = Atmosphere.T * Shadow * specular * Atmosphere.L;
-    ambient  = Atmosphere.T * ambient  * saturate(Atmosphere.Shadow + 0.01);
-    
-    return vec3(ambient + MaxLightIntensity * (Atmosphere.S + (Material.AO * (specular + diffuse) / PI) * NdotL));
+    float A = Material.Roughness;
+    float A2 = A * A;
+
+    vec3  F0 = Material.Specular *  mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
+    vec3 F90 = max(vec3(F0), 1.0 - A);
+    vec3  F  = F_FresnelSchlick(LdotH, F0, F90);
+    vec3 kD  = vec3(1.0 - F) * vec3(1.0 - Material.Metallic);
+
+    if (NdotL > 0.0)
+    {
+        float G  = G_GeometrySmith(NdotV, NdotL, A);
+        float D  = D_DistributionGGX(NdotH, A);
+
+        Lo += ONE_OVER_PI * F * G * D / (4.0 * NdotL * NdotV + 0.001);
+        Lo += ONE_OVER_PI * kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
+    }
+
+    vec3 reflection = textureLod(SpecularLUT, reflect(-V, N), A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;
+    vec2 brdf  = texture(BRDFLUT, vec2(NdotV, A2)).rg;
+    vec3 irradiance = Atmosphere.E + texture(DiffuseLUT, N).rgb;
+
+    vec3 diffuse = Material.Albedo.rgb * irradiance;
+    vec3 specular = reflection * (F * brdf.x + brdf.y);
+    vec3 ambient  = Material.AO * Atmosphere.L * Atmosphere.T * (kD * diffuse + specular);
+    vec3 scattering = Atmosphere.S;
+
+    return scattering + ambient + Illumination * Lo;
 }
 
 void main()

@@ -133,13 +133,13 @@ void Blend(in RayMarch Ray)
 
         Atmosphere.L = mix(Atmosphere1.L, Atmosphere2.L, Ray.A);
         Atmosphere.T = mix(Atmosphere1.T, Atmosphere2.T, Ray.A);
-        Atmosphere.S = mix(Atmosphere1.S, Atmosphere2.S, Ray.T);
+        Atmosphere.S = mix(Atmosphere1.S, Atmosphere2.S, Ray.A);
         Atmosphere.Shadow = mix(Atmosphere1.Shadow, Atmosphere2.Shadow, Ray.A);
 
         vec3 Radiance      = Atmosphere.T * Atmosphere.L;
         vec3 Scattering    = Atmosphere.S  * MaxLightIntensity;
 
-        CloudsColor = Scattering + Radiance * outScattering.rgb;
+        CloudsColor = Ray.T * (Scattering + Radiance * outScattering.rgb);
     }
     
     if (Hits.Ground == 0.0)
@@ -221,14 +221,14 @@ void MarchToCloud(inout RayMarch Ray)
 
     // take larger steps and
     // skip empty space until cloud is found
-    int steps = int(ceil(mix(96, 64, w))), i = steps - 1;
+    int steps = int(ceil(mix(96, 72, w))), i = steps - 1;
     Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     for (i; i > 0 && sample_density == 0.0;i--)
     {
         UpdateRay(Ray);
 
         if ((sample_density = SampleCloudShape(Ray, 3)) > 0)
-            sample_density = SampleCloudDetail(Ray, sample_density, 3);
+            sample_density = SampleCloudDetail(Ray, sample_density, 2);
     }
 
     if (sample_density == 0.0)

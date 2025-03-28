@@ -78,10 +78,10 @@ namespace GR
 		/*
 		* !@brief Combined AO(r), Roughness(g) and Metallic(b) map used in PBR pipeline
 		*/
-		struct AORoughnessMetallicMap : Resource<Texture>
+		struct AORoughnessMetallicMapTransmittance : Resource<Texture>
 		{
 		public:
-			AORoughnessMetallicMap(std::shared_ptr<Texture> resource, bool* flagptr = nullptr)
+			AORoughnessMetallicMapTransmittance(std::shared_ptr<Texture> resource, bool* flagptr = nullptr)
 				: Resource(resource, flagptr) { }
 		private:
 		};

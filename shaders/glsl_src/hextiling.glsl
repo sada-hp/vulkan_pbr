@@ -82,5 +82,6 @@ void hex2colTex(sampler2D col, sampler2D arm, vec2 st, out SMaterial Material, o
     Material.AO = W.x * a1.r + W.y * a2.r + W.z * a3.r;
     Material.Roughness = W.x * a1.g + W.y * a2.g + W.z * a3.g;
     Material.Metallic = W.x * a1.b + W.y * a2.b + W.z * a3.b;
+    Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
     weights = ProduceHexWeights(W.xyz, v1, v2, v3);
 }

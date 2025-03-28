@@ -77,5 +77,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, PushConstants.ColorMask.a * Material.Albedo.a);
     outNormal = vec4(N, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 1.0);
+    outDeferred = vec4(Material.AO, Material.Roughness, Material.Metallic, Material.Specular);
 }
