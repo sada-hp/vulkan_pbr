@@ -206,7 +206,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	res = prepare_renderer_resources() & res;
 	res = atmosphere_precompute() & res;
 	res = volumetric_precompute() & res;
-	res = create_frame_pipelines()   & res;
+	res = brdf_precompute() & res;
+	res = create_frame_pipelines() & res;
 
 #ifdef INCLUDE_GUI
 	m_GuiContext = ImGui::CreateContext();
@@ -262,6 +263,7 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_TerrainCompute.reset();
 	m_WaterCompute.reset();
+	m_BRDFLUT.reset();
 
 	m_TerrainDrawSet.resize(0);
 	m_TerrainSet.resize(0);
@@ -269,7 +271,6 @@ VulkanBase::~VulkanBase() noexcept
 	m_DiffuseIrradience.resize(0);
 	m_SpecularLUT.resize(0);
 	m_CubemapLUT.resize(0);
-	m_BRDFLUT.resize(0);
 	m_WaterSet.resize(0);
 	m_WaterLUT.resize(0);
 
@@ -352,11 +353,6 @@ VulkanBase::~VulkanBase() noexcept
 		return true;
 	});
 
-	std::erase_if(m_FramebuffersBRDF, [&, this](VkFramebuffer& fb) {
-		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
-		return true;
-	});
-
 	std::erase_if(m_SwapchainViews, [&, this](VkImageView& view) {
 		vkDestroyImageView(m_Scope.GetDevice(), view, VK_NULL_HANDLE);
 		return true;
@@ -383,7 +379,6 @@ VulkanBase::~VulkanBase() noexcept
 	m_PostProcessPipeline.reset();
 	m_ConvolutionPipeline.reset();
 	m_SpecularIBLPipeline.reset();
-	m_IntegrationPipeline.reset();
 
 	m_DepthAttachmentsHR.resize(0);
 	m_DepthViewsHR.resize(0);
@@ -710,22 +705,6 @@ bool VulkanBase::BeginFrame()
 
 			vkCmdEndRenderPass(GraphicsCmd);
 		}
-
-		viewport.width = static_cast<float>(m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().width);
-		viewport.height = static_cast<float>(m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().height);
-		vkCmdSetViewport(GraphicsCmd, 0, 1, &viewport);
-
-		scissor.extent = { m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().width, m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().height };
-		vkCmdSetScissor(GraphicsCmd, 0, 1, &scissor);
-
-		renderPassInfo.renderArea.extent = { m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().width, m_BRDFLUT[m_SwapchainIndex].Image->GetExtent().height };
-		renderPassInfo.framebuffer = m_FramebuffersBRDF[m_SwapchainIndex];
-		vkCmdBeginRenderPass(GraphicsCmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		m_IntegrationPipeline->BindPipeline(GraphicsCmd);
-		vkCmdDraw(GraphicsCmd, 3, 1, 0, 0);
-
-		vkCmdEndRenderPass(GraphicsCmd);
 	}
 
 	vkEndCommandBuffer(GraphicsCmd);
@@ -1325,21 +1304,20 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_DepthAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
 		m_DepthViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsLR[i]);
 	}
-
+	 
 	if (m_DiffuseIrradience.size() == 0)
 	{
 		m_DiffuseIrradience.resize(imagesCount);
 		m_SpecularLUT.resize(imagesCount);
 		m_CubemapLUT.resize(imagesCount);
-		m_BRDFLUT.resize(imagesCount);
 
 		for (size_t i = 0; i < m_SwapchainImages.size(); i++)
 		{
 			VkImageCreateInfo hdrInfo{};
 			hdrInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 			hdrInfo.format = m_Scope.GetHDRFormat();
-			hdrInfo.arrayLayers = 1;
-			hdrInfo.extent = { 512, 512, 1 };
+			hdrInfo.arrayLayers = 6;
+			hdrInfo.extent = { CubeR, CubeR, 1 };
 			hdrInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 			hdrInfo.imageType = VK_IMAGE_TYPE_2D;
 			hdrInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1349,14 +1327,8 @@ VkBool32 VulkanBase::create_swapchain_images()
 			hdrInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			hdrInfo.queueFamilyIndexCount = queueFamilies.size();
 			hdrInfo.pQueueFamilyIndices = queueFamilies.data();
+			hdrInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-			m_BRDFLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-			m_BRDFLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_BRDFLUT[i].Image);
-
-			hdrInfo.extent.width = CubeR;
-			hdrInfo.extent.height = CubeR;
-			hdrInfo.arrayLayers = 6;
-			hdrInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 			m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 			m_CubemapLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image);
 
@@ -1405,14 +1377,12 @@ VkBool32 VulkanBase::create_framebuffers()
 	{
 		m_FramebuffersCM.resize(m_SwapchainImages.size());
 		m_FramebuffersDC.resize(m_SwapchainImages.size());
-		m_FramebuffersBRDF.resize(m_SwapchainImages.size());
 		m_FramebuffersSC.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_SwapchainImages.size());
 
 		for (size_t i = 0; i < m_SwapchainImages.size(); i++)
 		{
 			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_CubemapLUT[i].View->GetImageView() }, &m_FramebuffersCM[i]);
 			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR, CubeR, 6 }, { m_DiffuseIrradience[i].View->GetImageView() }, &m_FramebuffersDC[i]);
-			res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { m_BRDFLUT[i].Image->GetExtent().width, m_BRDFLUT[i].Image->GetExtent().height, 1 }, { m_BRDFLUT[i].View->GetImageView() }, &m_FramebuffersBRDF[i]);
 
 			for (uint32_t j = 0; j < m_SpecularLUT[i].Image->GetMipLevelsCount(); j++)
 				res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { CubeR >> j, CubeR >> j, 6 }, { m_SpecularLUT[i].Views[j + 1]->GetImageView() }, &m_FramebuffersSC[m_SpecularLUT[0].Image->GetMipLevelsCount() * i + j]);
@@ -1456,7 +1426,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(10, VK_SHADER_STAGE_FRAGMENT_BIT, m_DiffuseIrradience[i].View->GetImageView(), SamplerLinear)
 			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_SpecularLUT[i].Views[0]->GetImageView(), SamplerLinear)
-			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_BRDFLUT[i].View->GetImageView(), SamplerLinear)
+			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_BRDFLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(13, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
 			.AddImageSampler(14, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
 			.AddImageSampler(15, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
@@ -1495,6 +1465,8 @@ VkBool32 VulkanBase::create_frame_pipelines()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("composition_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddDescriptorLayout(m_CompositionDescriptors[0]->GetLayout())
+		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetRenderPass(m_Scope.GetCompositionPass(), 0)
 		.Construct(m_Scope);
 
@@ -1537,12 +1509,6 @@ VkBool32 VulkanBase::create_frame_pipelines()
 		.SetShaderStage("cube_convolution_spec_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetRenderPass(m_Scope.GetCubemapPass(), 0)
 		.AddPushConstant(pushContants)
-		.Construct(m_Scope);
-
-	m_IntegrationPipeline = GraphicsPipelineDescriptor()
-		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
-		.SetShaderStage("brdf_integrate_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
-		.SetRenderPass(m_Scope.GetSimplePass(), 0)
 		.Construct(m_Scope);
 
 	return res;
@@ -1843,12 +1809,99 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
-		//.SetPolygonMode(VK_POLYGON_MODE_LINE)
+		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
 #pragma endregion
 
 #pragma region Precompute
+VkBool32 VulkanBase::brdf_precompute()
+{
+	std::vector<uint32_t> queueFamilies = { m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_TRANSFER_BIT).GetFamilyIndex() };
+	std::sort(queueFamilies.begin(), queueFamilies.end());
+	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
+
+	std::unique_ptr<GraphicsPipeline> m_IntegrationPipeline = GraphicsPipelineDescriptor()
+		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
+		.SetShaderStage("brdf_integrate_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+		.SetRenderPass(m_Scope.GetSimplePass(), 0)
+		.Construct(m_Scope);
+
+	VkImageCreateInfo bimageInfo{};
+	bimageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	bimageInfo.format = m_Scope.GetHDRFormat();
+	bimageInfo.arrayLayers = 1;
+	bimageInfo.extent = { 512, 512, 1 };
+	bimageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	bimageInfo.imageType = VK_IMAGE_TYPE_2D;
+	bimageInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	bimageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	bimageInfo.mipLevels = 1;
+	bimageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+	bimageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	bimageInfo.queueFamilyIndexCount = queueFamilies.size();
+	bimageInfo.pQueueFamilyIndices = queueFamilies.data();
+
+	VmaAllocationCreateInfo allocCreateInfo{};
+	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+	m_BRDFLUT.Image = std::make_unique<VulkanImage>(m_Scope, bimageInfo, allocCreateInfo);
+	m_BRDFLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_BRDFLUT.Image);
+
+	VkFramebuffer Framebuffer;
+	CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCubemapPass(), { m_BRDFLUT.Image->GetExtent().width, m_BRDFLUT.Image->GetExtent().height, 1 }, { m_BRDFLUT.View->GetImageView() }, &Framebuffer);
+
+	VkCommandBuffer cmd;
+
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(1, &cmd);
+	vkBeginCommandBuffer(cmd, &beginInfo);
+
+	{
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.framebuffer = Framebuffer;
+		renderPassInfo.renderPass = m_Scope.GetSimplePass();
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = { m_BRDFLUT.Image->GetExtent().width, m_BRDFLUT.Image->GetExtent().height };
+
+		VkViewport viewport{};
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = static_cast<float>(m_BRDFLUT.Image->GetExtent().width);
+		viewport.height = static_cast<float>(m_BRDFLUT.Image->GetExtent().height);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { m_BRDFLUT.Image->GetExtent().width, m_BRDFLUT.Image->GetExtent().height };
+		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		m_IntegrationPipeline->BindPipeline(cmd);
+		vkCmdDraw(cmd, 3, 1, 0, 0);
+
+		vkCmdEndRenderPass(cmd);
+	}
+
+	vkEndCommandBuffer(cmd);
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
+	vkDestroyFramebuffer(m_Scope.GetDevice(), Framebuffer, VK_NULL_HANDLE);
+
+	return 1;
+}
+
 VkBool32 VulkanBase::atmosphere_precompute()
 {
 	VulkanTexture DeltaE{};
@@ -1907,7 +1960,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VmaAllocationCreateInfo imageAlloc{};
 	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::LinearRepeat);
+	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp);
+	VkSampler ImageSampler2 = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	m_TransmittanceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	m_TransmittanceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TransmittanceLUT.Image);
@@ -1954,7 +2008,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	DeltaSRSMDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView())
 		.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView())
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), ImageSampler2)
 		.Allocate(m_Scope);
 
 	GenDeltaSRSMLUT = ComputePipelineDescriptor()
@@ -1969,8 +2023,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 
 	SingleScatterDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView())
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSR.View->GetImageView(), ImageSampler2)
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, DeltaSM.View->GetImageView(), ImageSampler2)
 		.Allocate(m_Scope);
 
 	GenSingleScatterLUT = ComputePipelineDescriptor()
@@ -2092,7 +2146,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	Queue.Submit(cmd)
 		.Wait();
 
-	for (uint32_t Sample = 2; Sample < 25; Sample++)
+	for (uint32_t Sample = 2; Sample <= 5; Sample++)
 	{
 		Queue.Wait();
 		vkBeginCommandBuffer(cmd, &cmdBegin);
@@ -2113,7 +2167,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 
 		GenDeltaEnLUT->PushConstants(cmd, &Sample, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		GenDeltaEnLUT->BindPipeline(cmd);
-		DeltaEnDSO->BindSet(0, cmd, *GenDeltaEnLUT);
+		DeltaEnDSO->BindSet(0, cmd, *GenDeltaEnLUT);   
 		vkCmdDispatch(cmd, DeltaE.Image->GetExtent().width / 8u + uint32_t(DeltaE.Image->GetExtent().width % 8u > 0),
 			DeltaE.Image->GetExtent().height / 8u + uint32_t(DeltaE.Image->GetExtent().height % 8u > 0),
 			1u);
@@ -2180,7 +2234,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 8u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
-	m_VolumeWeather.Image = GRNoise::GeneratePerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u);
+	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u, 4u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat); 
@@ -2209,7 +2263,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 	m_Volumetrics->pipeline = GraphicsPipelineDescriptor()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
-		.SetShaderStage("volumetric_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+		.SetShaderStage("volumetric_frag", VK_SHADER_STAGE_FRAGMENT_BIT) 
 		.SetBlendAttachments(1, &blendState)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Volumetrics->descriptorSet->GetLayout())
@@ -2236,8 +2290,8 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	noiseInfo.arrayLayers = shape.m_Rings;
 	noiseInfo.extent = { LUTExtent, LUTExtent, 1 };
-	noiseInfo.format = VK_FORMAT_R32_SFLOAT;
-	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	noiseInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	noiseInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(LUTExtent))) + 1;
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -2253,7 +2307,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	waterInfo.arrayLayers = shape.m_Rings;
 	waterInfo.extent = { LUTExtent, LUTExtent, 1 };
 	waterInfo.format = VK_FORMAT_R32_SFLOAT;
-	waterInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	waterInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	waterInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(LUTExtent))) + 1;
 	waterInfo.flags = 0u;
 	waterInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -2273,6 +2327,17 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	m_TerrainSet.resize(m_SwapchainImages.size());
 	m_TerrainDrawSet.resize(m_SwapchainImages.size());
 
+	VkCommandBuffer clearCMD;
+	VkClearColorValue Color;
+	Color.float32[0] = 0.0;
+	Color.float32[1] = 0.0;
+	Color.float32[2] = 0.0;
+	Color.float32[3] = 0.0;
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers2(1, &clearCMD);
+
+	::BeginOneTimeSubmitCmd(clearCMD);
 	for (uint32_t i = 0; i < m_TerrainLUT.size(); i++)
 	{
 		m_TerrainLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
@@ -2281,9 +2346,26 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		m_WaterLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, waterInfo, noiseAllocCreateInfo);
 		m_WaterLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_WaterLUT[i].Image);
 
+		vkCmdClearColorImage(clearCMD, m_TerrainLUT[i].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_TerrainLUT[i].Image->GetSubResourceRange());
+		vkCmdClearColorImage(clearCMD, m_WaterLUT[i].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_WaterLUT[i].Image->GetSubResourceRange());
+
+		m_TerrainLUT[i].Image->TransitionLayout(clearCMD, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		m_WaterLUT[i].Image->TransitionLayout(clearCMD, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+	}
+	::EndCommandBuffer(clearCMD);
+
+	m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(clearCMD)
+		.Wait()
+		.FreeCommandBuffers(1, &clearCMD);
+
+	for (uint32_t i = 0; i < m_TerrainLUT.size(); i++)
+	{
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
 			.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, VB)
+			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddUniformBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOBuffers[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			.Allocate(m_Scope);
 
 		m_WaterSet[i] = DescriptorSetDescriptor()

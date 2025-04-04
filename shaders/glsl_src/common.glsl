@@ -1,8 +1,8 @@
 #ifndef _COMMON_SHADER
 #define _COMMON_SHADER
 
-#define PI 3.14159265359
-#define TWO_PI 2 * 3.14159265359
+#define PI 3.1415926535897932384626433832795
+#define TWO_PI 2 * PI
 #define ONE_OVER_PI 1.0 / PI
 #define ONE_OVER_2PI 1.0 / (2.0 * PI)
 #define ONE_OVER_4PI 1.0 / (4.0 * PI)
@@ -31,6 +31,16 @@ vec2 saturate(vec2 x)
 vec3 saturate(vec3 x)
 {
     return clamp(x, 0.0, 1.0);
+}
+
+vec4 saturate(vec4 x)
+{
+    return clamp(x, 0.0, 1.0);
+}
+
+float saturateAngle(float x)
+{
+    return clamp(-1.0, 1.0, x);
 }
 
 void SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius, out vec2 t)
@@ -144,6 +154,17 @@ dmat3 GetTerrainOrientation()
     dmat3 Orientation;
     Orientation[0] = vec3(1.0, 0.0, 0.0);
     Orientation[1] = normalize(floor(ubo.CameraPositionFP64.xyz));
+    Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
+    Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
+
+    return Orientation;
+}
+
+dmat3 GetTerrainOrientation(dvec3 U)
+{
+    dmat3 Orientation;
+    Orientation[0] = vec3(1.0, 0.0, 0.0);
+    Orientation[1] = U;
     Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
     Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
 

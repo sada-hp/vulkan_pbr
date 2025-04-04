@@ -24,7 +24,7 @@ float GetOpticalDepth(float H, float R, float Mu)
     {
         float Xj = float(i) * Dx;
         float Yj = exp(-(sqrt(R * R + Xj * Xj + 2.0 * Xj * R * Mu) - Rg) / H);
-        Depth += (Yi + Yj) / 2.0 * Dx;
+        Depth += (Yi + Yj) * 0.5 * Dx;
         Xi = Xj;
         Yi = Yj;
     }

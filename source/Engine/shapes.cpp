@@ -360,17 +360,17 @@ namespace GR
 						glm::vec3 Hp = (Gp + Ip) * 0.5f;
 						glm::vec3 Ep = (Ap + Ip) * 0.5f;
 
-						const glm::vec4 UvNorm = glm::vec4(glm::vec2(DiameterLevel), glm::vec2(Diameter));
+						const glm::vec4 UvNorm = glm::vec4(glm::vec2(DiameterLevel), glm::vec2(1.0));
 
-						glm::vec4 Auv = glm::vec4(0.5) + glm::vec4(Ap.x, Ap.z, Ap.x, Ap.z) / UvNorm;
-						glm::vec4 Buv = glm::vec4(0.5) + glm::vec4(Bp.x, Bp.z, Bp.x, Bp.z) / UvNorm;
-						glm::vec4 Cuv = glm::vec4(0.5) + glm::vec4(Cp.x, Cp.z, Cp.x, Cp.z) / UvNorm;
-						glm::vec4 Duv = glm::vec4(0.5) + glm::vec4(Dp.x, Dp.z, Dp.x, Dp.z) / UvNorm;
-						glm::vec4 Euv = glm::vec4(0.5) + glm::vec4(Ep.x, Ep.z, Ep.x, Ep.z) / UvNorm;
-						glm::vec4 Fuv = glm::vec4(0.5) + glm::vec4(Fp.x, Fp.z, Fp.x, Fp.z) / UvNorm;
-						glm::vec4 Guv = glm::vec4(0.5) + glm::vec4(Gp.x, Gp.z, Gp.x, Gp.z) / UvNorm;
-						glm::vec4 Iuv = glm::vec4(0.5) + glm::vec4(Ip.x, Ip.z, Ip.x, Ip.z) / UvNorm;
-						glm::vec4 Huv = glm::vec4(0.5) + glm::vec4(Hp.x, Hp.z, Hp.x, Hp.z) / UvNorm;
+						glm::vec4 Auv = glm::vec4(0.5) + glm::vec4(Ap.x, Ap.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Buv = glm::vec4(0.5) + glm::vec4(Bp.x, Bp.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Cuv = glm::vec4(0.5) + glm::vec4(Cp.x, Cp.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Duv = glm::vec4(0.5) + glm::vec4(Dp.x, Dp.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Euv = glm::vec4(0.5) + glm::vec4(Ep.x, Ep.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Fuv = glm::vec4(0.5) + glm::vec4(Fp.x, Fp.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Guv = glm::vec4(0.5) + glm::vec4(Gp.x, Gp.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Iuv = glm::vec4(0.5) + glm::vec4(Ip.x, Ip.z, Diameter, DiameterLevel) / UvNorm;
+						glm::vec4 Huv = glm::vec4(0.5) + glm::vec4(Hp.x, Hp.z, Diameter, DiameterLevel) / UvNorm;
 
 #if 1
 						if (!uniquePositions.contains(Ap * glm::vec3(1, 0, 1)))

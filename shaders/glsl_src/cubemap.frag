@@ -12,5 +12,5 @@ layout(location = 0) in vec4 vertPosition;
 
 void main()
 {
-    outColor = vec4(SkyScattering(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, normalize(vertPosition.xyz), ubo.SunDirection.xyz), 1.0);
+    outColor = vec4(MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, ubo.CameraPosition.xyz, normalize(vertPosition.xyz), ubo.SunDirection.xyz), 1.0);
 }

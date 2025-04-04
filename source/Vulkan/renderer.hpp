@@ -157,7 +157,6 @@ private:
 	std::vector<VkFramebuffer> m_FramebuffersCM   = {};
 	std::vector<VkFramebuffer> m_FramebuffersDC   = {};
 	std::vector<VkFramebuffer> m_FramebuffersSC   = {};
-	std::vector<VkFramebuffer> m_FramebuffersBRDF = {};
 
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
@@ -165,7 +164,6 @@ private:
 	std::unique_ptr<GraphicsPipeline> m_CubemapPipeline     = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<GraphicsPipeline> m_IntegrationPipeline = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
@@ -204,7 +202,7 @@ private:
 	VulkanTexture m_IrradianceLUT = {};
 	VulkanTexture m_TransmittanceLUT = {};
 
-	std::vector<VulkanTexture> m_BRDFLUT = {};
+	VulkanTexture m_BRDFLUT = {};
 	std::vector<VulkanTexture> m_CubemapLUT = {};
 	std::vector<VulkanTexture> m_DiffuseIrradience = {};
 	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
@@ -312,6 +310,8 @@ private:
 	VkBool32 atmosphere_precompute();
 
 	VkBool32 volumetric_precompute();
+
+	VkBool32 brdf_precompute();
 
 	VkBool32 terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap& shape);
 

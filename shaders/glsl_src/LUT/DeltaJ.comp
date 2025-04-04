@@ -95,9 +95,7 @@ void main()
     if (gl_GlobalInvocationID.z < imageSize(outImage).z && gl_GlobalInvocationID.x < imageSize(outImage).x && gl_GlobalInvocationID.y < imageSize(outImage).y)
     {
         float R, CosViewZenith, CosSunZenith, CosViewun;
-        vec3 UV = GetUV(imageSize(outImage).xyz);
-
-        UVWToWorldInscatter(UV, R, CosViewZenith, CosSunZenith, CosViewun);
+        UVWToWorldInscatter(R, CosViewZenith, CosSunZenith, CosViewun);
 
         vec3 DeltaJ = ComputeDeltaJ(PushConstants.Sample, R, CosViewZenith, CosSunZenith, CosViewun);
         imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaJ, 0.0));

@@ -19,7 +19,7 @@ void RayMieIntegrand(float R, float Mu, float MuS, float Nu, float t, out vec3 R
 
     float Ri = sqrt(R * R + t * t + 2.0 * R * Mu * t);
     float MuSi = (Nu * t + MuS * R) / Ri;
-    Ri = max(Rg, Ri);
+    Ri = clamp(Ri, Rg, Rt);
 
     if (MuSi >= -sqrt (1.0 - Rg * Rg / (Ri * Ri)))
     {
@@ -41,13 +41,13 @@ void ComputeDeltaSRDeltaSM(float R, float Mu, float MuS, float Nu, out vec3 Ray,
 
     for(int i = 1; i <= INSCATTERING_SAMPLES; i++)
     {
-        float Xi = i * Dx;
+        float Xi = float(i) * Dx;
 
         vec3 Rayj, Miej;
         RayMieIntegrand(R, Mu, MuS, Nu, Xi, Rayj, Miej);
 
-        Ray += (Rayi + Rayj) * 0.5 * Dx;
-        Mie += (Miei + Miej) * 0.5 * Dx;
+        Ray += (Rayi + Rayj) / 2.0 * Dx;
+        Mie += (Miei + Miej) / 2.0 * Dx;
 
         Rayi = Rayj;
         Miei = Miej;
@@ -62,15 +62,13 @@ void main()
     if (gl_GlobalInvocationID.z < imageSize(rScattering).z && gl_GlobalInvocationID.x < imageSize(rScattering).x && gl_GlobalInvocationID.y < imageSize(rScattering).y)
     {
         float R, CosViewZenith, CosSunZenith, CosViewun;
-        vec3 UV = GetUV(imageSize(rScattering).xyz);
-        
-        UVWToWorldInscatter(UV, R, CosViewZenith, CosSunZenith, CosViewun);
+        UVWToWorldInscatter(R, CosViewZenith, CosSunZenith, CosViewun);
 
         vec3 DeltaSR;
         vec3 DeltaSM;
         ComputeDeltaSRDeltaSM(R, CosViewZenith, CosSunZenith, CosViewun, DeltaSR, DeltaSM);
         
-        imageStore(rScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSR, 0.0));
-        imageStore(mScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(DeltaSM, 0.0));
+        imageStore(rScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(max(DeltaSR, 0.0), 0.0));
+        imageStore(mScattering, ivec3(gl_GlobalInvocationID.xyz), vec4(max(DeltaSM, 0.0), 0.0));
     }
 }

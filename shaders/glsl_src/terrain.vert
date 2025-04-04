@@ -59,17 +59,9 @@ void main()
 
     Height = texelFetch(NoiseMap, texelId, 0).r;
 
-#if 1
-        dmat3 Orientation = GetTerrainOrientation();
-        dvec3 Center = RoundToIncrement(ubo.CameraPositionFP64.xyz, Scale * exp2(Level));
-#else
-        dmat3 Orientation;
-        Orientation[0] = vec3(1.0, 0.0, 0.0);
-        Orientation[1] = normalize(dvec3(0.0, Rg, 0.0));
-        Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
-        Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
-        dvec3 Center = dvec3(0.0, Rg, 0.0);
-#endif
+    dvec3 Camera = normalize(round(ubo.CameraPositionFP64.xyz));
+    dmat3 Orientation = GetTerrainOrientation(Camera);
+    dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(Level)));
 
     ivec3 texelIdU = clamp_coords(texelId.x, texelId.y - 1, Level);
     float u = texelFetch(NoiseMap, texelIdU, 0).r;

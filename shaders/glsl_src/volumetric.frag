@@ -1,4 +1,7 @@
 #version 460
+
+#define USE_CLOUD_MIE
+
 #include "ubo.glsl"
 #include "lighting.glsl"
 #include "noise.glsl"
@@ -77,6 +80,17 @@ vec3 GetUV(vec3 p, float scale, float speed_mod)
     return scale * uv + anim;
 }
 
+void GetUV(in RayMarch Ray, out vec3 UVA1, out vec3 UVA2)
+{
+    vec3 n = normalize(Ray.Position);
+    float pole = abs(dot(n, vec3(0, 1, 0)));
+    UVA1.xy = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+    UVA2.xy = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+    UVA1.z = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+    UVA2.z = 1.0 - UVA1.z;
+}
+
 // Cheaper version of Sample-Density
 float SampleCloudShape(in RayMarch Ray, int lod)
 {
@@ -121,25 +135,53 @@ void Blend(in RayMarch Ray)
 
     if (outScattering.a != 0.0)
     {
+        SAtmosphere Atmosphere;
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, Eye + Ray.Direction * SphereMinDistance(Eye, Ray.Direction, vec3(0.0), Rct), SunDir, Atmosphere);
+
         SkyColor += SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, Ray.Direction, SunDir);
+
+#if 1
+        float PhaseF = HGDPhaseCloud(dot(ubo.SunDirection.xyz, Ray.Direction));
+        float Hit = SphereMinDistance(Eye, Ray.Direction, vec3(0.0), Rct);
+        if (Hit > 0.0)
+        {
+            vec3 n = normalize(Eye + Ray.Direction * Hit);
+            float pole = abs(dot(n, vec3(0, 1, 0)));
+            vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+            vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+            float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+            float right = 1.0 - left;
+            float mask = left * texture(WeatherMap, 5.0 * uv1).b + right * texture(WeatherMap, 5.0 * uv2).b;
+            mask = saturate(mask - 0.6) / 0.4;
+
+            float www = left * texture(WeatherMap, 700.0 * uv1).g + right * texture(WeatherMap, 700.0 * uv2).g;
+            float y = left * texture(WeatherMap, vec2(250.0, 25.0) * uv1).r + right * texture(WeatherMap, vec2(250.0, 25.0) * uv2).r;
+            y = saturate(y - 0.2) / 0.8;
+            www = saturate(remap(www, y, 1.0, 0.0, 1.0));
+
+            SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * mask * www;
+
+            mask = left * texture(WeatherMap, 5.0 * -uv1).b + right * texture(WeatherMap, 5.0 * -uv2).b;
+            mask = saturate(mask - 0.6) / 0.4;
+            y = left * texture(WeatherMap, vec2(15.0, 65.0) * uv1).r + right * texture(WeatherMap, vec2(15.0, 65.0) * uv2).r;
+            y = smootherstep(0.0, 1.0, saturate(y - 0.2) / 0.8);
+            SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * mask * y;
+        }
+#endif
+     
         SkyColor *= MaxLightIntensity;
     }
 
     if (outScattering.a != 1.0)
     {
-        SAtmosphere Atmosphere, Atmosphere1, Atmosphere2;
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.FirstHit, SunDir, Atmosphere1);
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Ray.LastHit, SunDir, Atmosphere2);
+        SAtmosphere Atmosphere;
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Ray.T, Ray.A, Eye, Ray.LastHit, SunDir, Atmosphere);
 
-        Atmosphere.L = mix(Atmosphere1.L, Atmosphere2.L, Ray.A);
-        Atmosphere.T = mix(Atmosphere1.T, Atmosphere2.T, Ray.A);
-        Atmosphere.S = mix(Atmosphere1.S, Atmosphere2.S, Ray.A);
-        Atmosphere.Shadow = mix(Atmosphere1.Shadow, Atmosphere2.Shadow, Ray.A);
-
-        vec3 Radiance      = Atmosphere.T * Atmosphere.L;
+        vec3 Radiance      = Atmosphere.L;
         vec3 Scattering    = Atmosphere.S  * MaxLightIntensity;
 
-        CloudsColor = Ray.T * (Scattering + Radiance * outScattering.rgb);
+        CloudsColor = Scattering + Radiance * outScattering.rgb;
     }
     
     if (Hits.Ground == 0.0)
@@ -349,10 +391,10 @@ void main()
 
         MarchToCloud(Ray);
     }
-    else if (Hits.Ground != 0.0)
-    {
-        discard;
-    }
+    // else if (Hits.Ground != 0.0)
+    // {
+    //     discard;
+    // }
 
     Blend(Ray);
 }

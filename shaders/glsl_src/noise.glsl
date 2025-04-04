@@ -198,15 +198,16 @@ float perlin(vec3 x0, float freq)
 float fbm_worley(vec2 x, float f, uint n) 
 {
     float v = 0.0;
-	float a = 0.5;
+	float a = 1.0;
     float as = 0.0;
 
 	for (int i = 0; i < n; i++) {
-		v += a * worley(x, f);
+		v += a * sqrt(worley(x, f));
         f *= 2.0;
 
         as += a;
-		a *= a;
+		a *= 0.5;
+        NOISE_SEED++;
 	}
     
 	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
@@ -224,6 +225,7 @@ float fbm_worley(vec3 x, float f, uint n)
 
         as += a;
 		a *= a;
+        NOISE_SEED++;
 	}
     
 	return clamp(v / as * 0.5 + 0.5, 0.0, 1.0);
@@ -238,6 +240,7 @@ float fbm_perlin(vec2 x, float f, uint n)
 		v += a * perlin(x, f);
         f *= 2.0;
 		a *= 0.5;
+        NOISE_SEED++;
 	}
 
 	return clamp(v, -1.0, 1.0) * 0.5 + 0.5;
@@ -252,6 +255,22 @@ float fbm_perlin(vec3 x, float f, uint n)
 		v += a * perlin(x, f);
         f *= 2.0;
 		a *= 0.5;
+        NOISE_SEED++;
+	}
+
+	return clamp(v, -1.0, 1.0) * 0.5 + 0.5;
+}
+
+float fbm_perlin_turb(vec3 x, float f, uint n) 
+{
+	float v = 0.0;
+	float a = 1.0;
+
+	for (int i = 0; i < n; i++) {
+		v += a * abs(perlin(x, f));
+        f *= 2.0;
+		a *= 0.5;
+        NOISE_SEED++;
 	}
 
 	return clamp(v, -1.0, 1.0) * 0.5 + 0.5;

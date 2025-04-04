@@ -31,18 +31,17 @@ layout(location = 2) out vec4 outDeferred;
 
 float SampleWater(vec3 UVW)
 {
-    float r = textureLod(WaterMap, UVW, 0).r;
-    r += textureLod(WaterMap, vec3(UV, Level), 1).r * 0.5;
-    r += textureLod(WaterMap, vec3(UV, Level), 2).r * 0.25;
-    r += textureLod(WaterMap, vec3(UV, Level), 3).r * 0.1;
-
-    return saturate(pow(1.0 - Height, 2.0) * saturate(max(r - 1500.0, 0.0) / 2850.0 - 0.1));
+    float r = texture(WaterMap, UVW).r;
+    r = saturate(r / 400.0);
+    r = saturate(r - 0.1) / 0.9;
+    return r;
 }
 
 void main()
 {
 #if 1
     vec3 N = normalize(Normal);
+    vec3 U = normalize(WorldPosition.xyz + ubo.CameraPosition.xyz);
 #else
     vec3 dX = dFdxFine(WorldPosition.xyz);
     vec3 dY = dFdyFine(WorldPosition.xyz);
@@ -54,53 +53,29 @@ void main()
 
     float w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
     float r = SampleWater(vec3(UV, Level));
-    w = saturate(w + mix(5.0, 1.0, r) * r);
+    w = saturate(w + r);
 
-#if 1
     vec3 W;
     hex2colTex(AlbedoMap, ARMMap, (ubo.CameraPosition.xz + WorldPosition.xz) * 3e-4, Material, W);
     // Material.Albedo.rgb = W;
 
-    Material.Albedo.rgb = mix(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(0.0, 0.0, 0.5), w);
-    Material.Roughness = mix(Material.Roughness, 0.0, w);
+    Material.Albedo.rgb = mix(PushConstants.ColorMask.rgb * Material.Albedo.rgb, vec3(0.03, 0.03, 0.05), w);
+    Material.Roughness = mix(Material.Roughness, 0.0, w * w * w);
     Material.AO = mix(Material.AO, 1.0, w);
-#else
-    // Material.Albedo = texture(NoiseMap, UV);
-    switch (Level)
-    {
-        case 0:
-        Material.Albedo = vec4(1.0);
-        break;
-        case 1:
-        Material.Albedo = vec4(1.0, 0.0, 0.0, 1.0);
-        break;
-        case 2:
-        Material.Albedo = vec4(0.0, 1.0, 0.0, 1.0);
-        break;
-        case 3:
-        Material.Albedo = vec4(0.0, 0.0, 1.0, 1.0);
-        break;
-        case 4:
-        Material.Albedo = vec4(0.0, 1.0, 1.0, 1.0);
-        break;
-        case 5:
-        Material.Albedo = vec4(1.0, 0.0, 1.0, 1.0);
-        break;
-        case 6:
-        Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
-        break;
-    }
+    Material.Normal = N;
 
-    Material.Albedo = mix(vec4(0.0, 1.0, 0.0, 1.0), vec4(0.0, 0.0, 1.0, 1.0), w * 0.5);
+    w = saturate(10.0 * (1.0 - saturate(abs(dot(N, U)))));
+    Material.Albedo.rgb = mix(Material.Albedo.rgb, vec3(0.05), w);
+    Material.Roughness = mix(Material.Roughness, 1.0, w);
+    Material.AO = mix(Material.AO, 1.0, w);
 
-    Material.AO = 1.0;
-    Material.Roughness = 1.0;
-    Material.Metallic = 0.0;
-#endif
-    Material.Albedo.rgb = Material.Albedo.rgb;
+    w = saturate(2.0 * saturate(Height - 0.4) / 0.6);
+    Material.Albedo.rgb = mix(Material.Albedo.rgb, vec3(1.0), w);
+    Material.Roughness = mix(Material.Roughness, 0.15, w);
+
     Material.Roughness = max(PushConstants.RoughnessMultiplier * Material.Roughness, 0.01);
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
-    outNormal = vec4(N, 0.0);
+    outNormal = vec4(Material.Normal, 0.0);
     outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
 }

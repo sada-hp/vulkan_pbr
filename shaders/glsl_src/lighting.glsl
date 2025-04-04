@@ -117,25 +117,6 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu)
     return texture(LUT, vec2(uvMu, uvR)).rgb;
 }
 
-vec3 GetTransmittanceWithShadow(sampler2D LUT, float R, float Mu)
-{
-    const float eps = 0.01;
-    float CosHorizon = -sqrt(1.0 - (Rg / R) * (Rg / R));
-
-    if (Mu < CosHorizon)
-    {
-        return vec3(0.0);
-    }
-    else if (Mu < CosHorizon + eps)
-    {
-        return GetTransmittance(LUT, R, Mu) * mix(vec3(1.0), vec3(0.0), saturate((CosHorizon + eps - Mu) / eps));
-    }
-    else
-    {
-        return GetTransmittance(LUT, R, Mu);
-    }
-}
-
 vec3 GetTransmittance(sampler2D LUT, float R, float Mu, float d)
 {
     float R1 = sqrt(R * R + d * d + 2.0 * R * Mu * d);
@@ -148,6 +129,36 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, float d)
     else
     {
         return min(GetTransmittance( LUT, R1, -Mu1 ) / GetTransmittance ( LUT, R, -Mu ), 1.0 );
+    }
+}
+
+vec3 GetTransmittanceWithShadow(sampler2D LUT, float R, float Mu)
+{
+    const float eps = 0.04;
+    float CosHorizon = -sqrt(1.0 - (Rg / R) * (Rg / R));
+
+    if (Mu < CosHorizon)
+    {
+        return vec3(0.0);
+    }
+    else
+    {
+        return GetTransmittance(LUT, R, Mu);
+    }
+}
+
+vec3 GetTransmittanceWithShadow(sampler2D LUT, float R, float Mu, float R1, float Mu1)
+{
+    const float eps = 0.04;
+    float CosHorizon = -sqrt(1.0 - (Rg / R) * (Rg / R));
+
+    if (Mu < CosHorizon)
+    {
+        return vec3(0.0);
+    }
+    else
+    {
+        return GetTransmittance(LUT, R, Mu) * GetTransmittance(LUT, R1, Mu1);
     }
 }
 
@@ -166,32 +177,8 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
     }
 }
 
-vec3 GetTransmittanceWithShadow(sampler2D TransmittanceLUT, vec3 x, vec3 s)
-{
-    float r = length(x);
-    if (r <= Rt)
-    {
-        float muS = dot(x, s) / r;
-        return GetTransmittanceWithShadow(TransmittanceLUT, r, muS);
-    }
-
-    return vec3(0.0);
-}
-
-vec3 GetTransmittance(sampler2D TransmittanceLUT, vec3 x, vec3 s)
-{
-    float r = length(x);
-    if (r <= Rt)
-    {
-        float muS = dot(x, s) / r;
-        return GetTransmittance(TransmittanceLUT, r, muS);
-    }
-
-    return vec3(0.0);
-}
-
 // precomputed-atmospheric-scattering
-void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, sampler3D InscatteringLUT, vec3 Eye, vec3 Target, vec3 sun, out SAtmosphere Atmosphere) 
+void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, sampler3D InscatteringLUT, float T, float A, vec3 Eye, vec3 Target, vec3 sun, out SAtmosphere Atmosphere) 
 {
     float Re = length(Eye);
 
@@ -208,7 +195,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         vec3 View = normalize(Target - Eye);
         float EdotV = dot(Eye, View) / Re;
 
-#if 0
+#if 1
         float d = -Re * EdotV - sqrt(Re * Re * (EdotV * EdotV - 1.0) + Rt * Rt);
         if (d > 0.0)
         {
@@ -225,20 +212,22 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         float PdotL = dot(Target, sun) / Rp;
 
         float PhaseR = RayleighPhase(VdotL);
-        float PhaseM = HGDPhaseCloud(VdotL);
 
+#ifdef USE_CLOUD_MIE
+        float PhaseM = HGDPhaseCloud(VdotL);
+#else
+        float PhaseM = MiePhase(VdotL);
+#endif
+        float Rpe = distance(Eye, Target);
         Atmosphere.T = GetTransmittance(TransmittanceLUT, Re, EdotV, View, Target);
-        Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL);
+        Atmosphere.L = T * Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
         Atmosphere.E = GetIrradiance(IrradianceLUT, Rp, PdotL);
 
-        vec4 inscatter = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
-        inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL), 0.0);
-
-        const float EPS = 0.05;
+        const float EPS = 0.08;
+        vec4 inscatter = vec4(0.0);
         float muHoriz = -sqrt(1.0 - (Rg / Re) * (Rg / Re));
         if (abs(EdotV - muHoriz) < EPS) 
         {
-            float Rpe = distance(Eye, Target);
             float a = ((EdotV - muHoriz) + EPS) / (2.0 * EPS);
 
             EdotV = muHoriz - EPS;
@@ -257,11 +246,16 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 
             inscatter = mix(inScatterA, inScatterB, a);
         }
+        else
+        {
+            inscatter = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
+            inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL), 0.0);
+        }
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
-        Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL + 0.2));
-        Atmosphere.S = max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0);
-        Atmosphere.S = max(Atmosphere.S * Atmosphere.Shadow, 1e-5 * (1.0 - Atmosphere.T));
+        Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL));
+        Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
+        Atmosphere.S = mix(0.65, 1.0, Atmosphere.Shadow) * Atmosphere.S;
     }
 }
 

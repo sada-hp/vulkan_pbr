@@ -100,7 +100,7 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateWorley(const RenderScope& Scope, V
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
 {
-	return generate("worley_perlin_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { frequency, worley_octaves, perlin_octaves });
+	return generate("worley_perlin_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, worley_octaves, perlin_octaves });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)

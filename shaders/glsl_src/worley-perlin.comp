@@ -8,15 +8,15 @@ layout (constant_id = 0) const uint frequency = 4;
 layout (constant_id = 1) const uint worley_octaves = 4;
 layout (constant_id = 2) const uint perlin_octaves = 4;
 
-layout (binding = 0, r8) uniform writeonly image2D outImage;
+layout (binding = 0, r11f_g11f_b10f) uniform writeonly image2D outImage;
 
 void main()
 {
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
 
-    float w = fbm_worley(cell_loc * frequency, frequency, worley_octaves);
-    float p = fbm_perlin(cell_loc * frequency, frequency, perlin_octaves);
+    float w = 1.0 - fbm_worley(cell_loc, frequency, worley_octaves);
+    float p = fbm_perlin(cell_loc, frequency, perlin_octaves);
     float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
 
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(perlin_worley));
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(p, w, perlin_worley, 0.0));
 }

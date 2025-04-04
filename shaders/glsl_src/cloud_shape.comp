@@ -16,16 +16,21 @@ void main()
 
     const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
     float worley01 = 1.0 - worley(cell_loc, frequency_worley * 4);
+    NOISE_SEED++;
     float worley02 = 1.0 - worley(cell_loc, frequency_worley * 8);
+    NOISE_SEED++;
     float worley03 = 1.0 - worley(cell_loc, frequency_worley * 14);
     
-    float perlin = fbm_perlin(cell_loc, frequency_perlin, 4);
+    float perlin = fbm_perlin_turb(cell_loc, frequency_perlin, 4);
     float fbm_worley = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
     float perlin_worley = remap(perlin, 0.0, 1.0, fbm_worley, 1.0);
 
     worley01 = 1.0 - worley(cell_loc, frequency_worley * 6);
+    NOISE_SEED++;
     worley02 = 1.0 - worley(cell_loc, frequency_worley * 12);
+    NOISE_SEED++;
     worley03 = 1.0 - worley(cell_loc, frequency_worley * 18);
+    NOISE_SEED++;
     float low_frequency_fbm = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
 
     float cloud_noise = remap(perlin_worley, -low_frequency_fbm, 1.0, 0.0, 1.0);
