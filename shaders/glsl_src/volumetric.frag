@@ -31,7 +31,7 @@ void UpdateRay(inout RayMarch Ray)
 
 void UpdateRay(inout RayMarch Ray, float Stepsize, float f)
 {
-    Ray.Stepsize = smootherstep(0.0, 2.0, f) * 4.0 * Stepsize;
+    Ray.Stepsize = smoothstep(0.0, 2.0, f) * 4.0 * Stepsize;
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
 }
@@ -117,11 +117,11 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
 {
     float height = 1.0 - Ray.Height;
-    vec3 uv =  GetUV(Ray.Position, 400.0, -0.05);
+    vec3 uv =  GetUV(Ray.Position, 300.0, -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, lod);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 40.0));
 
     base = remap(base, high_frequency_modifier * mix(0.15, 0.45, Clouds.Coverage), 1.0, 0.0, 1.0);
     return saturate(height * Clouds.Density * base);
@@ -176,7 +176,7 @@ void Blend(in RayMarch Ray)
     if (outScattering.a != 1.0)
     {
         SAtmosphere Atmosphere;
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Ray.T, Ray.A, Eye, Ray.LastHit, SunDir, Atmosphere);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Ray.T, Ray.A, Eye, mix(Ray.FirstHit, Ray.Start, Ray.A), SunDir, Atmosphere);
 
         vec3 Radiance      = Atmosphere.L;
         vec3 Scattering    = Atmosphere.S  * MaxLightIntensity;
@@ -184,10 +184,7 @@ void Blend(in RayMarch Ray)
         CloudsColor = Scattering + Radiance * outScattering.rgb;
     }
     
-    if (Hits.Ground == 0.0)
-        outScattering.rgb = mix(CloudsColor, SkyColor, outScattering.a);
-    else
-        outScattering.rgb = CloudsColor;
+    outScattering.rgb = mix(CloudsColor, SkyColor, outScattering.a * (1.0 - saturate(Hits.Ground)));
 }
 
 // volumetric-cloudscapes-of-horizon-zero-dawn
@@ -263,14 +260,15 @@ void MarchToCloud(inout RayMarch Ray)
 
     // take larger steps and
     // skip empty space until cloud is found
-    int steps = int(ceil(mix(96, 72, w))), i = steps - 1;
+    int steps = 1024, i = steps - 1;
     Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
-    for (i; i > 0 && sample_density == 0.0;i--)
+
+    for (i; i >= 0 && sample_density == 0.0; i--)
     {
         UpdateRay(Ray);
 
-        if ((sample_density = SampleCloudShape(Ray, 3)) > 0)
-            sample_density = SampleCloudDetail(Ray, sample_density, 2);
+        if ((sample_density = SampleCloudShape(Ray, 1)) > 0)
+            sample_density = SampleCloudDetail(Ray, sample_density, 1);
     }
 
     if (sample_density == 0.0)
@@ -282,25 +280,24 @@ void MarchToCloud(inout RayMarch Ray)
     Ray.End = Ray.Position - Ray.Stepsize * Ray.Direction;
     Ray.FirstHit = Ray.Position;
     Ray.Position = Ray.End;
-
-    steps = i;
+    steps = int(ceil(mix(32, 16, w)));
     float incr = 1.0 / float(steps);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     const float I = PI * MaxLightIntensity * PhaseF;
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
     float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
-    for (i = steps - 1; i > 0; i--)
+    for (i = steps - 1; i >= 0; i--)
     {
         UpdateRay(Ray, Stepsize, float(steps - i) * incr);
         
-        int mip = int(floor(mix(5.0, 0.0, outScattering.a)));
-        if ((sample_density = SampleCloudShape(Ray, mip)) > 0 && outScattering.a > 1e-2)
+        int mip = int(floor(mix(5.0, 0.0, saturate(50.0 * outScattering.a))));
+        if ((sample_density = SampleCloudShape(Ray, mip)) > 0)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
         if (sample_density > 0.0) 
         {
-            float extinction = sample_density + 1e-6;
+            float extinction = sample_density;
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
             float luminance = MarchToLight(Ray.Position, ubo.SunDirection.xyz, 12, mip) * I;
 
@@ -313,9 +310,6 @@ void MarchToCloud(inout RayMarch Ray)
             float Dist = ((float(steps - i + 1) * Ray.Stepsize + ToCamera) / ToAEP);
             mean_depth += mix(Ray.Height, 1.0, Dist) * outScattering.a;
             mean_transmittance += outScattering.a * mix(1.0 - Ray.Height, 1.0, Dist);
-
-            if (outScattering.a <= 1e-5)
-                break;
         }
     }
 

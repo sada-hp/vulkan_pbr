@@ -223,7 +223,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         Atmosphere.L = T * Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
         Atmosphere.E = GetIrradiance(IrradianceLUT, Rp, PdotL);
 
-        const float EPS = 0.08;
+        const float EPS = 0.008;
         vec4 inscatter = vec4(0.0);
         float muHoriz = -sqrt(1.0 - (Rg / Re) * (Rg / Re));
         if (abs(EdotV - muHoriz) < EPS) 

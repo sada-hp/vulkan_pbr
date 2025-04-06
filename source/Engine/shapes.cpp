@@ -461,7 +461,7 @@ namespace GR
 						vertices.emplace_back(Hp);
 						H = vertices.size() - 1;
 
-						vertices.emplace_back(Ip);
+						vertices.emplace_back(Ip); 
 						I = vertices.size() - 1;
 #endif
 

@@ -17,7 +17,7 @@ float Rcdelta = Rct - Rcb;
 const float HR = 8.0;
 const vec3 BetaR = vec3(5.8e-3, 1.35e-2, 3.31e-2);
 
-#if 1
+#if 0
     // partly cloudy
     const float HM = 3.0;
     const vec3 BetaMSca = vec3(3e-3);

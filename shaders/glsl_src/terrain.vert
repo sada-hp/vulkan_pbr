@@ -22,6 +22,7 @@ layout(location = 1) out vec3 Normal;
 layout(location = 2) out vec2 UV;
 layout(location = 3) out float Height;
 layout(location = 4) out flat int Level;
+layout(location = 5) out mat3 TBN;
 
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
@@ -38,11 +39,6 @@ ivec3 clamp_coords(int x, int y, int level)
         texel.z += 1;
         texel.x = onefourth.x + (x < 0 ? x : int(ceil(float(x) / 2)));
         texel.y = onefourth.y + (y < 0 ? y : int(ceil(float(y) / 2)));
-    }
-    else if (texel.z > 0 && texel.x >= onefourth.x && texel.x <= threefourth.x && texel.y >= onefourth.y && texel.y <= threefourth.y)
-    {
-        texel.z -= 1;
-        texel.xy = 2 * (texel.xy - onefourth);
     }
 
     return texel;
@@ -78,7 +74,37 @@ void main()
     Normal.x = (l - r) / exp2(max(texelIdR.z, texelIdL.z));
     Normal.z = (u - d) / exp2(max(texelIdD.z, texelIdU.z));
     Normal.y = 2.0 * Scale;
-    Normal = vec3(Orientation * normalize(Normal));
+    Normal = vec3(normalize(Normal));
+
+    vec3 A = vec3(Orientation * vec3(vertPosition.x, Height, vertPosition.z) + Center);
+    vec3 B = vec3(Orientation * vec3(vertPosition.x + Scale * exp2(Level), r, vertPosition.z) + Center);
+    vec3 C = vec3(Orientation * vec3(vertPosition.x, d, vertPosition.z + Scale * exp2(Level)) + Center);
+
+    vec3 AC = C - A;
+    vec3 AB = B - A;
+
+    Normal = normalize(cross(AC, AB));
+
+    vec2 Auv = vec2(vertPosition.x, vertPosition.z) / vertUV.w;
+    vec2 Buv = vec2(vertPosition.x + Scale * exp2(Level), vertPosition.z) / vertUV.w;
+    vec2 Cuv = vec2(vertPosition.x, vertPosition.z + Scale * exp2(Level)) / vertUV.w;
+    Auv.y = 1.0 - Auv.y;
+    Buv.y = 1.0 - Buv.y;
+    Cuv.y = 1.0 - Cuv.y;
+    vec2 delta1 = Buv - Auv;
+    vec2 delta2 = Cuv - Auv;
+
+    float f = 1.0 / (delta1.x * delta2.y - delta1.y * delta2.x);
+
+    vec3 Tangent;
+    Tangent.x = f * (delta2.y * AB.x - delta1.y * AC.x);
+    Tangent.y = f * (delta2.y * AB.y - delta1.y * AC.y);
+    Tangent.z = f * (delta2.y * AB.z - delta1.y * AC.z);
+
+    Tangent = normalize(Tangent);
+    vec3 Bitangent = normalize(cross(Normal, Tangent));
+
+    TBN = mat3(Tangent, Bitangent, Normal);
 
     vec3 ObjectPosition = vec3(Orientation * vec3(vertPosition.x, 0.0, vertPosition.z) + Center);
 
@@ -87,4 +113,6 @@ void main()
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 
     Height = Seed == 0 ? 1.0 : (Height - MinHeight) / (MaxHeight - MinHeight);
+
+
 }

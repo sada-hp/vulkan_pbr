@@ -65,7 +65,7 @@ float SampleCloud(vec3 x0)
         return base;
     }
 
-    uv =  GetUV(x0, 400.0, -0.05);
+    uv =  GetUV(x0, 300.0, -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, 3);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
@@ -116,8 +116,8 @@ void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out
     vec3 Ray = Eye;
 
     SAtmosphere AtmosphereStart, AtmosphereEnd;
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, clamp(1.0 - Clouds.Coverage, 0.5, 1.0), 1.0, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, clamp(1.0 - Clouds.Coverage, 0.5, 1.0), 1.0, Eye, World, Sun, AtmosphereEnd);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, World, Sun, AtmosphereEnd);
 
     Atmosphere.T = AtmosphereEnd.T;
     Atmosphere.Shadow = AtmosphereEnd.Shadow;
@@ -159,12 +159,13 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     float Shadow = 1.0;
     SAtmosphere Atmosphere;
     SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow);
+
     vec3 Illumination = MaxLightIntensity * Atmosphere.L * NdotL;
 
     float A = Material.Roughness;
     float A2 = A * A;
 
-    vec3  F0 = Material.Specular *  mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
+    vec3  F0 = Material.Specular * mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
     vec3 F90 = max(vec3(F0), 1.0 - A);
     vec3  F  = F_FresnelSchlick(LdotH, F0, F90);
     vec3 kD  = vec3(1.0 - F) * vec3(1.0 - Material.Metallic);
@@ -185,9 +186,10 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 diffuse = Material.Albedo.rgb * irradiance;
     vec3 specular = reflection * (F * brdf.x + brdf.y);
     vec3 ambient  = Atmosphere.L * Material.AO * (kD * diffuse + specular);
-    vec3 scattering = Atmosphere.S;
+    vec3 scattering = clamp(1.0 - Clouds.Coverage, 0.25, 1.0) * Atmosphere.S;
 
     return scattering + ambient + Illumination * Lo;
+    // return ambient + Illumination * Lo;
 }
 
 void main()

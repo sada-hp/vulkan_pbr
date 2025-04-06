@@ -1,6 +1,6 @@
 vec3 fxaa_apply(sampler2D frame, vec2 inUV, vec2 frameBufSize)
 {
-    float FXAA_SPAN_MAX = 8.0;
+    float FXAA_SPAN_MAX = 4.0;
     float FXAA_REDUCE_MUL = 0.125f;
     float FXAA_REDUCE_MIN = 0.0078125f; //1.0/128.0
 

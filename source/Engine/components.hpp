@@ -177,33 +177,144 @@ namespace GR
 		/*
 		* !@brief World matrix
 		*/
-		template<typename TM, typename TV>
+		template<typename TRotation, typename TOffset>
 		struct TransformMatrix
 		{
-			glm::mat<3, 3, TM> orientation = glm::mat<3, 3, TM>(1.0);
-			glm::vec<3, TV> offset = glm::vec<3, TV>(0.0);
+			glm::mat<3, 3, TRotation> orientation = glm::mat<3, 3, TRotation>(1.0);
+			glm::vec<3, TOffset> offset = glm::vec<3, TOffset>(0.0);
 
 			template<typename Type>
 			GRAPI void SetFromMatrix(const glm::mat<4, 4, Type>& M)
 			{
-				orientation[0][0] = static_cast<TM>(M[0][0]);
-				orientation[0][1] = static_cast<TM>(M[0][1]);
-				orientation[0][2] = static_cast<TM>(M[0][2]);
+				orientation[0][0] = static_cast<TRotation>(M[0][0]);
+				orientation[0][1] = static_cast<TRotation>(M[0][1]);
+				orientation[0][2] = static_cast<TRotation>(M[0][2]);
 
-				orientation[1][0] = static_cast<TM>(M[1][0]);
-				orientation[1][1] = static_cast<TM>(M[1][1]);
-				orientation[1][2] = static_cast<TM>(M[1][2]);
+				orientation[1][0] = static_cast<TRotation>(M[1][0]);
+				orientation[1][1] = static_cast<TRotation>(M[1][1]);
+				orientation[1][2] = static_cast<TRotation>(M[1][2]);
 
-				orientation[2][0] = static_cast<TM>(M[2][0]);
-				orientation[2][1] = static_cast<TM>(M[2][1]);
-				orientation[2][2] = static_cast<TM>(M[2][2]);
+				orientation[2][0] = static_cast<TRotation>(M[2][0]);
+				orientation[2][1] = static_cast<TRotation>(M[2][1]);
+				orientation[2][2] = static_cast<TRotation>(M[2][2]);
 
-				offset[0] = static_cast<TV>(M[3][0]);
-				offset[1] = static_cast<TV>(M[3][1]);
-				offset[2] = static_cast<TV>(M[3][2]);
+				offset[0] = static_cast<TOffset>(M[3][0]);
+				offset[1] = static_cast<TOffset>(M[3][1]);
+				offset[2] = static_cast<TOffset>(M[3][2]);
 			}
 
 			template<typename Type>
+			GRAPI TransformMatrix& SetOffset(const glm::vec<3, Type>& V)
+			{
+				offset = glm::vec<3, TOffset>(V);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetOffset(Type x, Type y, Type z)
+			{
+				offset = glm::vec<3, TOffset>(x, y, z);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& Translate(const glm::vec<3, Type>& V)
+			{
+				offset += GetRotation() * glm::vec<3, TOffset>(V);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetOffsetFromGeo(Type longitude, Type latitude, Type height, Type radius)
+			{
+				TOffset lonRad = longitude;
+				TOffset latRad = latitude;
+
+				TOffset CosLon = static_cast<TOffset>(glm::cos(lonRad));
+				TOffset SinLon = static_cast<TOffset>(glm::sin(lonRad));
+				TOffset CosLat = static_cast<TOffset>(glm::cos(latRad));
+				TOffset SinLat = static_cast<TOffset>(glm::sin(latRad));
+
+				glm::vec<3, TOffset> n = glm::vec<3, TOffset>(CosLat * CosLon, SinLat, CosLat * SinLon);
+				glm::vec<3, TOffset> k = n * static_cast<TOffset>(radius) * static_cast<TOffset>(radius);
+				TOffset gamma = glm::sqrt(k.x * n.x + k.y * n.y + k.z * n.z);
+
+				offset = k / gamma + (n * static_cast<TOffset>(height));
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& MoveGeo(Type longitude, Type latitude, Type height, Type radius)
+			{
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetRotation(const glm::vec<3, Type>& R, const glm::vec<3, Type>& U, const glm::vec<3, Type>& F)
+			{
+				orientation[0] = glm::vec<3, TRotation>(R);
+				orientation[1] = glm::vec<3, TRotation>(U);
+				orientation[2] = glm::vec<3, TRotation>(F);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetRotation(const glm::vec<3, Type>& U, const glm::vec<3, Type>& F)
+			{
+				return SetRotation(glm::normalize(glm::cross(U, F)), U, F);
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetRotation(const glm::mat<3, 3, Type>& M)
+			{
+				orientation = glm::mat<3, 3, TRotation>(M);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetRotation(Type pitch, Type yaw, Type roll)
+			{
+				glm::qua<TRotation> q = glm::angleAxis(static_cast<TRotation>(yaw), glm::vec<3, TRotation>(0, 1, 0));
+				q = q * glm::angleAxis(static_cast<TRotation>(roll), glm::vec<3, TRotation>(0, 0, 1));
+				q = q * glm::angleAxis(static_cast<TRotation>(-pitch), glm::vec<3, TRotation>(1, 0, 0));
+
+				glm::mat<3, 3, TRotation> M = glm::mat3_cast(q);
+
+				orientation[0] = glm::normalize(M[0]);
+				orientation[1] = glm::normalize(M[1]);
+				orientation[2] = glm::normalize(M[2]);
+
+				return *this;
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& Rotate(Type pitch, Type yaw, Type roll)
+			{
+				glm::qua<TRotation> q = glm::angleAxis(static_cast<TRotation>(yaw), glm::vec<3, TRotation>(0, 1, 0));
+				q = q * glm::angleAxis(static_cast<TRotation>(roll), glm::vec<3, TRotation>(0, 0, 1));
+				q = q * glm::angleAxis(static_cast<TRotation>(-pitch), glm::vec<3, TRotation>(1, 0, 0));
+
+				return SetRotation(glm::mat3_cast(q) * GetRotation());
+			}
+
+			template<typename Type>
+			GRAPI TransformMatrix& SetScale(Type x, Type y, Type z)
+			{
+				orientation[0] = glm::normalize(orientation[0]) * static_cast<TRotation>(x);
+				orientation[1] = glm::normalize(orientation[1]) * static_cast<TRotation>(y);
+				orientation[2] = glm::normalize(orientation[2]) * static_cast<TRotation>(z);
+
+				return *this;
+			}
+
+			template<typename Type = TRotation>
 			GRAPI glm::mat<4, 4, Type> GetMatrix()
 			{
 				return glm::mat<4, 4, Type>
@@ -215,97 +326,34 @@ namespace GR
 				);
 			}
 
-			GRAPI TransformMatrix& SetOffset(const glm::vec<3, TV>& V)
+			template<typename Type = TOffset>
+			GRAPI glm::vec<3, Type> GetOffset() const
 			{
-				offset = V;
-
-				return *this;
+				return glm::vec<3, Type>(offset);
 			}
 
-			GRAPI TransformMatrix& Translate(const glm::vec<3, TV>& V)
+			template<typename Type = TRotation>
+			GRAPI glm::mat<3, 3, Type> GetRotation() const
 			{
-				offset += GetRotation() * V;
-
-				return *this;
+				return glm::mat<3, 3, Type>(orientation);
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::vec<3, TM>& R, const glm::vec<3, TM>& U, const glm::vec<3, TM>& F)
+			template<typename Type = TOffset>
+			GRAPI glm::vec<3, Type> GetForward() const
 			{
-				orientation[0] = R;
-				orientation[1] = U;
-				orientation[2] = F;
-
-				return *this;
+				return glm::vec<3, Type>(orientation[2]);
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::vec<3, TM>& U, const glm::vec<3, TM>& F)
+			template<typename Type = TOffset>
+			GRAPI glm::vec<3, Type> GetRight() const
 			{
-				return SetRotation(glm::normalize(glm::cross(U, F)), U, F);
+				return glm::vec<3, Type>(orientation[0]);
 			}
 
-			GRAPI TransformMatrix& SetRotation(const glm::mat<3, 3, TM>& M)
+			template<typename Type = TOffset>
+			GRAPI glm::vec<3, Type> GetUp() const
 			{
-				orientation = M;
-
-				return *this;
-			}
-
-			GRAPI TransformMatrix& SetRotation(TM pitch, TM yaw, TM roll)
-			{
-				glm::qua<TM> q = glm::angleAxis(yaw, glm::vec<3, TM>(0, 1, 0));
-				q = q * glm::angleAxis(roll, glm::vec<3, TM>(0, 0, 1));
-				q = q * glm::angleAxis(-pitch, glm::vec<3, TM>(1, 0, 0));
-
-				glm::mat<3, 3, TM> M = glm::mat3_cast(q);
-
-				orientation[0] = glm::normalize(M[0]);
-				orientation[1] = glm::normalize(M[1]);
-				orientation[2] = glm::normalize(M[2]);
-
-				return *this;
-			}
-
-			GRAPI TransformMatrix& Rotate(TM pitch, TM yaw, TM roll)
-			{
-				glm::qua<TM> q = glm::angleAxis(yaw, glm::vec<3, TM>(0, 1, 0));
-				q = q * glm::angleAxis(roll, glm::vec<3, TM>(0, 0, 1));
-				q = q * glm::angleAxis(-pitch, glm::vec<3, TM>(1, 0, 0));
-
-				return SetRotation(glm::mat3_cast(q) * GetRotation());
-			}
-
-			GRAPI TransformMatrix& SetScale(TM x, TM y, TM z)
-			{
-				orientation[0] = glm::normalize(orientation[0]) * x;
-				orientation[1] = glm::normalize(orientation[1]) * y;
-				orientation[2] = glm::normalize(orientation[2]) * z;
-
-				return *this;
-			}
-
-			GRAPI glm::vec<3, TV> GetOffset() const
-			{
-				return offset;
-			}
-
-			GRAPI glm::mat<3, 3, TM> GetRotation() const
-			{
-				return orientation;
-			}
-
-			GRAPI glm::vec<3, TM> GetForward() const
-			{
-				return glm::vec<3, TM>(orientation[2]);
-			}
-
-			GRAPI glm::vec<3, TM> GetRight() const
-			{
-				return glm::vec<3, TM>(orientation[0]);
-			}
-
-			GRAPI glm::vec<3, TM> GetUp() const
-			{
-				return glm::vec<3, TM>(orientation[1]);
+				return glm::vec<3, Type>(orientation[1]);
 			}
 		};
 

@@ -21,36 +21,14 @@ layout (constant_id = 5) const uint Seed = 0;
 layout (set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 layout (set = 1, binding = 1, r32f) uniform image2DArray target;
 
-ivec3 clamp_coords(ivec3 texel)
-{
-    ivec2 size = textureSize(NoiseMap, 0).xy;
-    ivec2 onefourth = size / 4;
-    ivec2 threefourth = 3 * onefourth;
-
-    // if texel is outside the bounds of current level    
-    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
-    {
-        texel.z += 1;
-        texel.x = onefourth.x + (texel.x < 0 ? texel.x : int(ceil(float(texel.x) / 2)));
-        texel.y = onefourth.y + (texel.y < 0 ? texel.y : int(ceil(float(texel.y) / 2)));
-    }
-    else if (texel.z > 0 && texel.x >= onefourth.x && texel.x <= threefourth.x && texel.y >= onefourth.y && texel.y <= threefourth.y)
-    {
-        texel.z -= 1;
-        texel.xy = 2 * (texel.xy - onefourth);
-    }
-
-    return texel;
-}
-
 float sample_height(ivec3 texel, ivec3 Offset)
 {
-    texel = clamp_coords(texel + Offset);
-    return texelFetch(NoiseMap, texel, 0).r;
+    return texelFetch(NoiseMap, texel + Offset, 0).r;
 }
 
 void spill(ivec3 Texel, float xp, float zp, float w, int radius)
 {
+    int Level = Texel.z;
     for (int z = Texel.y - radius; z <= Texel.y + radius; z++)
     {
         float zo = z - zp;
@@ -66,17 +44,16 @@ void spill(ivec3 Texel, float xp, float zp, float w, int radius)
 
             nw *= ONE_OVER_2PI;
 
-            imageAtomicAdd(target, clamp_coords(Texel), nw * w);
+            Texel = ivec3(x, z, Level);
+            if (Texel.x > 0 && Texel.x < imageSize(target).x && Texel.y > 0 && Texel.y < imageSize(target).y)
+                imageAtomicAdd(target, Texel, nw * w);
         }
     }
 }
 
 bool test_run()
 {
-    ivec3 Texel = clamp_coords(ivec3(gl_GlobalInvocationID.xyz));
-
-    if (Texel.z != gl_GlobalInvocationID.z)
-        return false;
+    ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
     float Kw = 0.01;
     float dt = 0.3;
@@ -122,6 +99,9 @@ bool test_run()
         float nxf = fract(nxp);
         float nzf = fract(nzp);
 
+        if (Texel.x + 1 >= imageSize(target).x || Texel.y + 1 >= imageSize(target).y)
+            return false;
+
         float nh00 = sample_height(Texel, ivec3(0));
         float nh10 = sample_height(Texel, ivec3(1, 0, 0));
         float nh01 = sample_height(Texel, ivec3(0, 1, 0));
@@ -131,6 +111,9 @@ bool test_run()
 
         if (nh >= h)
         {
+            if (Texel.x - 1 < 0 || Texel.y - 1 < 0)
+                return false;
+
             nh00 = sample_height(Texel, ivec3(0));
             nh10 = sample_height(Texel, ivec3(-1, 0, 0));
             nh01 = sample_height(Texel, ivec3(0, -1, 0));
@@ -155,12 +138,12 @@ bool test_run()
         dH = vec4(nh00, nh10, nh01, nh11);
     }
 
-    return h <= MinHeight * 1.01;
+    return h <= MinHeight * 1.01 && w <= 5.0;
 }
 
 void erosion_loop()
 {
-    ivec3 Texel = clamp_coords(ivec3(gl_GlobalInvocationID.xyz));
+    ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
     float Kw = 0.01;
     float dt = 0.3;
@@ -177,7 +160,7 @@ void erosion_loop()
     );
 
     float dx = 0.0, dz = 0.0;
-    float s = 0.0, v = 0.0, w = 500.0 + texelFetch(NoiseMap, Texel, 0).g * (1.0 - (h - MinHeight) / (MaxHeight - MinHeight)) * 500.0;
+    float s = 0.0, v = 0.0, w = 100.0 + (1.0 - (h - MinHeight) / (MaxHeight - MinHeight)) * 500.0;
 
     while (w > 0.01)
     {

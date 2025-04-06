@@ -35,6 +35,8 @@ namespace GR
 
 		GRAPI void BindTexture(Components::Resource<Texture>& Resource, const std::string& path);
 
+		GRAPI void BindTexture(Components::Resource<Texture>& Resource, const std::vector<std::string>& paths);
+
 		template<typename Type, typename... Args>
 		GRAPI decltype(auto) EmplaceComponent(Entity ent, Args&& ...args)
 		{

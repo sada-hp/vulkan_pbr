@@ -49,7 +49,7 @@ vec3 ProduceHexWeights(vec3 W, ivec2 vertex1, ivec2 vertex2, ivec2 vertex3)
     return res;
 }
 
-void hex2colTex(sampler2D col, sampler2D arm, vec2 st, out SMaterial Material, out vec3 weights)
+void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, vec2 st, out SMaterial Material)
 {
     vec2 dSTdx = dFdx(st), dSTdy = dFdy(st);
 
@@ -62,13 +62,17 @@ void hex2colTex(sampler2D col, sampler2D arm, vec2 st, out SMaterial Material, o
     vec2 st2 = st + noise2(v2);
     vec2 st3 = st + noise2(v3);
 
-    vec4 c1 = textureGrad(col, st1, dSTdx, dSTdy);
-    vec4 c2 = textureGrad(col, st2, dSTdx, dSTdy);
-    vec4 c3 = textureGrad(col, st3, dSTdx, dSTdy);
+    vec4 c1 = textureGrad(col, vec3(st1, Layer), dSTdx, dSTdy);
+    vec4 c2 = textureGrad(col, vec3(st2, Layer), dSTdx, dSTdy);
+    vec4 c3 = textureGrad(col, vec3(st3, Layer), dSTdx, dSTdy);
 
-    vec4 a1 = textureGrad(arm, st1, dSTdx, dSTdy);
-    vec4 a2 = textureGrad(arm, st2, dSTdx, dSTdy);
-    vec4 a3 = textureGrad(arm, st3, dSTdx, dSTdy);
+    vec4 a1 = textureGrad(arm, vec3(st1, Layer), dSTdx, dSTdy);
+    vec4 a2 = textureGrad(arm, vec3(st2, Layer), dSTdx, dSTdy);
+    vec4 a3 = textureGrad(arm, vec3(st3, Layer), dSTdx, dSTdy);
+
+    vec4 n1 = textureGrad(nor, vec3(st1, Layer), dSTdx, dSTdy);
+    vec4 n2 = textureGrad(nor, vec3(st2, Layer), dSTdx, dSTdy);
+    vec4 n3 = textureGrad(nor, vec3(st3, Layer), dSTdx, dSTdy);
 
     vec3 Lw = vec3(0.299, 0.587, 0.114);
     vec3 Dw = vec3(dot(c1.xyz, Lw), dot(c2.xyz, Lw), dot(c3.xyz, Lw));
@@ -83,5 +87,6 @@ void hex2colTex(sampler2D col, sampler2D arm, vec2 st, out SMaterial Material, o
     Material.Roughness = W.x * a1.g + W.y * a2.g + W.z * a3.g;
     Material.Metallic = W.x * a1.b + W.y * a2.b + W.z * a3.b;
     Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
-    weights = ProduceHexWeights(W.xyz, v1, v2, v3);
+    Material.Normal = 2.0 * (W.x * n1.rgb + W.y * n2.rgb + W.z * n3.rgb) - 1.0;
+    // weights = ProduceHexWeights(W.xyz, v1, v2, v3);
 }

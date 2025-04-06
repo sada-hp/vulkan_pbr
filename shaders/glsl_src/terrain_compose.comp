@@ -1,0 +1,81 @@
+#version 460
+#include "constants.glsl"
+#include "common.glsl"
+#include "noise.glsl"
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+struct Vertex
+{
+    vec4 Position;
+    vec4 UV;
+};
+
+layout (binding = 0, rgba32f) uniform image2DArray terrainImage;
+
+layout(push_constant) uniform constants
+{
+    int Sample;
+} 
+PushConstants;
+
+
+layout (constant_id = 2) const uint VertexCount = 0;
+layout (constant_id = 3) const float Scale = 0;
+layout (constant_id = 4) const float MinHeight = 0;
+layout (constant_id = 5) const float MaxHeight = 0;
+layout (constant_id = 6) const uint Seed = 0;
+
+void main()
+{
+    ivec3 Texel = ivec3(imageSize(terrainImage).xy / 4 + gl_GlobalInvocationID.xy, PushConstants.Sample + 1);
+    ivec3 OldTexel = ivec3(gl_GlobalInvocationID.xy * 2, PushConstants.Sample);
+    if (OldTexel.x < imageSize(terrainImage).x && OldTexel.y < imageSize(terrainImage).y)
+    {
+        float Norm = 1.0;
+        bool Water = false;
+        vec4 Value = vec4(0.0); 
+        vec4 Temp1 = imageLoad(terrainImage, OldTexel);
+
+        if (Temp1.x == MinHeight)
+            Water = true;
+
+        vec4 Temp2 = vec4(0.0);
+        if (!Water && OldTexel.x + 1 < imageSize(terrainImage).x)
+        {
+            Temp2 = imageLoad(terrainImage, OldTexel + ivec3(1, 0, 0));
+            Norm++;
+
+            if (Temp2.x == MinHeight)
+                Water = true;
+        }
+        
+        vec4 Temp3 = vec4(0.0);
+        if (!Water && OldTexel.y + 1 < imageSize(terrainImage).y)
+        {
+            Temp3 = imageLoad(terrainImage, OldTexel + ivec3(0, 1, 0));
+            Norm++;
+
+            if (Temp3.x == MinHeight)
+                Water = true;
+        }
+        
+        vec4 Temp4 = vec4(0.0);
+        if (Norm == 3.0)
+        {
+            Temp4 = imageLoad(terrainImage, OldTexel + ivec3(1, 1, 0));
+            Norm++;
+
+            if (Temp4.x == MinHeight)
+                Water = true;
+        }
+
+        Value = (Temp1 + Temp2 + Temp3 + Temp4) / Norm;
+        if (Water)
+        {
+            Value.x = MinHeight;
+        }
+
+        imageStore(terrainImage, Texel, Value);
+    }
+}

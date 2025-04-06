@@ -63,7 +63,7 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	imageViewCI.format = imageCI.format;
-	imageViewCI.viewType = (flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+	imageViewCI.viewType = (flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 ? VK_IMAGE_VIEW_TYPE_CUBE : (subRes.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D);
 	imageViewCI.subresourceRange = subRes;
 
 	VmaAllocationCreateInfo skyAlloc{};
@@ -247,7 +247,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	ImGui_ImplVulkan_Init(&init_info);
 #endif
 
-	m_Camera.Transform.SetOffset({ 0.0, GR::Renderer::Rg, 0.0 });
+	m_Camera.Transform.SetOffset(0.0f, GR::Renderer::Rg, 0.0f);
 
 	assert(res != 0);
 }
@@ -262,6 +262,7 @@ VulkanBase::~VulkanBase() noexcept
 #endif
 
 	m_TerrainCompute.reset();
+	m_TerrainCompose.reset();
 	m_WaterCompute.reset();
 	m_BRDFLUT.reset();
 
@@ -753,13 +754,27 @@ bool VulkanBase::BeginFrame()
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.image = m_TerrainLUT[m_SwapchainIndex].Image->GetImage();
 			barrier.subresourceRange = m_TerrainLUT[m_SwapchainIndex].Image->GetSubResourceRange();
 			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+			m_TerrainSet[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_TerrainCompose);
+			m_TerrainCompose->BindPipeline(ComputeCmd);
+
+			uint32_t X = m_TerrainLUT[0].Image->GetExtent().width / 16 + uint32_t(m_TerrainLUT[0].Image->GetExtent().width % 16);
+			uint32_t Y = m_TerrainLUT[0].Image->GetExtent().height / 8 + uint32_t(m_TerrainLUT[0].Image->GetExtent().width % 8);
+			for (int i = 0; i < m_TerrainLUT[0].Image->GetArrayLayers() - 1; i++)
+			{
+				vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+				m_TerrainCompose->PushConstants(ComputeCmd, &i, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+				vkCmdDispatch(ComputeCmd, X, Y, 1);
+			}
+
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
 
@@ -783,7 +798,7 @@ bool VulkanBase::BeginFrame()
 			m_UBOSets[m_SwapchainIndex]->BindSet(0, ComputeCmd, *m_WaterCompute);
 			m_WaterSet[m_SwapchainIndex]->BindSet(1, ComputeCmd, *m_WaterCompute);
 			m_WaterCompute->BindPipeline(ComputeCmd);
-			vkCmdDispatch(ComputeCmd, m_WaterLUT[0].Image->GetExtent().width / 32 + 1, m_WaterLUT[0].Image->GetExtent().height / 32 + 1, m_WaterLUT[0].Image->GetArrayLayers());
+			vkCmdDispatch(ComputeCmd, m_WaterLUT[0].Image->GetExtent().width / 32 + 1, m_WaterLUT[0].Image->GetExtent().height / 32 + 1, glm::min(m_WaterLUT[0].Image->GetArrayLayers(), 4u));
 			vkCmdPipelineBarrier(ComputeCmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 		}
 #endif
@@ -1591,15 +1606,51 @@ void VulkanBase::transfer_ownership(VkQueueFlagBits queue1, VkQueueFlagBits queu
 #pragma endregion
 
 #pragma region Objects
-std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::string& path, VkFormat format) const
+std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::vector<std::string>& path, VkFormat format) const
 {
 	std::unique_ptr<VulkanTexture> Texture = std::make_unique<VulkanTexture>();
 
+	unsigned char* all = nullptr;
+
 	int w, h, c;
-	unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &c, 4);
-	Texture->Image = create_image(m_Scope, pixels, 1, w, h, 4, format, 0);
+	unsigned char* pixels = stbi_load(path[0].c_str(), &w, &h, &c, 4);
+
+	if (path.size() > 1)
+	{
+		all = (unsigned char*)malloc(w * h * 4 * path.size());
+		memmove(all, pixels, w * h * 4);
+		free(pixels);
+	}
+	else
+	{
+		all = pixels;
+	}
+
+	for (int i = 1; i < path.size(); i++)
+	{
+		int nw, nh, nc;
+		pixels = stbi_load(path[i].c_str(), &nw, &nh, &nc, 4);
+
+		assert(nw == w && nh == h);
+
+		if (nw != w || nh != h)
+		{
+			free(pixels);
+			free(all);
+
+			Texture->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u));
+			Texture->View = std::make_unique<VulkanImageView>(m_Scope, *Texture->Image);
+			
+			return Texture;
+		}
+
+		memmove(all + i * w * h * 4, pixels, w * h * 4);
+		free(pixels);
+	}
+
+	Texture->Image = create_image(m_Scope, all, path.size(), w, h, 4, format, 0);
 	Texture->View = std::make_unique<VulkanImageView>(m_Scope, *Texture->Image, Texture->Image->GetSubResourceRange());
-	free(pixels);
+	free(all);
 
 	return Texture;
 }
@@ -1948,7 +1999,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageCI.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageCI.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageCI.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	imageCI.imageType = VK_IMAGE_TYPE_2D;
 
 	VkImageViewCreateInfo imageViewCI{};
@@ -1963,8 +2014,10 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler ImageSampler2 = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
+	imageCI.mipLevels = static_cast<uint32_t>(std::floor(std::log2(256u))) + 1;
 	m_TransmittanceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	m_TransmittanceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TransmittanceLUT.Image);
+	imageCI.mipLevels = 1;
 
 	TrDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView())
@@ -2018,8 +2071,10 @@ VkBool32 VulkanBase::atmosphere_precompute()
 		.AddDescriptorLayout(DeltaSRSMDSO->GetLayout())
 		.Construct(m_Scope);
 
+	// imageCI.mipLevels = static_cast<uint32_t>(std::floor(std::log2(256u))) + 1;
 	m_ScatteringLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	m_ScatteringLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_ScatteringLUT.Image);
+	// imageCI.mipLevels = 1;
 
 	SingleScatterDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView())
@@ -2205,6 +2260,8 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	Queue.Wait()
 		.FreeCommandBuffers(1, &cmd);
 
+	m_TransmittanceLUT.Image->GenerateMipMaps();
+
 	m_TransmittanceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_ScatteringLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_IrradianceLUT.Image->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -2231,14 +2288,14 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 8u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
-	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 32u, 32u, 32u }, 8u, 8u);
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 8u, 8u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
 	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u, 4u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat); 
-	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::LinearClamp);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat); 
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_Volumetrics->descriptorSet = DescriptorSetDescriptor()
@@ -2390,6 +2447,23 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AddSpecializationConstant(5, shape.m_MaxHeight)
 		.AddSpecializationConstant(6, shape.m_NoiseSeed)
 		.SetShaderName("terrain_noise_comp")
+		.Construct(m_Scope);
+
+	VkPushConstantRange ConstantCompose{};
+	ConstantCompose.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	ConstantCompose.size = sizeof(int);
+
+	m_TerrainCompose = ComputePipelineDescriptor()
+		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
+		.AddSpecializationConstant(0, Rg)
+		.AddSpecializationConstant(1, Rt)
+		.AddSpecializationConstant(2, VertexCount)
+		.AddSpecializationConstant(3, shape.m_Scale)
+		.AddSpecializationConstant(4, shape.m_MinHeight)
+		.AddSpecializationConstant(5, shape.m_MaxHeight)
+		.AddSpecializationConstant(6, shape.m_NoiseSeed)
+		.AddPushConstant(ConstantCompose)
+		.SetShaderName("terrain_compose_comp")
 		.Construct(m_Scope);
 
 	m_WaterCompute = ComputePipelineDescriptor()

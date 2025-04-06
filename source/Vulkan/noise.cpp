@@ -17,7 +17,8 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 	noiseInfo.extent = imageSize;
 	noiseInfo.format = format;
 	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-	noiseInfo.mipLevels = 1u;
+	noiseInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(imageSize.width, imageSize.height)))) + 1;
+	// noiseInfo.mipLevels = 1u;
 	noiseInfo.flags = 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;

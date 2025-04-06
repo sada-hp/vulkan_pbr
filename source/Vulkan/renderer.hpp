@@ -215,6 +215,7 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
 
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
+	std::unique_ptr<ComputePipeline> m_TerrainCompose = {};
 	std::unique_ptr<ComputePipeline> m_WaterCompute = {};
 
 	uint32_t m_TerrainDispatches = 0u;
@@ -268,7 +269,7 @@ public:
 	*
 	* @return Vulkan image memory
 	*/
-	std::unique_ptr<VulkanTexture> _loadImage(const std::string& path, VkFormat format) const;
+	std::unique_ptr<VulkanTexture> _loadImage(const std::vector<std::string>& path, VkFormat format) const;
 	/*
 	* 
 	*/

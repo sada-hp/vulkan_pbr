@@ -37,7 +37,12 @@ namespace GR
 
 	void World::BindTexture(Components::Resource<Texture>& Resource, const std::string& path)
 	{
-		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage(path, VK_FORMAT_R8G8B8A8_UNORM));
+		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage({ path }, VK_FORMAT_R8G8B8A8_UNORM));
+	}
+
+	void World::BindTexture(Components::Resource<Texture>& Resource, const std::vector<std::string>& paths)
+	{
+		Resource.Set(static_cast<VulkanBase*>(m_Scope)->_loadImage(paths, VK_FORMAT_R8G8B8A8_UNORM));
 	}
 
 	void World::DrawScene(double Delta)

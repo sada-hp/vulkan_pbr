@@ -41,26 +41,7 @@ layout (constant_id = 4) const float MinHeight = 0;
 layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
 
-bool clamp_coords(ivec3 texel)
-{
-    ivec2 size = imageSize(terrainImage).xy;
-    ivec2 onefourth = size / 4;
-    ivec2 threefourth = 3 * onefourth;
-
-    // if texel is outside the bounds of current level    
-    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
-    {
-        return false;
-    }
-    else if (texel.z > 0 && texel.x >= onefourth.x && texel.x <= threefourth.x && texel.y >= onefourth.y && texel.y <= threefourth.y)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-vec2 terrain_fbm(vec3 n, float octaves)
+vec2 terrain_fbm(vec3 n, float freq, float octaves)
 {
     float pole = abs(dot(n, vec3(0, 1, 0)));
     vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
@@ -70,7 +51,6 @@ vec2 terrain_fbm(vec3 n, float octaves)
     float right = 1.0 - left;
 
     float fbm = 0.0;
-    float Freq = 500.0;
     float Ampltude = 1.0;
     float GainA = 0.5;
     float GainF = 2.0;
@@ -92,7 +72,7 @@ vec2 terrain_fbm(vec3 n, float octaves)
             float _Np = 0.0;
             vec2 _DNp = vec2(0.0);
             vec2 _DNp2 = vec2(0.0);
-            perlind(uv1, Freq, _Np, _DNp, _DNp2);
+            perlind(uv1, freq, _Np, _DNp, _DNp2);
 
             Np += left * _Np;
             DNp += left * _DNp;
@@ -104,35 +84,31 @@ vec2 terrain_fbm(vec3 n, float octaves)
             float _Np = 0.0;
             vec2 _DNp = vec2(0.0);
             vec2 _DNp2 = vec2(0.0);
-            perlind(uv2, Freq, _Np, _DNp, _DNp2);
+            perlind(uv2, freq, _Np, _DNp, _DNp2);
 
             Np += right * _Np;
             DNp += right * _DNp;
             DNp2 += right * _DNp2;
         }
 
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.65 );
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.25 );
         fbm += SlopeF * AltitudeF * Np;
         river_network += SlopeF * AltitudeF * abs(Np);
 
-        Gp = Gp + DNp * 0.4;
+        Gp = Gp + DNp * 0.8;
         SlopeF = (1.0 / 1.0 + dot(Gp, Gp));
-        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.3);
+        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.25);
         Ampltude *= GainA;
-        Freq *= GainF;
+        freq *= GainF;
 
         NOISE_SEED++;
     }
 
     float nb = abs(fbm);
     float nr = 1.0 - nb;
-    float w = (1.0 - sqrt(left * worley(-uv1, 150.0) + right * worley(-uv2, 150.0))) * 2.0 - 1.0;
+    float worley = sqrt(left * worley(-uv1, 125.0) + right * worley(-uv2, 125.0));
+    float w = worley * 2.0 - 1.0;
     fbm = w >= 0 ? mix(fbm, nr, w) : mix(fbm, nb, abs(w));
-
-    fbm = 0.5 + 0.5 * fbm;
-
-    fbm = fbm * pow(abs(fbm), 2.0);
-    fbm = saturate(fbm - 0.05);
 
     river_network = saturate(pow(river_network, 1.0 / 1.5));
     river_network = saturate(river_network - 0.5) * 2.0;
@@ -172,9 +148,10 @@ void main()
         }
         else
         {
-            dvec3 ObjectPosition = Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1;
+            dvec3 ObjectPosition = round(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1);
             vec3 Normal = vec3(normalize(ObjectPosition));
-            vec2 Noise = terrain_fbm(Normal, 10);
+            vec2 Noise = abs(0.5 * terrain_fbm(Normal, 100.0, 15) + 0.25 * terrain_fbm(Normal, 400.0, 15) + 0.25 * terrain_fbm(Normal, 800.0, 15));
+            Noise = saturate(Noise * pow(abs(Noise), vec2(1.0 / mix(1.5, 5.0, Noise.y))));
             Val.xy = vec2(MinHeight + Noise.x * (MaxHeight - MinHeight), Noise.y);
         }
 

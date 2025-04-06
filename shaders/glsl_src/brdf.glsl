@@ -8,6 +8,26 @@ struct SMaterial
     float Specular;
 };
 
+SMaterial mixmat(in SMaterial A, in SMaterial B, float w)
+{
+    if (w == 1.0)
+    {
+        return B;
+    }
+    else
+    {
+        SMaterial C;
+        C.Albedo = mix(A.Albedo, B.Albedo, w);
+        C.Normal = normalize(mix(A.Normal, B.Normal, w));
+        C.Roughness = mix(A.Roughness, B.Roughness, w);
+        C.Specular = mix(A.Specular, B.Specular, w);
+        C.Metallic = mix(A.Metallic, B.Metallic, w);
+        C.AO = mix(A.AO, B.AO, w);
+
+        return C;
+    }
+}
+
 vec3 F_FresnelSchlick(float Mu, vec3 f0)
 {
     return f0 + (1.0 - f0) * pow(max(1.0 - Mu, 0.0), 5.0);
@@ -24,7 +44,7 @@ float D_DistributionGGX(float NdotH, float roughness)
     float a2 = a * a;
     float det = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	
-    return a2 / max((det * det), 0.001);
+    return a2 / max(PI * (det * det), 0.001);
 }
 
 float GeometrySchlickGGX(float NdotV, float roughness)
@@ -67,7 +87,7 @@ vec3 DisneyDiffuse(vec3 Albedo, float NdotL, float NdotV, float LdotH, float Rou
     float LightScatter = F_FresnelSchlick(NdotL, F0, F90).r;
     float ViewScatter = F_FresnelSchlick(NdotV, F0, F90).r;
 
-    return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
+    return ONE_OVER_PI * Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
