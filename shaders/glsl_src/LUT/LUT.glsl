@@ -71,8 +71,8 @@ vec3 GetUV(ivec3 size, vec3 offset)
 void UVWToWorldInscatter(out float R, out float CosViewZenith, out float CosSunZenith, out float CosViewun)
 {
     R = float(gl_GlobalInvocationID.z) / (DIM_R - 1.0);
-    R = R * R;
-    R = sqrt(Rg * Rg + R * (Rt * Rt - Rg * Rg)) + (gl_GlobalInvocationID.z == 0 ? 0.01 : (gl_GlobalInvocationID.z == DIM_R - 1 ? -0.001 : 0.0));
+    // R = R * R;
+    R = sqrt(Rg * Rg + R * R * (Rt * Rt - Rg * Rg)) + (gl_GlobalInvocationID.z == 0 ? 0.01 : (gl_GlobalInvocationID.z == DIM_R - 1 ? -0.001 : 0.0));
 
     const float Dmin = Rt - R;
     const float Dmax = sqrt(R * R - Rg * Rg) + sqrt(Rt * Rt - Rg * Rg);

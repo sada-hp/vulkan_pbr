@@ -5,6 +5,14 @@
 // Morten S. Mikkelsen
 // Journal of Computer Graphics Techniques Vol. 11, No. 2, 2022
 
+struct HexParams
+{
+    vec2 st1, st2, st3;
+    ivec2 v1, v2, v3;
+    float w1, w2, w3;
+    vec2 dSTdx, dSTdy;
+};
+
 void TrangleGrid(in vec2 st, 
                 out float w1, out float w2, out float w3,
                 out ivec2 v1, out ivec2 v2, out ivec2 v3)
@@ -49,36 +57,36 @@ vec3 ProduceHexWeights(vec3 W, ivec2 vertex1, ivec2 vertex2, ivec2 vertex3)
     return res;
 }
 
-void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, vec2 st, out SMaterial Material)
+void GetHexParams(in vec2 st, out HexParams params)
 {
-    vec2 dSTdx = dFdx(st), dSTdy = dFdy(st);
-
-    float w1, w2, w3;
-    ivec2 v1, v2, v3;
+    params.dSTdx = dFdx(st);
+    params.dSTdy = dFdy(st);
+    TrangleGrid(st, params.w1, params.w2, params.w3, params.v1, params.v2, params.v3);
     
-    TrangleGrid(st, w1, w2, w3, v1, v2, v3);
+    params.st1 = st + noise2(params.v1);
+    params.st2 = st + noise2(params.v2);
+    params.st3 = st + noise2(params.v3);
+}
 
-    vec2 st1 = st + noise2(v1);
-    vec2 st2 = st + noise2(v2);
-    vec2 st3 = st + noise2(v3);
+void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material)
+{
+    vec4 c1 = textureGrad(col, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 c2 = textureGrad(col, vec3(Params.st2, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 c3 = textureGrad(col, vec3(Params.st3, Layer), Params.dSTdx, Params.dSTdy);
 
-    vec4 c1 = textureGrad(col, vec3(st1, Layer), dSTdx, dSTdy);
-    vec4 c2 = textureGrad(col, vec3(st2, Layer), dSTdx, dSTdy);
-    vec4 c3 = textureGrad(col, vec3(st3, Layer), dSTdx, dSTdy);
+    vec4 a1 = textureGrad(arm, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 a2 = textureGrad(arm, vec3(Params.st2, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 a3 = textureGrad(arm, vec3(Params.st3, Layer), Params.dSTdx, Params.dSTdy);
 
-    vec4 a1 = textureGrad(arm, vec3(st1, Layer), dSTdx, dSTdy);
-    vec4 a2 = textureGrad(arm, vec3(st2, Layer), dSTdx, dSTdy);
-    vec4 a3 = textureGrad(arm, vec3(st3, Layer), dSTdx, dSTdy);
-
-    vec4 n1 = textureGrad(nor, vec3(st1, Layer), dSTdx, dSTdy);
-    vec4 n2 = textureGrad(nor, vec3(st2, Layer), dSTdx, dSTdy);
-    vec4 n3 = textureGrad(nor, vec3(st3, Layer), dSTdx, dSTdy);
+    vec4 n1 = textureGrad(nor, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 n2 = textureGrad(nor, vec3(Params.st2, Layer), Params.dSTdx, Params.dSTdy);
+    vec4 n3 = textureGrad(nor, vec3(Params.st3, Layer), Params.dSTdx, Params.dSTdy);
 
     vec3 Lw = vec3(0.299, 0.587, 0.114);
     vec3 Dw = vec3(dot(c1.xyz, Lw), dot(c2.xyz, Lw), dot(c3.xyz, Lw));
 
     Dw = mix(vec3(1.0), Dw, vec3(0.6));
-    vec3 W = Dw * pow(vec3(w1, w2, w3), vec3(7));
+    vec3 W = Dw * pow(vec3(Params.w1, Params.w2, Params.w3), vec3(7));
 
     W /= (W.x + W.y + W.z);
 
@@ -88,5 +96,4 @@ void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int 
     Material.Metallic = W.x * a1.b + W.y * a2.b + W.z * a3.b;
     Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
     Material.Normal = 2.0 * (W.x * n1.rgb + W.y * n2.rgb + W.z * n3.rgb) - 1.0;
-    // weights = ProduceHexWeights(W.xyz, v1, v2, v3);
 }

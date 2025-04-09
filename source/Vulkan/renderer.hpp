@@ -154,32 +154,33 @@ private:
 	std::vector<VkFramebuffer> m_FramebuffersLR   = {};
 	std::vector<VkFramebuffer> m_FramebuffersCP   = {};
 	std::vector<VkFramebuffer> m_FramebuffersPP   = {};
-	std::vector<VkFramebuffer> m_FramebuffersCM   = {};
-	std::vector<VkFramebuffer> m_FramebuffersDC   = {};
-	std::vector<VkFramebuffer> m_FramebuffersSC   = {};
 
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurPipeline         = VK_NULL_HANDLE;
-	std::unique_ptr<GraphicsPipeline> m_CubemapPipeline     = VK_NULL_HANDLE;
-	std::unique_ptr<GraphicsPipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<GraphicsPipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_CubemapPipeline     = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors     = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
 
-	std::vector<VkFence> m_PresentFences = {};
 	VkFence m_AcquireFence = VK_NULL_HANDLE;
-	std::vector<VkSemaphore> m_PresentSemaphores = {};
+
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
-	std::vector<VkCommandBuffer> m_PresentBuffers = {};
-	std::vector<VkCommandBuffer> m_AsyncBuffers = {};
-	std::vector<VkCommandBuffer> m_OwnershipBuffers = {};;
-	std::vector<VkSemaphore> m_AsyncSemaphores = {};
-	std::vector<VkFence> m_AsyncFences = {};
+	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
+
+	std::vector<VulkanSynchronization> m_PresentSync = {};
+	std::vector<VulkanSynchronization> m_DeferredSync = {};
+	std::vector<VulkanSynchronization> m_TerrainAsync = {};
+	std::vector<VulkanSynchronization> m_CubemapAsync = {};
+	std::vector<VulkanSynchronization> m_TransferAsync = {};
+	std::vector<VulkanSynchronization> m_BackgroundAsync = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
@@ -210,6 +211,10 @@ private:
 	std::vector<VulkanTexture> m_TerrainLUT = {};
 	std::vector<VulkanTexture> m_WaterLUT = {};
 
+	std::vector<VulkanTexture> m_SSRLUT = {};
+	std::unique_ptr<ComputePipeline> m_SSRPipeline = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_SSRDescriptors = {};
+
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_WaterSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
@@ -221,6 +226,7 @@ private:
 	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_SwapchainIndex = 0;
+	uint64_t m_FrameCount = 0;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
@@ -323,8 +329,6 @@ private:
 	std::unique_ptr<DescriptorSet> create_terrain_set(const VulkanImageView& albedo, const VulkanImageView& nh, const VulkanImageView& arm) const;
 
 	std::unique_ptr<GraphicsPipeline> create_terrain_pipeline(const DescriptorSet& set, const GR::Shapes::GeoClipmap& shape) const;
-
-	void transfer_ownership(VkQueueFlagBits queue1, VkQueueFlagBits queue2, const VulkanImage* image, const VkFence fence, const VkSemaphore sem);
 
 #ifdef VALIDATION
 	VkDebugUtilsMessengerEXT m_DebugMessenger;

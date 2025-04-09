@@ -4,6 +4,17 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <array>
+
+struct VulkanSynchronization
+{
+	VkCommandBuffer Commands;
+	VkSemaphore Semaphore;
+	VkFence Fence;
+};
+
+VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out);
+
+VkBool32 DestroySyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* in);
 /*
 * !@brief Creates synchronization fence
 *

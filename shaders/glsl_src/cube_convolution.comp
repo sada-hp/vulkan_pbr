@@ -1,0 +1,53 @@
+#version 460
+#include "ubo.glsl"
+#include "lighting.glsl"
+#include "cubemap_matrix.glsl"
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+layout(binding = 1) uniform sampler2D TransmittanceLUT;
+layout(binding = 2) uniform sampler2D IrradianceLUT;
+layout(binding = 3) uniform sampler3D InscatteringLUT;
+layout(binding = 4) uniform samplerCube EnvironmentLUT;
+
+layout(set = 1, binding = 0, rgba32f) uniform writeonly imageCube outImage;
+
+void main()
+{
+    vec2 size = imageSize(outImage).xy;
+    if (gl_GlobalInvocationID.x < size.x && gl_GlobalInvocationID.y < size.y)
+    {
+        int ViewIndex = int(gl_GlobalInvocationID.z);
+        vec2 UV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
+        vec4 ndcSpace = vec4(2.0 * UV - 1.0, 1.0, 1.0);
+        vec4 viewSpace = inverse(Projection) * ndcSpace;
+        vec4 worldSpace = inverse(View[ViewIndex]) * vec4(viewSpace.xyz, 0.0);
+        vec3 direction = normalize(worldSpace.xyz);
+        vec3 outColor = vec3(0.0);
+
+        vec3 N = direction;
+        vec3 U = normalize(ubo.CameraPosition.xyz);
+        vec3 R = normalize(cross(U, N));
+        U      = normalize(cross(N, R));
+
+        float sampleDelta = 0.125;
+        float nrSamples = 0.0; 
+        for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta)
+        {
+            for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta)
+            {
+                // spherical to cartesian (in tangent space)
+                vec3 tangentSample = vec3(sin(theta) * cos(phi),  sin(theta) * sin(phi), cos(theta));
+                
+                // tangent space to world
+                vec3 sampleVec = tangentSample.x * R + tangentSample.y * U + tangentSample.z * N; 
+
+                outColor += texture(EnvironmentLUT, sampleVec).rgb * cos(theta) * sin(theta);
+                nrSamples++;
+            }
+        }
+        outColor = PI * outColor * (1.0 / float(nrSamples));
+
+        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(outColor, 1.0));
+    }
+}

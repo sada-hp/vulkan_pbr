@@ -91,22 +91,23 @@ vec2 terrain_fbm(vec3 n, float freq, float octaves)
             DNp2 += right * _DNp2;
         }
 
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.25 );
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.4 );
         fbm += SlopeF * AltitudeF * Np;
         river_network += SlopeF * AltitudeF * abs(Np);
 
-        Gp = Gp + DNp * 0.8;
+        Gp = Gp + DNp;
         SlopeF = (1.0 / 1.0 + dot(Gp, Gp));
-        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.25);
+        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.35);
         Ampltude *= GainA;
         freq *= GainF;
+        GainF *= 1.025;
 
         NOISE_SEED++;
     }
 
     float nb = abs(fbm);
     float nr = 1.0 - nb;
-    float worley = sqrt(left * worley(-uv1, 125.0) + right * worley(-uv2, 125.0));
+    float worley = (left * worley(-uv1, 65.0) + right * worley(-uv2, 65.0));
     float w = worley * 2.0 - 1.0;
     fbm = w >= 0 ? mix(fbm, nr, w) : mix(fbm, nb, abs(w));
 
@@ -114,7 +115,7 @@ vec2 terrain_fbm(vec3 n, float freq, float octaves)
     river_network = saturate(river_network - 0.5) * 2.0;
     river_network = saturate(river_network);
 
-    return vec2(fbm, river_network);
+    return vec2(abs(fbm), river_network);
 }
 
 float sample_perlin_sphere(vec3 Normal, float freq)
@@ -132,26 +133,24 @@ void main()
 
         int Level = int(vertex.Position.y);
 
-        dvec3 Camera1 = normalize(round(ubo.CameraPositionFP64.xyz));
-        dvec3 Camera2 = normalize(round(ubo_old.CameraPositionFP64.xyz));
-
-        dmat3 Orientation1 = GetTerrainOrientation(Camera1);
-        dmat3 Orientation2 = GetTerrainOrientation(Camera2);
-        dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(Level)));
-        dvec3 Center2 = round(RoundToIncrement(Camera2 * Rg, Scale * exp2(Level)));
+        dvec3 Camera1 = round(ubo.CameraPositionFP64.xyz);
+        dvec3 Camera2 = round(ubo_old.CameraPositionFP64.xyz);
 
         vec4 Val = vec4(0.0);
         ivec3 Texel = ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level);
-        if (Center1 == Center2)
+        if (Camera1 == Camera2)
         {
             Val = texelFetch(terrainImageOld, Texel, 0);
         }
         else
         {
+            Camera1 = normalize(Camera1);
+            dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(Level)));
+            dmat3 Orientation1 = GetTerrainOrientation(Camera1);
             dvec3 ObjectPosition = round(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1);
             vec3 Normal = vec3(normalize(ObjectPosition));
             vec2 Noise = abs(0.5 * terrain_fbm(Normal, 100.0, 15) + 0.25 * terrain_fbm(Normal, 400.0, 15) + 0.25 * terrain_fbm(Normal, 800.0, 15));
-            Noise = saturate(Noise * pow(abs(Noise), vec2(1.0 / mix(1.5, 5.0, Noise.y))));
+            Noise.x = smootherstep(0.0, 1.0, Noise.x);
             Val.xy = vec2(MinHeight + Noise.x * (MaxHeight - MinHeight), Noise.y);
         }
 

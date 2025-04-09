@@ -18,27 +18,26 @@ layout(location = 0) in vec4 vertPosition;
 layout(location = 1) in vec4 vertUV;
 
 layout(location = 0) out vec4 WorldPosition;
-layout(location = 1) out vec3 Normal;
-layout(location = 2) out vec2 UV;
+layout(location = 1) out vec2 VertPosition;
+layout(location = 2) out flat float Diameter;
 layout(location = 3) out float Height;
 layout(location = 4) out flat int Level;
 layout(location = 5) out mat3 TBN;
 
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
-ivec3 clamp_coords(int x, int y, int level)
+ivec3 clamp_coords(ivec3 texel)
 {
-    ivec3 texel = ivec3(x, y, level);
     ivec2 size = textureSize(NoiseMap, 0).xy;
     ivec2 onefourth = size / 4;
     ivec2 threefourth = 3 * onefourth;
 
     // if texel is outside the bounds of current level    
-    if (x >= size.x || y >= size.y || x < 0 || y < 0)
+    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
     {
         texel.z += 1;
-        texel.x = onefourth.x + (x < 0 ? x : int(ceil(float(x) / 2)));
-        texel.y = onefourth.y + (y < 0 ? y : int(ceil(float(y) / 2)));
+        texel.x = onefourth.x + (texel.x < 0 ? texel.x : int(ceil(float(texel.x) / 2)));
+        texel.y = onefourth.y + (texel.y < 0 ? texel.y : int(ceil(float(texel.y) / 2)));
     }
 
     return texel;
@@ -50,8 +49,9 @@ void main()
     Level = int(vertPosition.y);
 
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
-    UV = vertUV.xy;
-    ivec3 texelId = ivec3(round(UV * (noiseSize - 1)), Level);
+    VertPosition = vertPosition.xz;
+    Diameter = vertUV.w;
+    ivec3 texelId = ivec3(round(vertUV.xy * (noiseSize - 1)), Level);
 
     Height = texelFetch(NoiseMap, texelId, 0).r;
 
@@ -59,31 +59,20 @@ void main()
     dmat3 Orientation = GetTerrainOrientation(Camera);
     dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(Level)));
 
-    ivec3 texelIdU = clamp_coords(texelId.x, texelId.y - 1, Level);
-    float u = texelFetch(NoiseMap, texelIdU, 0).r;
+    ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
+    float d = texelFetch(NoiseMap, texelIdD, 0).r;
 
-    ivec3 texelIdD = clamp_coords(texelId.x, texelId.y + 1, Level);
-    float d = texelFetch(NoiseMap, clamp_coords(texelId.x, texelId.y + 1, Level), 0).r;
-
-    ivec3 texelIdR = clamp_coords(texelId.x + 1, texelId.y, Level);
-    float r = texelFetch(NoiseMap, clamp_coords(texelId.x + 1, texelId.y, Level), 0).r;
-
-    ivec3 texelIdL = clamp_coords(texelId.x - 1, texelId.y, Level);
-    float l = texelFetch(NoiseMap, clamp_coords(texelId.x - 1, texelId.y, Level), 0).r;
-
-    Normal.x = (l - r) / exp2(max(texelIdR.z, texelIdL.z));
-    Normal.z = (u - d) / exp2(max(texelIdD.z, texelIdU.z));
-    Normal.y = 2.0 * Scale;
-    Normal = vec3(normalize(Normal));
+    ivec3 texelIdR = clamp_coords(texelId + ivec3(1, 0, 0));
+    float r = texelFetch(NoiseMap, texelIdR, 0).r;
 
     vec3 A = vec3(Orientation * vec3(vertPosition.x, Height, vertPosition.z) + Center);
-    vec3 B = vec3(Orientation * vec3(vertPosition.x + Scale * exp2(Level), r, vertPosition.z) + Center);
-    vec3 C = vec3(Orientation * vec3(vertPosition.x, d, vertPosition.z + Scale * exp2(Level)) + Center);
+    vec3 B = vec3(Orientation * vec3(vertPosition.x + Scale * exp2(texelIdR.z), r, vertPosition.z) + Center);
+    vec3 C = vec3(Orientation * vec3(vertPosition.x, d, vertPosition.z + Scale * exp2(texelIdD.z)) + Center);
 
     vec3 AC = C - A;
     vec3 AB = B - A;
 
-    Normal = normalize(cross(AC, AB));
+    vec3 Normal = normalize(cross(AC, AB));
 
     vec2 Auv = vec2(vertPosition.x, vertPosition.z) / vertUV.w;
     vec2 Buv = vec2(vertPosition.x + Scale * exp2(Level), vertPosition.z) / vertUV.w;
@@ -103,16 +92,11 @@ void main()
 
     Tangent = normalize(Tangent);
     vec3 Bitangent = normalize(cross(Normal, Tangent));
-
     TBN = mat3(Tangent, Bitangent, Normal);
 
-    vec3 ObjectPosition = vec3(Orientation * vec3(vertPosition.x, 0.0, vertPosition.z) + Center);
-
-    WorldPosition = vec4(vec3(normalize(ObjectPosition)) * (Rg + Height), 1.0);
+    WorldPosition = vec4(vec3(normalize(A)) * (Rg + Height), 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 
     Height = Seed == 0 ? 1.0 : (Height - MinHeight) / (MaxHeight - MinHeight);
-
-
 }

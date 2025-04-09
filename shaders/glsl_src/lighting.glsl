@@ -235,6 +235,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
             PdotV = (Re * EdotV + Rpe) / Rp;
             vec4 inScatter0 = GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL);
             vec4 inScatter1 = GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL);
+            inScatter1 = min(inScatter1, inScatter0);
             vec4 inScatterA = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
             EdotV = muHoriz + EPS;
@@ -242,20 +243,23 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
             PdotV = (Re * EdotV + Rpe) / Rp;
             inScatter0 = GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL);
             inScatter1 = GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL);
+            inScatter1 = min(inScatter1, inScatter0);
             vec4 inScatterB = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
 
             inscatter = mix(inScatterA, inScatterB, a);
         }
         else
         {
-            inscatter = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
-            inscatter = max(inscatter - Atmosphere.T.rgbr * GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL), 0.0);
+            vec4 inScatter0 = GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL);
+            vec4 inScatter1 = GetInscattering(InscatteringLUT, Rp, PdotV, PdotL, VdotL);
+            inScatter1 = min(inScatter1, inScatter0);
+            inscatter = max(inScatter0 - Atmosphere.T.rgbr * inScatter1, 0.0);
         }
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
         Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL));
         Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
-        Atmosphere.S = mix(0.65, 1.0, Atmosphere.Shadow) * Atmosphere.S;
+        Atmosphere.S = mix(0.25, 1.0, Atmosphere.Shadow) * Atmosphere.S;
     }
 }
 
@@ -280,7 +284,7 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     }
     
     // Sun
-    Color += vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
+    Color += TWO_PI * vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
 
     return Color;
 }

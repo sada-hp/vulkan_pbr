@@ -1,6 +1,45 @@
 #include "pch.hpp"
 #include "image.hpp"
 
+inline VkPipelineStageFlags getStageFromLayout(VkImageLayout layout, VkQueueFlagBits queue)
+{
+	bool IsGraphics = (queue & VK_QUEUE_GRAPHICS_BIT) != 0;
+	const std::unordered_map<VkImageLayout, VkPipelineStageFlags> stageTable = {
+		{VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
+		{VK_IMAGE_LAYOUT_GENERAL, IsGraphics ? VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT },
+		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, IsGraphics ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT},
+		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT}
+	};
+
+	assert(stageTable.contains(layout));
+
+	return stageTable.at(layout);
+}
+
+inline VkAccessFlags getAccessFromLayout(VkImageLayout layout, bool in)
+{
+	const std::unordered_map<VkImageLayout, VkAccessFlags> accessTable = {
+		{VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_NONE_KHR},
+		{VK_IMAGE_LAYOUT_GENERAL, in ? VK_ACCESS_SHADER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT},
+		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, in ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT : VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT},
+		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT},
+		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT},
+		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_MEMORY_READ_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, in ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT},
+		{VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, in ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT}
+	};
+
+	assert(accessTable.contains(layout));
+
+	return accessTable.at(layout);
+}
+
 VulkanImage::VulkanImage(const RenderScope& InScope)
 	: Scope(&InScope)
 {
@@ -69,50 +108,51 @@ VulkanImage& VulkanImage::TransitionLayout(VkImageLayout newLayout, VkQueueFlagB
 	return *this;
 }
 
-VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout, VkQueueFlagBits Queue)
+VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout, VkQueueFlagBits Queue)
 {
-	if (newLayout == descriptorInfo.imageLayout)
-		return *this;
+	return TransitionLayout(cmd, descriptorInfo.imageLayout, newLayout, Queue);
+}
 
-	const std::unordered_map<VkImageLayout, VkPipelineStageFlags> stageTable = {
-		{VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT},
-		{VK_IMAGE_LAYOUT_GENERAL, (Queue == VK_QUEUE_GRAPHICS_BIT) ? VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT },
-		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
-		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (Queue == VK_QUEUE_GRAPHICS_BIT) ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
-		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
-		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT},
-		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
-		{VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT},
-		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT}
-	};
-
-	const std::unordered_map<VkImageLayout, VkAccessFlags> accessTable = {
-		{VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_NONE_KHR},
-		{VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT},
-		{VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT},
-		{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT},
-		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT},
-		{VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT},
-		{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_MEMORY_READ_BIT},
-		{VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT},
-		{VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT}
-	};
-
-	assert(stageTable.contains(newLayout));
-
+VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer cmd, VkImageLayout oldLayout, VkImageLayout newLayout, VkQueueFlagBits Queue)
+{
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = descriptorInfo.imageLayout;
+	barrier.oldLayout = oldLayout;
 	barrier.newLayout = newLayout;
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
 	barrier.subresourceRange = subRange;
-	barrier.srcAccessMask = accessTable.at(barrier.oldLayout);
-	barrier.dstAccessMask = accessTable.at(barrier.newLayout);
-	vkCmdPipelineBarrier(cmd, stageTable.at(barrier.oldLayout), stageTable.at(barrier.newLayout), VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+	barrier.srcAccessMask = getAccessFromLayout(barrier.oldLayout, true);
+	barrier.dstAccessMask = getAccessFromLayout(barrier.newLayout, false);
+	vkCmdPipelineBarrier(cmd, getStageFromLayout(barrier.oldLayout, Queue), getStageFromLayout(barrier.newLayout, Queue), VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	descriptorInfo.imageLayout = newLayout;
+
+	return *this;
+}
+
+VulkanImage& VulkanImage::TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffer cmd2, uint32_t queue1, uint32_t queue2)
+{
+	if (queue1 == queue2)
+		return *this;
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = descriptorInfo.imageLayout;
+	barrier.newLayout = descriptorInfo.imageLayout;
+	barrier.srcQueueFamilyIndex = queue1;
+	barrier.dstQueueFamilyIndex = queue2;
+	barrier.image = image;
+	barrier.subresourceRange = subRange;
+	barrier.srcAccessMask = 0;
+	barrier.dstAccessMask = 0;
+
+	if (cmd1 != VK_NULL_HANDLE)
+		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+	if (cmd2 != VK_NULL_HANDLE)
+		vkCmdPipelineBarrier(cmd2, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	return *this;
 }
@@ -135,7 +175,7 @@ VulkanImage& VulkanImage::GenerateMipMaps()
 	return *this;
 }
 
-VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer& cmd)
+VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd)
 {
 	if (subRange.levelCount == 1) {
 		TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);

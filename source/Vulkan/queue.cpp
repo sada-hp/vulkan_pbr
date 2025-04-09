@@ -74,15 +74,15 @@ const Queue& Queue::Submit(const VkCommandBuffer& cmd, const VkSemaphore& semaph
 
 const Queue& Queue::Submit2(const VkCommandBuffer& cmd, const VkSemaphore& semaphore) const
 {
-	VkPipelineStageFlags mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+	VkPipelineStageFlags mask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &cmd;
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &semaphore;
-	submitInfo.pWaitDstStageMask = &mask;
+	submitInfo.waitSemaphoreCount = semaphore == VK_NULL_HANDLE ? 0 : 1;
+	submitInfo.pWaitSemaphores = semaphore == VK_NULL_HANDLE ? nullptr : &semaphore;
+	submitInfo.pWaitDstStageMask = semaphore == VK_NULL_HANDLE ? nullptr : &mask;
 	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 	return *this;
 }
@@ -96,9 +96,9 @@ const Queue& Queue::Submit2(const VkCommandBuffer& cmd, const VkFence& inFence, 
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &cmd;
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &semaphore;
-	submitInfo.pWaitDstStageMask = &mask;
+	submitInfo.waitSemaphoreCount = semaphore == VK_NULL_HANDLE ? 0 : 1;
+	submitInfo.pWaitSemaphores = semaphore == VK_NULL_HANDLE ? nullptr : &semaphore;
+	submitInfo.pWaitDstStageMask = semaphore == VK_NULL_HANDLE ? nullptr : &mask;
 	vkQueueSubmit(queue, 1, &submitInfo, inFence);
 	return *this;
 }

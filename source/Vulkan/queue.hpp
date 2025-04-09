@@ -33,6 +33,8 @@ public:
 
 	void FreeCommandBuffers(uint32_t count, VkCommandBuffer* buffers) const;
 
+	const VkCommandPool& GetPool() const { return pool; };
+
 	const VkQueue& GetQueue() const { return queue; };
 
 	const uint32_t& GetFamilyIndex() const { return family; };

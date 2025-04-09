@@ -33,31 +33,21 @@ void main()
     if (OldTexel.x < imageSize(terrainImage).x && OldTexel.y < imageSize(terrainImage).y)
     {
         float Norm = 1.0;
-        bool Water = false;
         vec4 Value = vec4(0.0); 
         vec4 Temp1 = imageLoad(terrainImage, OldTexel);
 
-        if (Temp1.x == MinHeight)
-            Water = true;
-
         vec4 Temp2 = vec4(0.0);
-        if (!Water && OldTexel.x + 1 < imageSize(terrainImage).x)
+        if (OldTexel.x + 1 < imageSize(terrainImage).x)
         {
             Temp2 = imageLoad(terrainImage, OldTexel + ivec3(1, 0, 0));
             Norm++;
-
-            if (Temp2.x == MinHeight)
-                Water = true;
         }
         
         vec4 Temp3 = vec4(0.0);
-        if (!Water && OldTexel.y + 1 < imageSize(terrainImage).y)
+        if (OldTexel.y + 1 < imageSize(terrainImage).y)
         {
             Temp3 = imageLoad(terrainImage, OldTexel + ivec3(0, 1, 0));
             Norm++;
-
-            if (Temp3.x == MinHeight)
-                Water = true;
         }
         
         vec4 Temp4 = vec4(0.0);
@@ -65,16 +55,11 @@ void main()
         {
             Temp4 = imageLoad(terrainImage, OldTexel + ivec3(1, 1, 0));
             Norm++;
-
-            if (Temp4.x == MinHeight)
-                Water = true;
         }
 
+        // Value.x = max(max(Temp1.x, Temp2.x), max(Temp3.x, Temp4.x));
+        // Value.y = (Temp1.y + Temp2.y + Temp3.y + Temp4.y) / Norm;
         Value = (Temp1 + Temp2 + Temp3 + Temp4) / Norm;
-        if (Water)
-        {
-            Value.x = MinHeight;
-        }
 
         imageStore(terrainImage, Texel, Value);
     }

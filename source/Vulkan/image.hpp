@@ -45,11 +45,15 @@ struct VulkanImage
 
 	VulkanImage& TransitionLayout(VkImageLayout newLayout, VkQueueFlagBits Queue = VK_QUEUE_GRAPHICS_BIT);
 
-	VulkanImage& TransitionLayout(VkCommandBuffer& cmd, VkImageLayout newLayout, VkQueueFlagBits Queue);
+	VulkanImage& TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout, VkQueueFlagBits Queue);
+
+	VulkanImage& TransitionLayout(VkCommandBuffer cmd, VkImageLayout oldLayout, VkImageLayout newLayout, VkQueueFlagBits Queue);
+
+	VulkanImage& TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffer cmd2, uint32_t queue1, uint32_t queue2);
 
 	VulkanImage& GenerateMipMaps();
 
-	VulkanImage& GenerateMipMaps(VkCommandBuffer& cmd);
+	VulkanImage& GenerateMipMaps(VkCommandBuffer cmd);
 
 	const VkImage& GetImage() const { return image; };
 

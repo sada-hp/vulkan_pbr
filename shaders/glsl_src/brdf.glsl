@@ -1,3 +1,5 @@
+#include "common.glsl"
+
 struct SMaterial
 {
     vec4 Albedo;
