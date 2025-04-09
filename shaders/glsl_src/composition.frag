@@ -167,7 +167,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
 
     vec3  F0 = Material.Specular * mix(vec3(0.04), Material.Albedo.rgb, Material.Metallic);
     vec3 F90 = max(vec3(F0), 1.0 - A);
-    vec3  F  = F_FresnelSchlick(LdotH, F0, F90);
+    vec3  F  = F_FresnelSchlick(LdotH, F0, vec3(1.0));
     vec3 kD  = vec3(1.0 - F) * vec3(1.0 - Material.Metallic);
 
     if (NdotL > 0.0)
@@ -175,8 +175,8 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
         float G  = G_GeometrySmith(NdotV, NdotL, A);
         float D  = D_DistributionGGX(NdotH, A);
 
-        Lo += F * G * D / (4.0 * NdotL * NdotV + 0.001);
-        Lo += kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
+        Lo += ONE_OVER_PI * F * G * D / (4.0 * NdotL * NdotV + 0.001);
+        Lo += ONE_OVER_PI * kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
     }
 
     vec3 reflection = textureLod(SpecularLUT, reflect(-V, N), A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;

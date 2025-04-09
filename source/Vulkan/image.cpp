@@ -132,6 +132,25 @@ VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer cmd, VkImageLayout ol
 	return *this;
 }
 
+VulkanImage& VulkanImage::TransitionLayout(VkCommandBuffer cmd, VkImageSubresourceRange subResource, VkImageLayout oldLayout, VkImageLayout newLayout, VkQueueFlagBits Queue)
+{
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange = subResource;
+	barrier.srcAccessMask = getAccessFromLayout(barrier.oldLayout, true);
+	barrier.dstAccessMask = getAccessFromLayout(barrier.newLayout, false);
+	vkCmdPipelineBarrier(cmd, getStageFromLayout(barrier.oldLayout, Queue), getStageFromLayout(barrier.newLayout, Queue), VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+
+	descriptorInfo.imageLayout = newLayout;
+
+	return *this;
+}
+
 VulkanImage& VulkanImage::TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffer cmd2, uint32_t queue1, uint32_t queue2)
 {
 	if (queue1 == queue2)

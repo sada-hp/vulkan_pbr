@@ -49,6 +49,8 @@ struct VulkanImage
 
 	VulkanImage& TransitionLayout(VkCommandBuffer cmd, VkImageLayout oldLayout, VkImageLayout newLayout, VkQueueFlagBits Queue);
 
+	VulkanImage& TransitionLayout(VkCommandBuffer cmd, VkImageSubresourceRange subResource, VkImageLayout oldLayout, VkImageLayout newLayout, VkQueueFlagBits Queue);
+
 	VulkanImage& TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffer cmd2, uint32_t queue1, uint32_t queue2);
 
 	VulkanImage& GenerateMipMaps();

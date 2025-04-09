@@ -46,7 +46,7 @@ float D_DistributionGGX(float NdotH, float roughness)
     float a2 = a * a;
     float det = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	
-    return a2 / max(PI * (det * det), 0.001);
+    return a2 / max((det * det), 0.001);
 }
 
 float GeometrySchlickGGX(float NdotV, float roughness)
@@ -89,7 +89,7 @@ vec3 DisneyDiffuse(vec3 Albedo, float NdotL, float NdotV, float LdotH, float Rou
     float LightScatter = F_FresnelSchlick(NdotL, F0, F90).r;
     float ViewScatter = F_FresnelSchlick(NdotV, F0, F90).r;
 
-    return ONE_OVER_PI * Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
+    return Albedo * vec3(LightScatter * ViewScatter * EnergyFactor);
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)

@@ -181,8 +181,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
 	});
 
-	res = CreateFence(m_Scope.GetDevice(), &m_AcquireFence, VK_FALSE) & res;
-
 	res = prepare_renderer_resources() & res;
 	res = atmosphere_precompute() & res;
 	res = volumetric_precompute() & res;
@@ -275,8 +273,6 @@ VulkanBase::~VulkanBase() noexcept
 	m_DefaultBlack.reset();
 	m_DefaultNormal.reset();
 	m_DefaultARM.reset();
-
-	vkDestroyFence(m_Scope.GetDevice(), m_AcquireFence, VK_NULL_HANDLE);
 
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), m_PresentSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), m_TerrainAsync.data());
@@ -376,7 +372,10 @@ bool VulkanBase::BeginFrame()
 
 	uint32_t OldIndex = m_SwapchainIndex;
 
-	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], m_AcquireFence, &m_SwapchainIndex);
+	vkWaitForFences(m_Scope.GetDevice(), 1, &m_PresentSync[m_SwapchainIndex].Fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_Scope.GetDevice(), 1, &m_PresentSync[m_SwapchainIndex].Fence);
+
+	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), UINT64_MAX, m_SwapchainSemaphores[m_SwapchainIndex], VK_NULL_HANDLE, &m_SwapchainIndex);
 
 	if (OldIndex != m_SwapchainIndex)
 	{
@@ -542,7 +541,7 @@ bool VulkanBase::BeginFrame()
 		vkCmdDispatch(m_CubemapAsync[m_SwapchainIndex].Commands, X, Y, 6u);
 
 		uint32_t mips = m_SpecularLUT[m_SwapchainIndex].Image->GetMipLevelsCount();
-		for (uint32_t mip = 0; mip < mips; mip++)
+		for (uint32_t mip = 1; mip < mips; mip++)
 		{
 			uint32_t ScaledR = CubeR >> mip;
 			X = ScaledR / 8 + uint32_t(ScaledR % 8 > 0);
@@ -557,7 +556,21 @@ bool VulkanBase::BeginFrame()
 			vkCmdDispatch(m_CubemapAsync[m_SwapchainIndex].Commands, X, Y, 6u);
 		}
 
-		m_SpecularLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_CubemapLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
+		VkImageCopy copy{};
+		copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copy.dstSubresource.layerCount = 6;
+		copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copy.srcSubresource.layerCount = 6;
+		copy.extent = { CubeR, CubeR, 1 };
+		vkCmdCopyImage(m_CubemapAsync[m_SwapchainIndex].Commands, m_CubemapLUT[m_SwapchainIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_SpecularLUT[m_SwapchainIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+		m_CubemapLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_REMAINING_MIP_LEVELS, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
 		m_DiffuseIrradience[m_SwapchainIndex].Image->TransitionLayout(m_CubemapAsync[m_SwapchainIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 		m_SpecularLUT[m_SwapchainIndex].Image->TransferOwnership(m_CubemapAsync[m_SwapchainIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
@@ -625,6 +638,7 @@ bool VulkanBase::BeginFrame()
 
 		vkEndCommandBuffer(m_BackgroundAsync[m_SwapchainIndex].Commands);
 
+		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.commandBufferCount = 1;
@@ -715,14 +729,29 @@ void VulkanBase::EndFrame()
 		vkEndCommandBuffer(m_DeferredSync[m_SwapchainIndex].Commands);
 
 		VkSubmitInfo submitInfo{};
-		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT };
-		std::vector<VkSemaphore> waitSemaphores = { m_TerrainAsync[m_SwapchainIndex].Semaphore, m_PresentSync[m_SwapchainIndex].Semaphore };
+		std::vector<VkPipelineStageFlags> waitStages;
+		std::vector<VkSemaphore> waitSemaphores;
+		waitSemaphores.reserve(2);
+		waitStages.reserve(2);
+		
 		std::vector<VkSemaphore> signalSemaphores = { m_DeferredSync[m_SwapchainIndex].Semaphore };
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
 		// if we just started drawing, we should skip image present semaphore as it has not yet been signaled
-		submitInfo.waitSemaphoreCount = m_FrameCount < m_SwapchainImages.size() ? waitSemaphores.size() - 1 : waitSemaphores.size();
+		if (m_FrameCount >= m_SwapchainImages.size())
+		{
+			waitSemaphores.push_back(m_PresentSync[m_SwapchainIndex].Semaphore);
+			waitStages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+		}
+		if (m_TerrainCompute.get())
+		{
+			waitSemaphores.push_back(m_TerrainAsync[m_SwapchainIndex].Semaphore);
+			waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+		}
+
+		submitInfo.waitSemaphoreCount = waitSemaphores.size();
 		submitInfo.pWaitSemaphores = waitSemaphores.data();
-		submitInfo.pWaitDstStageMask = waitStages;
+		submitInfo.pWaitDstStageMask = waitStages.data();
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &m_DeferredSync[m_SwapchainIndex].Commands;
 		submitInfo.signalSemaphoreCount = signalSemaphores.size();
@@ -732,9 +761,6 @@ void VulkanBase::EndFrame()
 
 	// Process the scene data
 	{
-		VkFence Fences[] = {m_PresentSync[m_SwapchainIndex].Fence, m_AcquireFence};
-		vkWaitForFences(m_Scope.GetDevice(), 2, Fences, VK_TRUE, UINT64_MAX);
-		vkResetFences(m_Scope.GetDevice(), 2, Fences);
 		vkBeginCommandBuffer(m_PresentSync[m_SwapchainIndex].Commands, &beginInfo);
 
 		m_SpecularLUT[m_SwapchainIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_PresentSync[m_SwapchainIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
@@ -1608,18 +1634,16 @@ VkBool32 VulkanBase::brdf_precompute()
 		hdrInfo.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		hdrInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		hdrInfo.mipLevels = 1;
-		hdrInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		hdrInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		hdrInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		hdrInfo.queueFamilyIndexCount = queueFamilies.size();
 		hdrInfo.pQueueFamilyIndices = queueFamilies.data();
 		hdrInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-		m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
-		m_CubemapLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image);
-
 		m_DiffuseIrradience[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_DiffuseIrradience[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_DiffuseIrradience[i].Image);
 
+		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		hdrInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(CubeR))) + 1;
 		m_SpecularLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 
@@ -1631,6 +1655,11 @@ VkBool32 VulkanBase::brdf_precompute()
 			subRes.levelCount = 1u;
 			m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image, subRes));
 		}
+
+		hdrInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
+		m_CubemapLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image);
 	}
 
 	std::unique_ptr<GraphicsPipeline> m_IntegrationPipeline = GraphicsPipelineDescriptor()

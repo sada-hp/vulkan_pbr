@@ -170,8 +170,6 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
 
-	VkFence m_AcquireFence = VK_NULL_HANDLE;
-
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
 
