@@ -42,8 +42,8 @@ void main()
 
                 for(int i = 1; i < 5; i++)
                 {
-                    Color += imageLoad(BlurV, Texel + ivec2(i, 0)).rgb * weight[i] * 0.15;
-                    Color += imageLoad(BlurV, Texel - ivec2(i, 0)).rgb * weight[i] * 0.15;
+                    Color += imageLoad(BlurV, Texel + ivec2(i, 0)).rgb * weight[i];
+                    Color += imageLoad(BlurV, Texel - ivec2(i, 0)).rgb * weight[i];
                 }
                 
                 imageStore(BlurH, Texel, vec4(Color, 1.0));
@@ -54,8 +54,8 @@ void main()
 
                 for(int i = 1; i < 5; i++)
                 {
-                    Color += imageLoad(BlurH, Texel + ivec2(0, i)).rgb * weight[i] * 0.15;
-                    Color += imageLoad(BlurH, Texel - ivec2(0, i)).rgb * weight[i] * 0.15;
+                    Color += imageLoad(BlurH, Texel + ivec2(0, i)).rgb * weight[i];
+                    Color += imageLoad(BlurH, Texel - ivec2(0, i)).rgb * weight[i];
                 }
                 
                 imageStore(BlurV, Texel, vec4(Color, 1.0));

@@ -17,11 +17,18 @@ vec2 IntegrateBRDF(float NdotV, float roughness)
 
     vec3 N = vec3(0.0, 0.0, 1.0);
 
+    // from tangent-space vector to world-space sample vector
+    vec3 U   = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 T   = normalize(cross(U, N));
+    vec3 Bi   = cross(N, T);
+    mat3 TBN = mat3(T, Bi, N);
+
+    const float a = roughness * roughness;
     const uint SAMPLE_COUNT = 2048;
     for(uint i = 0u; i < SAMPLE_COUNT; i++)
     {
         vec2 Xi = Hammersley(i, SAMPLE_COUNT);
-        vec3 H  = ImportanceSampleGGX(Xi, N, roughness);
+        vec3 H  = ImportanceSampleGGX(TBN, Xi, a);
         vec3 L  = normalize(2.0 * dot(V, H) * H - V);
 
         float NdotL = max(L.z, 0.0);

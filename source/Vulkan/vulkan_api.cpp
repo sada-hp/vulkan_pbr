@@ -14,6 +14,19 @@ VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool 
 	return res;
 }
 
+VkBool32 CreateSyncronizationStruct2(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out)
+{
+	VkBool32 res = 1u;
+	for (uint32_t i = 0; i < count; i++)
+	{
+		res *= ::AllocateCommandBuffers(device, pool, 1, &out[i].Commands);
+		res *= ::CreateFence(device, &out[i].Fence, VK_TRUE);
+		res *= ::CreateSemaphore(device, &out[i].Semaphore);
+	}
+
+	return res;
+}
+
 VkBool32 DestroySyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* in)
 {
 	for (uint32_t i = 0; i < count; i++)

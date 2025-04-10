@@ -3,10 +3,11 @@
 #include "lighting.glsl"
 #include "brdf.glsl"
 
-layout(binding = 1) uniform sampler2D HDRColor;
-layout(binding = 2) uniform sampler2D HDRNormals;
-layout(binding = 3) uniform sampler2D HDRDeferred;
-layout(binding = 4) uniform sampler2D SceneDepth;
+layout(input_attachment_index = 0, binding = 1) uniform subpassInput HDRColor;
+layout(input_attachment_index = 1, binding = 2) uniform subpassInput HDRNormals;
+layout(input_attachment_index = 2, binding = 3) uniform subpassInput HDRDeferred;
+layout(input_attachment_index = 3, binding = 4) uniform subpassInput SceneDepth;
+
 layout(binding = 5) uniform sampler2D SceneBackground;
 layout(binding = 6) uniform sampler2D BackgroundDepth;
 
@@ -179,7 +180,9 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
         Lo += ONE_OVER_PI * kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
     }
 
-    vec3 reflection = textureLod(SpecularLUT, reflect(-V, N), A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;
+    vec3 R = 2.0f * N * dot(V, N) - V;
+    R = mix(N, R, (1.0f - A2) * (sqrt(1.0f - A2) + A2));
+    vec3 reflection = textureLod(SpecularLUT, R, A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;
     vec2 brdf  = texture(BRDFLUT, vec2(NdotV, A2)).rg;
     vec3 irradiance = Atmosphere.E + texture(DiffuseLUT, N).rgb;
 
@@ -196,10 +199,10 @@ void main()
 {
     vec4 SkyColor  = texture(SceneBackground, UV);
     float SkyDepth = texture(BackgroundDepth, UV).r;
-    vec4 Color     = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
-    float Depth    = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
-    vec4 Deferred  = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
-    vec3 Normal    = normalize(texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb);
+    vec4 Color     = subpassLoad(HDRColor);
+    float Depth    = subpassLoad(SceneDepth).r;
+    vec4 Deferred  = subpassLoad(HDRDeferred).rgba;
+    vec3 Normal    = normalize(subpassLoad(HDRNormals).rgb);
  
     if (Color.a != 0.0)
     {

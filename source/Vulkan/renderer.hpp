@@ -158,17 +158,22 @@ private:
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurPipeline         = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_CubemapPipeline     = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_CubemapPipeline      = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_CubemapMipPipeline   = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline  = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline  = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors     = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapMipDescriptors     = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
+
+	std::unique_ptr<Buffer> m_DiffusePrecompute = VK_NULL_HANDLE;
+	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
 
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
@@ -202,8 +207,8 @@ private:
 	VulkanTexture m_TransmittanceLUT = {};
 
 	VulkanTexture m_BRDFLUT = {};
-	std::vector<VulkanTexture> m_CubemapLUT = {};
 	std::vector<VulkanTexture> m_DiffuseIrradience = {};
+	std::vector<VulkanTextureMultiView> m_CubemapLUT = {};
 	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
 
 	std::vector<VulkanTexture> m_TerrainLUT = {};
@@ -223,7 +228,8 @@ private:
 
 	uint32_t m_TerrainDispatches = 0u;
 
-	uint32_t m_SwapchainIndex = 0;
+	uint32_t m_ImageIndex = 0;
+	uint32_t m_ResourceIndex = 0;
 	uint64_t m_FrameCount = 0;
 
 #ifdef INCLUDE_GUI

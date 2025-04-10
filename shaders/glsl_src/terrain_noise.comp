@@ -40,6 +40,7 @@ layout (constant_id = 3) const float Scale = 0;
 layout (constant_id = 4) const float MinHeight = 0;
 layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
+layout (constant_id = 7) const float deltaS = 0;
 
 vec2 terrain_fbm(vec3 n, float freq, float octaves)
 {
@@ -133,19 +134,19 @@ void main()
 
         int Level = int(vertex.Position.y);
 
-        dvec3 Camera1 = round(ubo.CameraPositionFP64.xyz);
-        dvec3 Camera2 = round(ubo_old.CameraPositionFP64.xyz);
+        dvec3 Camera1 = normalize(round(ubo.CameraPositionFP64.xyz));
+        dvec3 Camera2 = normalize(round(ubo_old.CameraPositionFP64.xyz));
+        dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(max(Level, deltaS))));
+        dvec3 Center2 = round(RoundToIncrement(Camera2 * Rg, Scale * exp2(max(Level, deltaS))));
 
         vec4 Val = vec4(0.0);
         ivec3 Texel = ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level);
-        if (Camera1 == Camera2)
+        if (Center1 == Center2)
         {
             Val = texelFetch(terrainImageOld, Texel, 0);
         }
         else
         {
-            Camera1 = normalize(Camera1);
-            dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(Level)));
             dmat3 Orientation1 = GetTerrainOrientation(Camera1);
             dvec3 ObjectPosition = round(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1);
             vec3 Normal = vec3(normalize(ObjectPosition));

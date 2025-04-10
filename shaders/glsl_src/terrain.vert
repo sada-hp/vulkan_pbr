@@ -7,6 +7,7 @@ layout (constant_id = 2) const float Scale = 1.f;
 layout (constant_id = 3) const float MinHeight = 1.f;
 layout (constant_id = 4) const float MaxHeight = 1.f;
 layout (constant_id = 5) const uint Seed = 0;
+layout (constant_id = 6) const float deltaS = 0;
 
 layout(push_constant) uniform constants
 {
@@ -57,7 +58,7 @@ void main()
 
     dvec3 Camera = normalize(round(ubo.CameraPositionFP64.xyz));
     dmat3 Orientation = GetTerrainOrientation(Camera);
-    dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(Level)));
+    dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(max(Level, deltaS))));
 
     ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
     float d = texelFetch(NoiseMap, texelIdD, 0).r;

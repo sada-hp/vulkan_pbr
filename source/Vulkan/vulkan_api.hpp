@@ -14,6 +14,8 @@ struct VulkanSynchronization
 
 VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out);
 
+VkBool32 CreateSyncronizationStruct2(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out);
+
 VkBool32 DestroySyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* in);
 /*
 * !@brief Creates synchronization fence

@@ -164,8 +164,8 @@ VulkanImage& VulkanImage::TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffe
 	barrier.dstQueueFamilyIndex = queue2;
 	barrier.image = image;
 	barrier.subresourceRange = subRange;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = 0;
+	barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
 	if (cmd1 != VK_NULL_HANDLE)
 		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
