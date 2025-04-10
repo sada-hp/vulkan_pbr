@@ -226,6 +226,9 @@ private:
 	std::unique_ptr<ComputePipeline> m_TerrainCompose = {};
 	std::unique_ptr<ComputePipeline> m_WaterCompute = {};
 
+	std::unique_ptr<GraphicsPipeline> m_GrassPipeline = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
+
 	uint32_t m_TerrainDispatches = 0u;
 
 	uint32_t m_ImageIndex = 0;

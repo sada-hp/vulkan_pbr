@@ -191,8 +191,8 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 ambient  = Atmosphere.L * Material.AO * (kD * diffuse + specular);
     vec3 scattering = clamp(1.0 - Clouds.Coverage, 0.25, 1.0) * Atmosphere.S;
 
-    return scattering + ambient + Illumination * Lo;
-    // return ambient + Illumination * Lo;
+    // return scattering + ambient + Illumination * Lo;
+    return ambient + Illumination * Lo;
 }
 
 void main()

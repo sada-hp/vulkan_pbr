@@ -21,6 +21,7 @@ struct UniformBuffer
 	glm::mat4 ProjectionMatrixInverse;
 	glm::vec4 CameraPosition;
 	glm::vec4 SunDirection;
+	glm::vec4 WorldUp;
 	glm::vec4 CameraUp;
 	glm::vec4 CameraRight;
 	glm::vec4 CameraForward;

@@ -56,7 +56,7 @@ void main()
 
     Height = texelFetch(NoiseMap, texelId, 0).r;
 
-    dvec3 Camera = normalize(round(ubo.CameraPositionFP64.xyz));
+    dvec3 Camera = ubo.WorldUp.xyz;
     dmat3 Orientation = GetTerrainOrientation(Camera);
     dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(max(Level, deltaS))));
 

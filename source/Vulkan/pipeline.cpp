@@ -216,7 +216,15 @@ GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetDepthBias(float depth
 GraphicsPipelineDescriptor& GraphicsPipelineDescriptor::SetBlendAttachments(uint32_t count, VkPipelineColorBlendAttachmentState* attachments)
 {
 	blendAttachments.resize(count);
-	memcpy(blendAttachments.data(), attachments, count * sizeof(VkPipelineColorBlendAttachmentState));
+	if (attachments)
+	{
+		memcpy(blendAttachments.data(), attachments, count * sizeof(VkPipelineColorBlendAttachmentState));
+	}
+	else
+	{
+		for (uint32_t i = 0; i < count; i++)
+			blendAttachments[i] = defaultAttachment;
+	}
 	blendState.pAttachments = blendAttachments.data();
 	blendState.attachmentCount = blendAttachments.size();
 

@@ -27,6 +27,7 @@ layout (set = 1, binding = 3) uniform UnfiormBufferOld
     mat4 ProjectionMatrixInverse;
     vec4 CameraPosition;
     vec4 SunDirection;
+    vec4 WorldUp;
     vec4 CameraUp;
     vec4 CameraRight;
     vec4 CameraForward;
@@ -134,8 +135,8 @@ void main()
 
         int Level = int(vertex.Position.y);
 
-        dvec3 Camera1 = normalize(round(ubo.CameraPositionFP64.xyz));
-        dvec3 Camera2 = normalize(round(ubo_old.CameraPositionFP64.xyz));
+        dvec3 Camera1 = ubo.WorldUp.xyz;
+        dvec3 Camera2 = ubo_old.WorldUp.xyz;
         dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(max(Level, deltaS))));
         dvec3 Center2 = round(RoundToIncrement(Camera2 * Rg, Scale * exp2(max(Level, deltaS))));
 

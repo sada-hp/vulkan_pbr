@@ -11,6 +11,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     mat4 ProjectionMatrixInverse;
     vec4 CameraPosition;
     vec4 SunDirection;
+    vec4 WorldUp;
     vec4 CameraUp;
     vec4 CameraRight;
     vec4 CameraForward;
