@@ -220,10 +220,10 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 #endif
         float Rpe = distance(Eye, Target);
         Atmosphere.T = GetTransmittance(TransmittanceLUT, Re, EdotV, View, Target);
-        Atmosphere.L = T * Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
+        Atmosphere.L = Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
         Atmosphere.E = GetIrradiance(IrradianceLUT, Rp, PdotL);
 
-        const float EPS = 0.008;
+        const float EPS = PdotL < 0.15 ? mix(0.1, 0.008, saturate((PdotL - 0.15) / 0.15)) : 0.008;
         vec4 inscatter = vec4(0.0);
         float muHoriz = -sqrt(1.0 - (Rg / Re) * (Rg / Re));
         if (abs(EdotV - muHoriz) < EPS) 
@@ -259,7 +259,11 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 
         Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL));
         Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
-        Atmosphere.S = mix(0.25, 1.0, Atmosphere.Shadow) * Atmosphere.S;
+
+        if (PdotL < 0.0)
+        {
+            Atmosphere.S = mix(1.0, 0.1, pow(abs(PdotL), 1.0 / 3.0)) * Atmosphere.S;
+        }
     }
 }
 

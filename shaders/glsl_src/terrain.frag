@@ -13,9 +13,10 @@ layout(push_constant) uniform constants
 }
 PushConstants;
 
-layout(set = 1, binding = 1) uniform sampler2DArray AlbedoMap;
-layout(set = 1, binding = 2) uniform sampler2DArray NormalHeightMap;
-layout(set = 1, binding = 3) uniform sampler2DArray ARMMap;
+layout(set = 1, binding = 0) uniform sampler2DArray AlbedoMap;
+layout(set = 1, binding = 1) uniform sampler2DArray NormalHeightMap;
+layout(set = 1, binding = 2) uniform sampler2DArray ARMMap;
+
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 layout(set = 2, binding = 1) uniform sampler2DArray WaterMap;
 

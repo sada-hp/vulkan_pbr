@@ -39,6 +39,11 @@ layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
 	Vertex at[];
 } vertices;
 
+layout(location = 0) out flat vec4 CenterPosition;
+layout(location = 1) out vec4 WorldPosition;
+layout(location = 2) out float AO;
+layout(location = 3) out vec3 Normal;
+
 ivec3 clamp_coords(ivec3 texel)
 {
     ivec2 size = textureSize(NoiseMap, 0).xy;
@@ -58,16 +63,13 @@ ivec3 clamp_coords(ivec3 texel)
 
 void main()
 {
-    Vertex vert = vertices.at[gl_InstanceIndex];
-
-    vec2 vertPos = round(vert.Position.xz * 0.25);
-    vec2 vertUV = 0.5 + vertPos / vert.UV.w;
-
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
-    ivec3 texelId = ivec3(round(vertUV * (noiseSize - 1)), vert.Position.y);
+    Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % (noiseSize.x * noiseSize.y)];
+
+    ivec3 texelId = ivec3(round(vert.UV.xy * (noiseSize - 1)), vert.Position.y);
 
     float Height = texelFetch(NoiseMap, texelId, 0).r;
-    vec4 WorldPosition = vec4(0.0, 0.0, 0.0, 1.0);
+    WorldPosition = vec4(0.0, 0.0, 0.0, 1.0);
 
     float hFrac = (Height - MinHeight) / (MaxHeight - MinHeight);
     if (hFrac > 0.01)
@@ -75,23 +77,26 @@ void main()
         dvec3 Camera = ubo.WorldUp.xyz;
         dmat3 Orientation = GetTerrainOrientation(Camera);
         dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(max(vert.Position.y, deltaS))));
-        vec3 ObjectPosition = vec3(Orientation * vec3(vertPos.x, Height, vertPos.y) + Center);
+        vec3 ObjectPosition = vec3(Orientation * vec3(vert.Position.x, Height, vert.Position.z) + Center);
         vec3 ObjectCenterNorm = normalize(ObjectPosition);
         vec3 ObjectCenter = ObjectCenterNorm * (Rg + Height);
 
-        mat3 rot = mat3(1.0);
+        AO = Vertices[indices[gl_VertexIndex]].y / 6.0;
 
-        vec3 hash = noise3(ObjectCenter);
-        vec3 hash2 = noise3(ObjectPosition);
+        float anim = gl_InstanceIndex + ubo.Time * 1e-1;
 
-        rot[0] = normalize(hash);
-        rot[1] = normalize(mix(vec3(0.0, 1.0, 0.0), hash2 * vec3(1.0, 3.0, 1.0), smootherstep(0.0, 1.0, Vertices[indices[gl_VertexIndex]].y / 6.0)));
-        rot[2] = normalize(cross(rot[0], rot[1]));
-        rot[0] = normalize(cross(rot[1], rot[2]));
+        vec3 hash = noise3(ObjectCenter + ObjectCenterNorm * gl_InstanceIndex);
+        vec3 hash2 = vec3(perlin(0.2 * ObjectCenter * 0.5 + anim, 5), perlin(0.2 * ObjectCenter + anim, 5), perlin(ObjectCenter * 0.05 + anim, 5));
 
-        WorldPosition = vec4((rot * 10.0 * Vertices[indices[gl_VertexIndex]].xyz + Scale * 0.5 * vec3(hash.x, 0.0, hash.z)) + ObjectCenter, 1.0);
+        mat3 Rot = mat3(1.0);
+        Rot[0] = normalize(hash);
+        Rot[1] = normalize(0.001 + mix(vec3(0.0, 1.0, 0.0), hash2 * vec3(1.0, 2.0, 1.0), smootherstep(0.0, 1.5, AO)));
+        Rot[2] = normalize(cross(Rot[0], Rot[1]));
+        Rot[0] = normalize(cross(Rot[1], Rot[2]));
 
-#if 0
+        WorldPosition = vec4((Rot * ((saturate(abs(hash) + 0.35) * vec2(gl_BaseInstance == 0 ? 5.0 : 10.0, 10.0).xyx) * (Vertices[indices[gl_VertexIndex]].xyz + Scale * vec3(hash.x, 0.0, hash.z)))) + ObjectCenter, 1.0);
+
+#if 1
         ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
         float d = texelFetch(NoiseMap, texelIdD, 0).r;
 
@@ -111,7 +116,14 @@ void main()
             WorldPosition = vec4(0.0, 0.0, 0.0, 1.0);
         }
 #endif
-    }
 
-    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
+        gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
+        CenterPosition.xyz = (Scale * 0.5 * vec3(hash.x, 0.0, hash.z) + ObjectCenter) - ubo.CameraPosition.xyz;
+        WorldPosition.xyz -= ubo.CameraPosition.xyz;
+        Normal = ObjectCenterNorm;
+    }
+    else
+    {
+        gl_Position = vec4(-1000.0);
+    }
 }

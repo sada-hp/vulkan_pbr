@@ -125,7 +125,7 @@ private:
 
 	friend class GR::Window;
 
-	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME };
+	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME, VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME };
 	std::vector<VkImage> m_SwapchainImages = {};
 	std::vector<VkImageView> m_SwapchainViews = {};
 

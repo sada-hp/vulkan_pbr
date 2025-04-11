@@ -1,4 +1,7 @@
 //Hash Functions for GPU Rendering (http://www.jcgt.org/published/0009/03/02/)
+#ifndef _NOISE_SHADER
+#define _NOISE_SHADER
+
 #define UI0 1597334673U
 #define UI1 3812015801U
 #define UI2 uvec2(UI0, UI1)
@@ -275,3 +278,5 @@ float fbm_perlin_turb(vec3 x, float f, uint n)
 
 	return clamp(v, -1.0, 1.0) * 0.5 + 0.5;
 }
+
+#endif

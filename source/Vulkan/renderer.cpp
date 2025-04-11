@@ -708,12 +708,6 @@ bool VulkanBase::BeginFrame()
 		vkCmdSetScissor(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(m_DeferredSync[m_ResourceIndex].Commands, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-#if 0
-		m_GrassPipeline->BindPipeline(m_DeferredSync[m_ResourceIndex].Commands);
-		m_UBOSets[m_ResourceIndex]->BindSet(0, m_DeferredSync[m_ResourceIndex].Commands, *m_GrassPipeline);
-		m_GrassSet[m_ResourceIndex]->BindSet(1, m_DeferredSync[m_ResourceIndex].Commands, *m_GrassPipeline);
-		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 267289, 0, 0);
-#endif
 
 #if DEBUG == 1
 		m_InFrame = true;
@@ -1439,6 +1433,21 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	const VkCommandBuffer& cmd = m_DeferredSync[m_ResourceIndex].Commands;
 	const VkDeviceSize offsets[] = { 0 };
 
+	m_GrassPipeline->BindPipeline(cmd);
+	m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_GrassPipeline);
+	m_GrassSet[m_ResourceIndex]->BindSet(1, cmd, *m_GrassPipeline);
+	gro.descriptorSet->BindSet(2, cmd, *m_GrassPipeline);
+
+	uint32_t firstRing = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height;
+	uint32_t nextRings = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
+	vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 3 * firstRing, 0, 0);
+	
+	if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 0)
+		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 2 * nextRings, 0, m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height);
+	
+	if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 1)
+		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 1 * nextRings, 0, nextRings + firstRing);
+
 	m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *gro.pipeline);
 
 	gro.descriptorSet->BindSet(1, cmd, *gro.pipeline);
@@ -1537,9 +1546,9 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_terrain_set(const VulkanImageV
 	const VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
 
 	return DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
+		.AddImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
 		// .AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
@@ -1568,7 +1577,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(6, float(glm::ceil(float(shape.m_Rings) / 2.f) +  1.f), VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(6, float(glm::ceil(float(shape.m_Rings) / 3.f) +  1.f), VK_SHADER_STAGE_VERTEX_BIT)
 		// .SetPolygonMode(VK_POLYGON_MODE_LINE)
 		.Construct(m_Scope);
 }
@@ -2351,7 +2360,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AddSpecializationConstant(4, shape.m_MinHeight)
 		.AddSpecializationConstant(5, shape.m_MaxHeight)
 		.AddSpecializationConstant(6, shape.m_NoiseSeed)
-		.AddSpecializationConstant(7, float(glm::ceil(float(shape.m_Rings) / 2.f) + 1.f))
+		.AddSpecializationConstant(7, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f))
 		.SetShaderName("terrain_noise_comp")
 		.Construct(m_Scope);
 
@@ -2384,9 +2393,12 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.SetShaderName("erosion_comp")
 		.Construct(m_Scope);
 
+	std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+
 	m_GrassPipeline = GraphicsPipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
+		.AddDescriptorLayout(dummy->GetLayout())
 		.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_NONE)
@@ -2397,7 +2409,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 2.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
 		.Construct(m_Scope);
 
 	return 1;

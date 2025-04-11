@@ -103,22 +103,24 @@ float SampleCloudShadow(vec3 x1)
 
 void SampleAtmosphere(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow)
 {
+    float len = distance(Eye, World);
+    float T = saturate(len / 1e5);
+
     if (Clouds.Coverage == 0.0)
     {
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, World, Sun, Atmosphere);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, Atmosphere);
         Atmosphere.S *= MaxLightIntensity;
         Atmosphere.E *= MaxLightIntensity;
         return;
     }
 
-    float len = distance(Eye, World);
     int steps = int(floor(mix(32, 16, saturate(0.01 * len / 1e4))));
     float Stepsize = len / float(steps);
     vec3 Ray = Eye;
 
     SAtmosphere AtmosphereStart, AtmosphereEnd;
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, World, Sun, AtmosphereEnd);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, AtmosphereEnd);
 
     Atmosphere.T = AtmosphereEnd.T;
     Atmosphere.Shadow = AtmosphereEnd.Shadow;
@@ -191,8 +193,8 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 ambient  = Atmosphere.L * Material.AO * (kD * diffuse + specular);
     vec3 scattering = clamp(1.0 - Clouds.Coverage, 0.25, 1.0) * Atmosphere.S;
 
-    // return scattering + ambient + Illumination * Lo;
-    return ambient + Illumination * Lo;
+    return scattering + ambient + Illumination * Lo;
+    // return ambient + Illumination * Lo;
 }
 
 void main()
