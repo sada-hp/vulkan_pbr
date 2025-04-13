@@ -49,7 +49,7 @@ float SampleCloud(vec3 x0, float height)
     float base = textureLod(CloudLowFrequency, uv, 2).r;
 
     float h1 = pow(height, 0.65);
-    float h2 = saturate(remap(1.0 - height, 0.0, 0.2, 0.0, 1.0));
+    float h2 = saturate(remap(1.0 - height, 0.0, 0.15, 0.0, 1.0));
 
     float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
     base *= weather1;
@@ -69,7 +69,7 @@ float SampleCloud(vec3 x0, float height)
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
     float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 20.0));
 
-    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * mix(0.15, 0.25, Clouds.Coverage), 1.0, 0.0, 1.0));
+    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * 0.15, 1.0, 0.0, 1.0));
     return base;
 }
 

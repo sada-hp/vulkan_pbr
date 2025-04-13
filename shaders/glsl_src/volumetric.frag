@@ -100,9 +100,9 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float base = textureLod(CloudLowFrequency, uv, lod).r;
 
     float h1 = pow(height, 0.65);
-    float h2 = saturate(remap(1.0 - height, 0.0, 0.2, 0.0, 1.0));
+    float h2 = saturate(remap(1.0 - height, 0.0, 0.15, 0.0, 1.0));
 
-    float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
+    float weather1 = smoothstep(0.0, 1.0, 1.0 - texture(WeatherMap, uv.xz / 5.0).r);
     base *= weather1;
 
     float weather2 = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
@@ -117,13 +117,13 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
 {
     float height = 1.0 - Ray.Height;
-    vec3 uv =  GetUV(Ray.Position, 150.0, Clouds.WindSpeed * -0.05);
+    vec3 uv =  GetUV(Ray.Position, 200.0, Clouds.WindSpeed * -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, lod);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 20.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 50.0));
 
-    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * mix(0.15, 0.25, Clouds.Coverage), 1.0, 0.0, 1.0));
+    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * mix(0.1, 0.25, outScattering.a), 1.0, 0.0, 1.0));
     return base;
 }
 
@@ -271,9 +271,9 @@ void MarchToCloud(inout RayMarch Ray)
     {
         UpdateRay(Ray);
 
-        if ((sample_density = SampleCloudShape(Ray, 1)) > 0)
+        if ((sample_density = SampleCloudShape(Ray, int(!found))) > 0)
         {
-            if ((sample_density = SampleCloudDetail(Ray, sample_density, 1)) > 0)
+            if ((sample_density = SampleCloudDetail(Ray, sample_density, int(!found))) > 0)
             {
                 i = steps - 1;
                 Ray.End = Ray.Position;
@@ -290,7 +290,8 @@ void MarchToCloud(inout RayMarch Ray)
     }
 
     // go more precise for clouds
-    Ray.FirstHit = Ray.Position;
+    Ray.FirstHit = Ray.End;
+    Ray.End = Ray.End - Ray.Stepsize * Ray.Direction;
     Ray.Position = Ray.End;
     steps = int(ceil(mix(32, 16, w)));
     float incr = 1.0 / float(steps);
@@ -347,8 +348,8 @@ void main()
     RayMarch Ray;
     Ray.Direction = normalize(ScreenWorld.xyz / ScreenWorld.w);
 
-    topBound = Rct;
-    bottomBound = Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25));
+    topBound = Rct - Rcdelta * 0.35 * (1.0 - Clouds.Coverage);
+    bottomBound = Rcb + Rcdelta * (0.65 - min(Clouds.Coverage * Clouds.Coverage, 0.65));
 
     Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
     Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);

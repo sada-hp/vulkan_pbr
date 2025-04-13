@@ -18,7 +18,7 @@ void main()
     NOISE_SEED = seed;
     
     vec4 temp = vec4(0.0);
-    int mult[4] = { 1, 2, 5, 13 };
+    int mult[4] = { 1, 6, 10, 13 };
     for (uint i = 0; i < 4; i++)
     {
 #if local_size_z == 1
