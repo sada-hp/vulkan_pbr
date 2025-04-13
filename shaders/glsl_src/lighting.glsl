@@ -35,7 +35,7 @@ float BeerLambert(float e, float ds)
 
 float DualLobeFunction(float a, float g1, float g2, float w)
 {
-    return PI * mix(HenyeyGreensteinPhase(a, g1), HenyeyGreensteinPhase(a, g2), w); 
+    return mix(HenyeyGreensteinPhase(a, g1), HenyeyGreensteinPhase(a, g2), w); 
 }
 
 float DrainePhase(float a, float g, float k)
@@ -64,6 +64,18 @@ float HGDPhase(float a)
     return HGDPhase(a, ghg, gd, kd, w);
 }
 
+float HGDPhase(float a, float g)
+{
+    float d = mix(5.0, 50.0, MieG);
+
+    float ghg = exp(-0.0990567/(d - 1.67154));
+    float gd = exp(-2.20679/(d + 3.91029) - 0.428934);
+    float kd = exp(3.62489 - (8.29288/(d + 5.52825)));
+    float w = exp(-0.599085/(d - 0.641583) - 0.665888);
+
+    return HGDPhase(a, g * ghg, g * gd, kd, w);
+}
+
 float HGDPhaseCloud(float a)
 {
     float d = mix(1.5, 5.0, 1.0 - MieG);
@@ -74,6 +86,18 @@ float HGDPhaseCloud(float a)
     float w =  0.026914 * (log(d) - cos(5.68947 * (log(log(d)) - 0.0292149))) + 0.376475;
     
     return HGDPhase(a, ghg, gd, kd, w);
+}
+
+float HGDPhaseCloud(float a, float g)
+{
+    float d = mix(1.5, 5.0, 1.0 - MieG);
+
+    float ghg = 0.0604931 * log(log(d)) + 0.940256;
+    float gd =  0.500411 - 0.081287 / (-2 * log(d) + tan(log(d)) + 1.27551);
+    float kd =  7.30354 * log(d) + 6.31675;
+    float w =  0.026914 * (log(d) - cos(5.68947 * (log(log(d)) - 0.0292149))) + 0.376475;
+    
+    return HGDPhase(a, g * ghg, g * gd, kd, w);
 }
 
 float Powder(float e, float ds)
@@ -223,7 +247,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         Atmosphere.L = Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
         Atmosphere.E = GetIrradiance(IrradianceLUT, Rp, PdotL);
 
-        const float EPS = PdotL < 0.15 ? mix(0.1, 0.008, saturate((PdotL - 0.15) / 0.15)) : 0.008;
+        const float EPS = 0.008;
         vec4 inscatter = vec4(0.0);
         float muHoriz = -sqrt(1.0 - (Rg / Re) * (Rg / Re));
         if (abs(EdotV - muHoriz) < EPS) 
@@ -260,9 +284,9 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL));
         Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
 
-        if (PdotL < 0.0)
+        if (EdotL < 0.0)
         {
-            Atmosphere.S = mix(1.0, 0.1, pow(abs(PdotL), 1.0 / 3.0)) * Atmosphere.S;
+            Atmosphere.S = mix(1.0, 0.1, pow(abs(EdotL), 1.0 / 3.0)) * Atmosphere.S;
         }
     }
 }
@@ -286,9 +310,11 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     {
         Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
     }
-    
+
+ #ifndef SKY_SCATTER_ONLY   
     // Sun
     Color += TWO_PI * vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
+#endif
 
     return Color;
 }

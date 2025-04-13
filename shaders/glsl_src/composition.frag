@@ -42,44 +42,42 @@ float GetHeightFraction(vec3 x0, float bottomBound, float topBound)
     return saturate((length(x0) - bottomBound) / (topBound - bottomBound));;
 }
 
-float SampleCloud(vec3 x0)
+float SampleCloud(vec3 x0, float height)
 {
     vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed * 0.01);
-    float height = 1.0 - GetHeightFraction(x0, Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25)), Rct);
 
-    float base = textureLod(CloudLowFrequency, uv, 3).r;
+    float base = textureLod(CloudLowFrequency, uv, 2).r;
 
-    float h1 = saturate(height + 0.2);
+    float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, 0.2, 0.0, 1.0));
 
-    float weather = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
-    base *= weather;
+    float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
+    base *= weather1;
 
-    weather = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
-    h1 *= weather;
-    h2 *= weather;
+    float weather2 = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
+    h1 *= weather2;
+    h2 *= weather2;
 
-    base = remap(base, 1.0 - Clouds.Coverage * h1 * h2, 1.0, Clouds.Coverage, 1.0);
+    base = height * saturate(remap(base, 1.0 - Clouds.Coverage * h1 * h2, 1.0, Clouds.Coverage * Clouds.Coverage, 1.0));
 
     if (base == 0.0)
-    {
         return base;
-    }
 
-    uv =  GetUV(x0, 300.0, -0.05);
+    uv =  GetUV(x0, 150.0, Clouds.WindSpeed * -0.05);
 
-    vec4 high_frequency_noise = texture(CloudHighFrequency, uv, 3);
+    vec4 high_frequency_noise = textureLod(CloudHighFrequency, uv, 1);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 20.0));
 
-    base = remap(base, high_frequency_modifier * mix(0.35, 0.55, Clouds.Coverage), 1.0, 0.0, 1.0);
-    return saturate(height * Clouds.Density * base);
+    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * mix(0.15, 0.25, Clouds.Coverage), 1.0, 0.0, 1.0));
+    return base;
 }
 
 float SampleCloudShadow(vec3 x1)
 {
     const int steps = 3;
-    float bottomBound = Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25));
+    float topBound = Rct - Rcdelta * 0.35 * (1.0 - Clouds.Coverage);
+    float bottomBound = Rcb + Rcdelta * (0.65 - min(Clouds.Coverage * Clouds.Coverage, 0.65));
 
     float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), bottomBound);
     float topDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), Rct);
@@ -92,7 +90,8 @@ float SampleCloudShadow(vec3 x1)
     for (int i = 0; i < steps; i++)
     {
         x0 += ubo.SunDirection.xyz * Stepsize;
-        Density += SampleCloud(x0);
+        float height = 1.0 - GetHeightFraction(x0, bottomBound, Rct);
+        Density += SampleCloud(x0, height);
     }
 
     if (Density == 0.0)

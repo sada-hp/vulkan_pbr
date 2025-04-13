@@ -1,4 +1,7 @@
 #version 460
+
+#define SKY_SCATTER_ONLY
+
 #include "ubo.glsl"
 #include "lighting.glsl"
 #include "cubemap_matrix.glsl"

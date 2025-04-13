@@ -3,28 +3,53 @@
 #include "noise.glsl"
 #include "common.glsl"
 
+layout(push_constant) uniform constants
+{
+    layout(offset = 0) float Lod;
+} In;
+
 struct Vertex
 {
     vec4 Position;
     vec4 UV;
 };
 
-vec4 Vertices[7] = {
-    vec4(-0.5,0,0,1),
-    vec4(0.5,0,0,1),
-    vec4(0.5,4,0,1),
-    vec4(-0.5,4,0,1),
-    vec4(-0.25,6,0,1),
-    vec4(0.25,6,0,1),
-    vec4(0,7,0,1)
+vec4 Vertices[11] = {
+    vec4( -1.0, 0.0, 0.0, 1.0),
+    vec4(  1.0, 0.0, 0.0, 1.0),
+    vec4(  1.0, 1.0, 0.0, 1.0),
+    vec4( -1.0, 1.0, 0.0, 1.0),
+    vec4(  1.0, 3.0, 0.0, 1.0),
+    vec4( -1.0, 3.0, 0.0, 1.0),
+    vec4( 0.75, 6.0, 0.0, 1.0),
+    vec4(-0.75, 6.0, 0.0, 1.0),
+    vec4( 0.45, 8.0, 0.0, 1.0),
+    vec4(-0.45, 8.0, 0.0, 1.0),
+    vec4( 0.00, 10.0, 0.0, 1.0)
 };
 
-int indices[15] = {
+int indices_l0[27] = {
     0,1,2,
-    3,2,0,
-    5,3,2,
-    4,3,5,
-    6,4,5
+    0,2,3,
+    3,2,4,
+    3,4,5,
+    5,4,6,
+    5,6,7,
+    7,6,8,
+    7,8,9,
+    9,8,10
+};
+
+int indices_l1[15] = {
+    0,1,4,
+    0,4,5,
+    5,4,8,
+    5,8,9,
+    9,8,10
+};
+
+int indices_l2[3] = {
+    0,1,10
 };
 
 layout (constant_id = 0) const float Rg = 6360.0 * 1e3;
@@ -39,7 +64,7 @@ layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
 	Vertex at[];
 } vertices;
 
-layout(location = 0) out flat vec4 CenterPosition;
+layout(location = 0) out vec4 CenterPosition;
 layout(location = 1) out vec4 WorldPosition;
 layout(location = 2) out float AO;
 layout(location = 3) out vec3 Normal;
@@ -81,20 +106,46 @@ void main()
         vec3 ObjectCenterNorm = normalize(ObjectPosition);
         vec3 ObjectCenter = ObjectCenterNorm * (Rg + Height);
 
-        AO = Vertices[indices[gl_VertexIndex]].y / 6.0;
-
         float anim = gl_InstanceIndex + ubo.Time * 1e-1;
-
         vec3 hash = noise3(ObjectCenter + ObjectCenterNorm * gl_InstanceIndex);
-        vec3 hash2 = vec3(perlin(0.2 * ObjectCenter * 0.5 + anim, 5), perlin(0.2 * ObjectCenter + anim, 5), perlin(ObjectCenter * 0.05 + anim, 5));
+        
+        vec3 LocalPosition;
+        if (In.Lod == 0)
+        {
+            LocalPosition = Vertices[indices_l0[gl_VertexIndex]].xyz;
+        }
+        else if (In.Lod == 1)
+        {
+            LocalPosition = Vertices[indices_l1[gl_VertexIndex]].xyz;
+        }
+        else
+        {
+            LocalPosition = Vertices[indices_l2[gl_VertexIndex]].xyz;
+        }
 
-        mat3 Rot = mat3(1.0);
-        Rot[0] = normalize(hash);
-        Rot[1] = normalize(0.001 + mix(vec3(0.0, 1.0, 0.0), hash2 * vec3(1.0, 2.0, 1.0), smootherstep(0.0, 1.5, AO)));
-        Rot[2] = normalize(cross(Rot[0], Rot[1]));
-        Rot[0] = normalize(cross(Rot[1], Rot[2]));
+        AO = saturate(LocalPosition.y / 6.0);
+        LocalPosition *= (saturate(abs(hash) + 0.35) * vec2(6.0, 10.0).xyx);
 
-        WorldPosition = vec4((Rot * ((saturate(abs(hash) + 0.35) * vec2(gl_BaseInstance == 0 ? 5.0 : 10.0, 10.0).xyx) * (Vertices[indices[gl_VertexIndex]].xyz + Scale * vec3(hash.x, 0.0, hash.z)))) + ObjectCenter, 1.0);
+        float lean = max(AO, 0.25) * perlin(ObjectPosition.xz + anim, 10);
+        mat3 RotX = transpose(mat3(vec3(1.0, 0.0, 0.0), 
+                    vec3(0.0, cos(lean), -sin(lean)), 
+                    vec3(0.0, sin(lean), cos(lean))
+        ));
+
+        float bank = noise(ObjectPosition.xz);
+        mat3 RotZ = transpose(mat3(vec3(cos(bank), sin(bank), 0.0), 
+                    vec3(-sin(bank), cos(bank), 0.0), 
+                    vec3(0.0, 0.0, 1.0)
+        ));
+
+        float face = noise(ObjectPosition.zy);
+        mat3 RotY = transpose(mat3(vec3(cos(face), 0.0, -sin(face)), 
+                    vec3(0.0, 1.0, 0.0), 
+                    vec3(sin(face), 0.0, cos(face))
+        ));
+
+        mat3 Rot = RotZ * RotX * RotY;
+        WorldPosition = vec4((Rot * (LocalPosition + Scale * exp2(vert.Position.y) * vec3(hash.x, 0.0, hash.z))) + ObjectCenter, 1.0);
 
 #if 1
         ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));

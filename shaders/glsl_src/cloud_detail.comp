@@ -18,15 +18,15 @@ void main()
     NOISE_SEED = seed;
     
     vec4 temp = vec4(0.0);
-    int mult[4] = { 1, 2, 4, 6 };
+    int mult[4] = { 1, 2, 5, 13 };
     for (uint i = 0; i < 4; i++)
     {
 #if local_size_z == 1
         const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
-        temp[i] = fbm_worley(cell_loc, frequency * mult[i], octaves);
+        temp[i] = 1.0 - fbm_worley(cell_loc, frequency * mult[i], octaves);
 #else
         const vec3 cell_loc = vec3(gl_GlobalInvocationID.xyz) / vec3(gl_NumWorkGroups.xyz);
-        temp[i] = fbm_worley(cell_loc, frequency * mult[i], octaves);
+        temp[i] = 1.0 -  fbm_worley(cell_loc, frequency * mult[i], octaves);
 #endif
     }
 

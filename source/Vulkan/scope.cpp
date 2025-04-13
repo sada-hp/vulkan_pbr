@@ -550,11 +550,11 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK; 
 		samplerInfo.unnormalizedCoordinates = VK_FALSE;
 		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
 		samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0;
 		samplerInfo.minLod = 0.0;
-		samplerInfo.maxLod = 20.0;
+		samplerInfo.maxLod = 20.0;~
 		vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &m_Samplers[Type]);
 	}
 

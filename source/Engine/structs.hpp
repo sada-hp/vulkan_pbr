@@ -24,7 +24,7 @@ struct UniformBuffer
 	glm::vec4 WorldUp;
 	glm::vec4 CameraUp;
 	glm::vec4 CameraRight;
-	glm::vec4 CameraForward;
+	glm::vec4 CameraForward; 
 	glm::vec2 Resolution;
 	double CameraRadius;
 	float Time;
@@ -42,7 +42,7 @@ struct CloudLayerProfile
 	}
 
 	float Coverage = 0.5;
-	float Density = 0.008;
+	float Density = 0.006;
 	float WindSpeed = 1.0;
 };
 /*

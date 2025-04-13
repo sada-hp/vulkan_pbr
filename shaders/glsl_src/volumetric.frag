@@ -99,32 +99,32 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
 
-    float h1 = saturate(height + 0.2);
+    float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, 0.2, 0.0, 1.0));
 
-    float weather = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
-    base *= weather;
+    float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
+    base *= weather1;
 
-    weather = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
-    h1 *= weather;
-    h2 *= weather;
+    float weather2 = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
+    h1 *= weather2;
+    h2 *= weather2;
 
-    base = remap(base, 1.0 - Clouds.Coverage * h1 * h2, 1.0, Clouds.Coverage, 1.0);
+    base = height * saturate(remap(base, 1.0 - Clouds.Coverage * h1 * h2, 1.0, Clouds.Coverage * Clouds.Coverage, 1.0));
 
-    return saturate(base);
+    return base;
 }
 
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
 {
     float height = 1.0 - Ray.Height;
-    vec3 uv =  GetUV(Ray.Position, 300.0, -0.05);
+    vec3 uv =  GetUV(Ray.Position, 150.0, Clouds.WindSpeed * -0.05);
 
     vec4 high_frequency_noise = texture(CloudHighFrequency, uv, lod);
     float high_frequency_fbm = high_frequency_noise.r * 0.625 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 40.0));
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 20.0));
 
-    base = remap(base, high_frequency_modifier * mix(0.15, 0.45, Clouds.Coverage), 1.0, 0.0, 1.0);
-    return saturate(height * Clouds.Density * base);
+    base = Clouds.Density * saturate(remap(base, high_frequency_modifier * mix(0.15, 0.25, Clouds.Coverage), 1.0, 0.0, 1.0));
+    return base;
 }
 
 void Blend(in RayMarch Ray)
@@ -197,50 +197,54 @@ float SampleCone(RayMarch Ray, int mip)
         UpdateRay(Ray);
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
 
-        if (cone_density < 0.2)
+        if (cone_density < 0.3)
         {
             float density = 0.0;
             if ((density = SampleCloudShape(Ray, mip + 1)) > 0.0)
             {
-                cone_density += SampleCloudDetail(Ray, density, mip + 1) + 1e-6;
+                cone_density += SampleCloudDetail(Ray, density, mip + 1);
             }
         }
         else
-            cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1) + 1e-6;
+            cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1);
     }
 
     return cone_density;
 }
 
-float MarchToLight(vec3 pos, vec3 rd, int steps, int mip)
+float MultiScatter(float phi, float e, float ds)
 {
-    const float shadowclr = 0.05;
-    if (outScattering.a < shadowclr)
-        return shadowclr;
+    float luminance = 0.0;
+    float a = 1.0, b = 1.0, c = 1.0;
+    for (int i = 0; i < 5; i++)
+    {
+        luminance += b * MaxLightIntensity * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
+        a *= 0.7;
+        b *= 0.5;
+        c *= 0.9;
+    }
 
-    float len = SphereMinDistance(pos, rd, vec3(0.0), topBound);
-    if (len <= 1.0)
-        return 1.0;
-    
+    return luminance;
+}
+
+float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
+{
     RayMarch Ray;
-    Ray.Stepsize = min(len, topBound - bottomBound) / float(steps);
+    float len = SphereMinDistance(pos, rd, vec3(0.0), topBound);
+    Ray.Stepsize = min(len, Rcdelta) / float(steps);
     Ray.Direction = ubo.SunDirection.xyz;
     Ray.Position = pos;
 
-    float transmittance = 1.0;
+    float cone_density = 0.0;
     for (int i = 0; i < steps; i++)
     {
         UpdateRay(Ray);
 
-        float cone_density = SampleCone(Ray, mip);
-
-        if (cone_density > 0.0)
-        {
-            transmittance *= BeerLambert(cone_density, Ray.Stepsize);
-        }
+        //cone_density += SampleCone(Ray, mip);
+        cone_density += SampleCloudDetail(Ray, SampleCloudShape(Ray, mip + 1), mip + 1);
     }
 
-    return mix(shadowclr, 1.0, transmittance);
+    return MultiScatter(phi, cone_density, Ray.Stepsize);
 }
 
 // Unoptimized and expensive
@@ -248,9 +252,8 @@ void MarchToCloud(inout RayMarch Ray)
 {
     Ray.Position = Ray.End;
 
-    // float PhaseF = DualLobeFunction(dot(ubo.SunDirection.xyz, Ray.Direction), -0.2, 0.2, 0.25);
-    float PhaseF = HGDPhaseCloud(dot(ubo.SunDirection.xyz, Ray.Direction));
-
+    float phi = dot(ubo.SunDirection.xyz, Ray.Direction);
+    float PhaseF = HGDPhaseCloud(phi);
     float EdotV = dot(normalize(ubo.CameraPosition.xyz), Ray.Direction);
     float w = saturate(1000.0 * pow(abs(EdotV), 5.0));
 
@@ -260,48 +263,54 @@ void MarchToCloud(inout RayMarch Ray)
 
     // take larger steps and
     // skip empty space until cloud is found
-    int steps = 1024, i = steps - 1;
+    int steps = int(ceil(mix(64, 32, w))), i = steps - 1;
     Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
 
-    for (i; i >= 0 && sample_density == 0.0; i--)
+    bool found = false;
+    for (i; i >= 0 && Ray.Stepsize > 1e-8; i -= 1)
     {
         UpdateRay(Ray);
 
         if ((sample_density = SampleCloudShape(Ray, 1)) > 0)
-            sample_density = SampleCloudDetail(Ray, sample_density, 1);
+        {
+            if ((sample_density = SampleCloudDetail(Ray, sample_density, 1)) > 0)
+            {
+                i = steps - 1;
+                Ray.End = Ray.Position;
+                Ray.Position -= Ray.Stepsize * Ray.Direction;
+                Ray.Stepsize /= float(steps);
+                found = true;
+            }
+        }
     }
 
-    if (sample_density == 0.0)
+    if (!found)
     {
         return;
     }
 
     // go more precise for clouds
-    Ray.End = Ray.Position - Ray.Stepsize * Ray.Direction;
     Ray.FirstHit = Ray.Position;
     Ray.Position = Ray.End;
     steps = int(ceil(mix(32, 16, w)));
     float incr = 1.0 / float(steps);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
-    const float I = PI * MaxLightIntensity * PhaseF;
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
     float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
     for (i = steps - 1; i >= 0; i--)
     {
         UpdateRay(Ray, Stepsize, float(steps - i) * incr);
         
-        int mip = int(floor(mix(5.0, 0.0, saturate(50.0 * outScattering.a))));
+        int mip = int(floor(mix(5.0, 0.0, saturate(20.0 * outScattering.a))));
         if ((sample_density = SampleCloudShape(Ray, mip)) > 0)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
         if (sample_density > 0.0) 
         {
-            float extinction = sample_density;
+            float extinction = max(sample_density, 1e-6);
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
-            float luminance = MarchToLight(Ray.Position, ubo.SunDirection.xyz, 12, mip) * I;
-
-            vec3 E = extinction * vec3(luminance);
+            vec3 E = extinction * vec3(MarchToLight(Ray.Position, ubo.SunDirection.xyz, phi, 6, mip));
             E = vec3(E - transmittance * E) / extinction;
             outScattering.rgb += E * outScattering.a;
             outScattering.a *= transmittance;
@@ -328,15 +337,15 @@ void main()
 {
     gl_FragDepth = 0.0;
 
-    vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 1.0, 1.0);
+    vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
     vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
-    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xyz, 0.0));
+    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * ScreenView);
     vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
     vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
     outScattering = vec4(0.0, 0.0, 0.0, 1.0);
 
     RayMarch Ray;
-    Ray.Direction = normalize(ScreenWorld.xyz);
+    Ray.Direction = normalize(ScreenWorld.xyz / ScreenWorld.w);
 
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * 0.5 * (1.0 - max(Clouds.Coverage, 0.25));
@@ -385,10 +394,6 @@ void main()
 
         MarchToCloud(Ray);
     }
-    // else if (Hits.Ground != 0.0)
-    // {
-    //     discard;
-    // }
 
     Blend(Ray);
 }

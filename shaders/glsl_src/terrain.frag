@@ -100,5 +100,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(Material.Normal, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.0);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.1);
 }

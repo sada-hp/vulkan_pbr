@@ -1440,13 +1440,24 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 
 	uint32_t firstRing = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height;
 	uint32_t nextRings = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
-	vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 3 * firstRing, 0, 0);
+	
+	float Lod = 0.0;
+	m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
+	vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 27, firstRing, 0, 0);
 	
 	if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 0)
+	{
+		Lod = 1.0;
+		m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
 		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 2 * nextRings, 0, m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height);
+	}
 	
 	if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 1)
-		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 1 * nextRings, 0, nextRings + firstRing);
+	{
+		Lod = 2.0;
+		m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
+		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 3, 3 * nextRings, 0, nextRings + firstRing);
+	}
 
 	m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *gro.pipeline);
 
@@ -2192,10 +2203,10 @@ VkBool32 VulkanBase::volumetric_precompute()
 	CloudLayerProfile defaultClouds{};
 	m_CloudLayer->Update(&defaultClouds, sizeof (CloudLayerProfile));
 
-	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 8u);
+	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
-	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 8u, 8u);
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 4u, 4u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
 	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u, 4u);
@@ -2395,10 +2406,12 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 
 	std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 
+	ConstantCompose.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	m_GrassPipeline = GraphicsPipelineDescriptor()
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
 		.AddDescriptorLayout(dummy->GetLayout())
+		.AddPushConstant(ConstantCompose)
 		.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_NONE)

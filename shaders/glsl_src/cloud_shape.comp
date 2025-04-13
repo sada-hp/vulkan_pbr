@@ -21,17 +21,17 @@ void main()
     NOISE_SEED++;
     float worley03 = 1.0 - worley(cell_loc, frequency_worley * 14);
     
-    float perlin = fbm_perlin_turb(cell_loc, frequency_perlin, 4);
-    float fbm_worley = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
+    float perlin = fbm_perlin(cell_loc, frequency_perlin, 4) * 0.5 + 0.5;
+    float fbm_worley = worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25;
     float perlin_worley = remap(perlin, 0.0, 1.0, fbm_worley, 1.0);
 
-    worley01 = 1.0 - worley(cell_loc, frequency_worley * 6);
+    worley01 = 1.0 - worley(cell_loc, frequency_worley * 1);
     NOISE_SEED++;
-    worley02 = 1.0 - worley(cell_loc, frequency_worley * 12);
+    worley02 = 1.0 - worley(cell_loc, frequency_worley * 3);
     NOISE_SEED++;
-    worley03 = 1.0 - worley(cell_loc, frequency_worley * 18);
+    worley03 = 1.0 - worley(cell_loc, frequency_worley * 8);
     NOISE_SEED++;
-    float low_frequency_fbm = worley01 * 0.5 + worley02 * 0.25 + worley03 * 0.125;
+    float low_frequency_fbm = worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25;
 
     float cloud_noise = remap(perlin_worley, -low_frequency_fbm, 1.0, 0.0, 1.0);
     imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(cloud_noise, 0.0, 0.0, 0.0));
