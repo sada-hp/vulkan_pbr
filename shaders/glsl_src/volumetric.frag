@@ -130,11 +130,11 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.2, Clouds.Coverage), 0.0, 1.0));
 
     float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
-    float weather2 = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
+    float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
     
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage * Clouds.Coverage, 1.0));
+    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage, 1.0));
 
     return base;
 }
@@ -219,7 +219,6 @@ float SampleCone(RayMarch Ray, int mip)
     Ray.Stepsize /= 6.f;
     for (int i = 0; i <= 6; i++)
     {
-        UpdateRay(Ray);
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
 
         if (cone_density < 0.3)
@@ -245,13 +244,13 @@ float MultiScatter(float phi, float e, float ds)
     float a = 1.0, b = 1.0, c = 1.0;
     for (int i = 0; i < 15; i++)
     {
-        luminance += b * HGDPhaseCloud(phi * c) * BeerLambert(e * a, ds);
-        a *= 0.2;
-        b *= 0.5;
+        luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
+        a *= 0.5;
+        b *= 0.45;
         c *= 0.75;
     }
 
-    return PI * luminance;
+    return luminance;
 }
 
 float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
@@ -267,8 +266,8 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
     {
         UpdateRay(Ray);
 
-        //cone_density += SampleCone(Ray, mip);
-        cone_density += SampleCloudDetail(Ray, SampleCloudShape(Ray, mip + 1), mip + 1);
+        cone_density += SampleCone(Ray, mip);
+        // cone_density += SampleCloudDetail(Ray, SampleCloudShape(Ray, mip + 1), mip + 1);
     }
 
     return MultiScatter(phi, cone_density, Ray.Stepsize);

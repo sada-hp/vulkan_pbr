@@ -281,7 +281,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         }
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
-        Atmosphere.Shadow = smoothstep(0.0, 1.0, saturate(PdotL));
+        Atmosphere.Shadow = saturate(PdotL);
         Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
 
         if (EdotL < 0.0)

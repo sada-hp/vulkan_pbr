@@ -46,24 +46,24 @@ float SampleCloud(vec3 x0, float transmittance, float height)
 {
     vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed * 0.01);
 
-    float base = textureLod(CloudLowFrequency, uv, 4).r;
+    float base = textureLod(CloudLowFrequency, uv, 0).r;
 
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.2, Clouds.Coverage), 0.0, 1.0));
 
     float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
-    float weather2 = saturate(texture(WeatherMap, 1.0 - uv.zx / 40.0).r + 0.2);
+    float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage * Clouds.Coverage, 1.0));
+    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage, 1.0));
 
-    return saturate(mix(5.0 * Clouds.Density, Clouds.Density, transmittance) * base);
+    return saturate(mix(5.0 * Clouds.Density, Clouds.Density / 2.0, transmittance) * base);
 }
 
 float SampleCloudShadow(vec3 x1)
 {
-    const int steps = 5;
+    const int steps = 6;
     float topBound = Rct;
     float bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
     float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), bottomBound);
@@ -80,9 +80,7 @@ float SampleCloudShadow(vec3 x1)
         x0 += ubo.SunDirection.xyz * Stepsize;
         float height = 1.0 - GetHeightFraction(x0, bottomBound, topBound);
         Density = SampleCloud(x0, transmittance, height);
-
-        if (Density > 0.0)
-            transmittance *= BeerLambert(Density, Stepsize);
+        transmittance *= BeerLambert(Density, Stepsize);
     }
 
     return saturate(0.05 + transmittance);
@@ -90,16 +88,19 @@ float SampleCloudShadow(vec3 x1)
 
 void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow)
 {
+    float Re = length(Eye);
     float len = distance(Eye, World);
     float T = saturate(len / 1e5);
 
-    if (Clouds.Coverage == 0.0)
+    if (Clouds.Coverage == 0.0 || Re > Rt + Rcdelta)
     {
         AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, Atmosphere);
         Atmosphere.S *= MaxLightIntensity;
         Atmosphere.E *= MaxLightIntensity;
         return;
     }
+
+    float a = Re < Rt ? 0.0 : (Re - Rt) / Rcdelta;
     
     int steps = int(floor(mix(32, 16, saturate(0.01 * len / 1e4))));
     float Stepsize = len / float(steps);
@@ -123,7 +124,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
         float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
 
-        Shadow = SampleCloudShadow(Ray);
+        Shadow = mix(SampleCloudShadow(Ray), 1.0, a);
         Atmosphere.S += Shadow * (MaxLightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - MaxLightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
         w0 = w1;
     }
