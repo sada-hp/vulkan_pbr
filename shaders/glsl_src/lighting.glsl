@@ -118,7 +118,7 @@ vec4 GetInscattering(sampler3D LUT, float R, float Mu, float MuS, float DotVL)
     float Delta = RMu * RMu - R * R + Rg * Rg;
     vec4 Cst = ((RMu < 0.0 && Delta > 0.0) ? vec4 (1.0, 0.0, 0.0, 0.5 - 0.5 / DIM_MU) : vec4(-1.0, H * H, H, 0.5 + 0.5 / DIM_MU));
     
-    float uR = 0.5 / DIM_R + Rho / H * ( 1.0 - 1.0 / DIM_R );
+    float uR = 0.5 / (DIM_R - 1.0) + Rho / H * ( 1.0 - 1.0 / (DIM_R - 1.0) );
     float uMu = Cst.w + (RMu * Cst.x + sqrt(Delta + Cst.y)) / (Rho + Cst.z) * (0.5 - 1.0 / DIM_MU);
     float uMuS = 0.5 / DIM_MU_S + (atan(max(MuS, -0.1975) * tan(1.26 * 1.1)) / 1.1 + (1.0 - 0.26)) * 0.5 * (1.0 - 1.0 / DIM_MU_S);
     float Weight = (DotVL + 1.0) * 0.5 * (DIM_NU - 1.0);
@@ -295,8 +295,8 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
 {
     vec3 Color = vec3(0.0);
     float Re = length(Eye);
-    float EdotV = dot(Eye, View) / Re;
-    float EdotL = dot(Eye, Sun) / Re;
+    float EdotV = saturateAngle(dot(Eye, View) / Re);
+    float EdotL = saturateAngle(dot(Eye, Sun) / Re);
     float VdotL = dot(View, Sun);
 
     float PhaseR    = RayleighPhase(VdotL);
@@ -305,10 +305,18 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     vec4 Scattering = max(GetInscattering(InscatteringLUT, Re, EdotV, EdotL, VdotL), 0.0);
     Scattering.w *= smoothstep(0.00, 0.02, EdotL);
 
-    // Sky
-    if (SphereIntersect(Eye, View, vec3(0.0), Rt))
+    vec2 D = SphereDistances(Eye, View, vec3(0.0), Rt);
+    if (D.x > 0.0 || D.y > 0.0)
     {
-        Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
+        if (Re < Rt)
+        {
+            Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
+        }
+        else
+        {
+            Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
+            Color *= smootherstep(0.0, 1.0, 1.0 - saturate(max(min(D.x, D.y) / max(D.x, D.y), 0.0)));
+        }
     }
 
  #ifndef SKY_SCATTER_ONLY   

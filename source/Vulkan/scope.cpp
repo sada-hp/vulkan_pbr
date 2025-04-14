@@ -554,7 +554,7 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
 		samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0;
 		samplerInfo.minLod = 0.0;
-		samplerInfo.maxLod = 20.0;~
+		samplerInfo.maxLod = 20.0;
 		vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &m_Samplers[Type]);
 	}
 

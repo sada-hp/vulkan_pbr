@@ -43,9 +43,9 @@ float saturateAngle(float x)
     return clamp(-1.0, 1.0, x);
 }
 
-void SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius, out vec2 t)
+vec2 SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius)
 {
-    t = vec2(0.0);
+    vec2 t = vec2(0.0);
 
 	float radius2 = radius * radius;
 
@@ -57,23 +57,23 @@ void SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius, out vec2 t)
 	float discr = b * b - 4.0 * a * c;
 
 	if (discr < 0.0) 
-        return;
+        return t;
 
     t = max(vec2((-b - sqrt(discr))/2, (-b + sqrt(discr))/2), 0.0);
+
+    return t;
 }
 
 float SphereMaxDistance(vec3 ro, vec3 rd, vec3 so, float radius)
 {
-    vec2 t;
-    SphereDistances(ro, rd, so, radius, t);
+    vec2 t = SphereDistances(ro, rd, so, radius);
 
     return max(t.x, t.y);
 }
 
 float SphereMinDistance(vec3 ro, vec3 rd, vec3 so, float radius)
 {
-    vec2 t;
-    SphereDistances(ro, rd, so, radius, t);
+    vec2 t = SphereDistances(ro, rd, so, radius);
 
     if (t.x == 0.0 && t.y > 0.0)
     {

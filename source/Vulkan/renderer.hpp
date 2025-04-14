@@ -171,6 +171,7 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_TemporalVolumetrics = {};
 
 	std::unique_ptr<Buffer> m_DiffusePrecompute = VK_NULL_HANDLE;
 	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
@@ -233,6 +234,7 @@ private:
 
 	uint32_t m_ImageIndex = 0;
 	uint32_t m_ResourceIndex = 0;
+	uint32_t m_ResourceCount = 0;
 	uint64_t m_FrameCount = 0;
 
 #ifdef INCLUDE_GUI

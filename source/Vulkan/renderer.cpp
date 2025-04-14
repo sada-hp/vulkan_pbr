@@ -156,15 +156,15 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		.SetFOV(glm::radians(45.f))
 		.SetDepthRange(1e-2f, 1e4f);
 
-	m_SwapchainSemaphores.resize(m_SwapchainImages.size());
-	m_FrameStatusSemaphores.resize(m_SwapchainImages.size());
+	m_SwapchainSemaphores.resize(m_ResourceCount);
+	m_FrameStatusSemaphores.resize(m_ResourceCount);
 
-	m_PresentSync.resize(m_SwapchainImages.size());
-	m_CubemapAsync.resize(m_SwapchainImages.size());
-	m_DeferredSync.resize(m_SwapchainImages.size());
-	m_TerrainAsync.resize(m_SwapchainImages.size());
-	m_TransferAsync.resize(m_SwapchainImages.size());
-	m_BackgroundAsync.resize(m_SwapchainImages.size());
+	m_PresentSync.resize(m_ResourceCount);
+	m_CubemapAsync.resize(m_ResourceCount);
+	m_DeferredSync.resize(m_ResourceCount);
+	m_TerrainAsync.resize(m_ResourceCount);
+	m_TransferAsync.resize(m_ResourceCount);
+	m_BackgroundAsync.resize(m_ResourceCount);
 
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), m_PresentSync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), m_TerrainAsync.data());
@@ -360,6 +360,7 @@ VulkanBase::~VulkanBase() noexcept
 	m_DiffuseDescriptors.resize(0);
 	m_CubemapMipDescriptors.resize(0);
 
+	m_TemporalVolumetrics.resize(0);
 	m_UBOSets.resize(0);
 
 	m_Scope.Destroy();
@@ -637,6 +638,7 @@ bool VulkanBase::BeginFrame()
 
 		m_UBOSets[m_ResourceIndex]->BindSet(0, m_BackgroundAsync[m_ResourceIndex].Commands, *m_Volumetrics->pipeline);
 		m_Volumetrics->descriptorSet->BindSet(1, m_BackgroundAsync[m_ResourceIndex].Commands, *m_Volumetrics->pipeline);
+		m_TemporalVolumetrics[m_ResourceIndex]->BindSet(2, m_BackgroundAsync[m_ResourceIndex].Commands, *m_Volumetrics->pipeline);
 		m_Volumetrics->pipeline->BindPipeline(m_BackgroundAsync[m_ResourceIndex].Commands);
 		vkCmdDraw(m_BackgroundAsync[m_ResourceIndex].Commands, 3, 1, 0, 0);
 
@@ -771,7 +773,7 @@ void VulkanBase::EndFrame()
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
 		// if we just started drawing, we should skip image present semaphore as it has not yet been signaled
-		if (m_FrameCount >= m_SwapchainImages.size())
+		if (m_FrameCount >= m_ResourceCount)
 		{
 			waitSemaphores.push_back(m_PresentSync[m_ResourceIndex].Semaphore);
 			waitStages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
@@ -923,8 +925,8 @@ void VulkanBase::EndFrame()
 		vkQueuePresentKHR(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), &presentInfo);
 	}
 
-	m_ResourceIndex = (m_ResourceIndex + 1) % m_SwapchainImages.size();
-	m_FrameCount = m_FrameCount + 1 == UINT64_MAX ? m_SwapchainImages.size() + 1 : m_FrameCount + 1;
+	m_ResourceIndex = (m_ResourceIndex + 1) % m_ResourceCount;
+	m_FrameCount = m_FrameCount + 1 == UINT64_MAX ? m_ResourceCount + 1 : m_FrameCount + 1;
 
 #if DEBUG == 1
 	m_InFrame = false;
@@ -981,8 +983,10 @@ void VulkanBase::_handleResize()
 	m_DepthAttachmentsLR.resize(0);
 	m_DepthViewsLR.resize(0);
 
-	m_SwapchainImages.resize(0);
+	m_TemporalVolumetrics.resize(0);
 	m_SSRLUT.resize(0);
+
+	m_SwapchainImages.resize(0);
 
 	m_Scope.RecreateSwapchain(m_Surface);
 
@@ -1066,32 +1070,33 @@ VkBool32 VulkanBase::create_swapchain_images()
 	assert(m_Scope.GetSwapchain() != VK_NULL_HANDLE);
 
 	uint32_t imagesCount = m_Scope.GetMaxFramesInFlight();
+	m_ResourceCount = glm::max(imagesCount, 2u);
 
-	m_SSRLUT.resize(imagesCount);
+	m_SSRLUT.resize(m_ResourceCount);
 
 	m_SwapchainImages.resize(imagesCount);
 	m_SwapchainViews.resize(imagesCount);
 
-	m_DepthAttachmentsHR.resize(imagesCount);
-	m_DepthViewsHR.resize(imagesCount);
+	m_DepthAttachmentsHR.resize(m_ResourceCount);
+	m_DepthViewsHR.resize(m_ResourceCount);
 
-	m_HdrAttachmentsHR.resize(imagesCount);
-	m_HdrViewsHR.resize(imagesCount);
+	m_HdrAttachmentsHR.resize(m_ResourceCount);
+	m_HdrViewsHR.resize(m_ResourceCount);
 
-	m_DeferredAttachments.resize(imagesCount);
-	m_DeferredViews.resize(imagesCount);
+	m_DeferredAttachments.resize(m_ResourceCount);
+	m_DeferredViews.resize(m_ResourceCount);
 
-	m_BlurAttachments.resize(2 * imagesCount);
-	m_BlurViews.resize(2 * imagesCount);
+	m_BlurAttachments.resize(2 * m_ResourceCount);
+	m_BlurViews.resize(2 * m_ResourceCount);
 
-	m_NormalAttachments.resize(imagesCount);
-	m_NormalViews.resize(imagesCount);
+	m_NormalAttachments.resize(m_ResourceCount);
+	m_NormalViews.resize(m_ResourceCount);
 
-	m_HdrAttachmentsLR.resize(imagesCount);
-	m_HdrViewsLR.resize(imagesCount);
+	m_HdrAttachmentsLR.resize(m_ResourceCount);
+	m_HdrViewsLR.resize(m_ResourceCount);
 
-	m_DepthAttachmentsLR.resize(imagesCount);
-	m_DepthViewsLR.resize(imagesCount);
+	m_DepthAttachmentsLR.resize(m_ResourceCount);
+	m_DepthViewsLR.resize(m_ResourceCount);
 
 	VkBool32 res = vkGetSwapchainImagesKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), &imagesCount, m_SwapchainImages.data()) == VK_SUCCESS;
 
@@ -1102,7 +1107,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 	VmaAllocationCreateInfo allocCreateInfo{};
 	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1191,15 +1196,15 @@ VkBool32 VulkanBase::create_swapchain_images()
 
 VkBool32 VulkanBase::create_framebuffers()
 {
-	assert(m_SwapchainImages.size() > 0 && m_Scope.GetRenderPass() != VK_NULL_HANDLE);
+	assert(m_ResourceCount > 0 && m_Scope.GetRenderPass() != VK_NULL_HANDLE);
 
-	m_FramebuffersHR.resize(m_SwapchainImages.size());
-	m_FramebuffersLR.resize(m_SwapchainImages.size());
-	m_FramebuffersCP.resize(m_SwapchainImages.size());
-	m_FramebuffersPP.resize(m_SwapchainImages.size());
+	m_FramebuffersHR.resize(m_ResourceCount);
+	m_FramebuffersLR.resize(m_ResourceCount);
+	m_FramebuffersCP.resize(m_ResourceCount);
+	m_FramebuffersPP.resize(m_ResourceCount);
 
 	VkBool32 res = 1;
-	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthViewsHR[i]->GetImageView() }, &m_FramebuffersHR[i]) & res;
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetLowResRenderPass(), { m_Scope.GetSwapchainExtent().width / LRr, m_Scope.GetSwapchainExtent().height / LRr, 1 }, { m_HdrViewsLR[i]->GetImageView(), m_DepthViewsLR[i]->GetImageView()}, &m_FramebuffersLR[i]) & res;
@@ -1214,10 +1219,11 @@ VkBool32 VulkanBase::create_frame_pipelines()
 {
 	VkBool32 res = 1;
 
-	m_CompositionDescriptors.resize(m_SwapchainImages.size());
-	m_PostProcessDescriptors.resize(m_SwapchainImages.size());
-	m_BlurDescriptors.resize(m_SwapchainImages.size());
-	m_SSRDescriptors.resize(m_SwapchainImages.size());
+	m_CompositionDescriptors.resize(m_ResourceCount);
+	m_PostProcessDescriptors.resize(m_ResourceCount);
+	m_TemporalVolumetrics.resize(m_ResourceCount);
+	m_BlurDescriptors.resize(m_ResourceCount);
+	m_SSRDescriptors.resize(m_ResourceCount);
 
 	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
@@ -1226,7 +1232,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 	VkPushConstantRange BlurConst{};
 	BlurConst.size = sizeof(float);
 	BlurConst.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		m_CompositionDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[i])
@@ -1262,7 +1268,13 @@ VkBool32 VulkanBase::create_frame_pipelines()
 
 		m_SSRDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOBuffers[i])
-			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsHR[i == 0 ? m_SwapchainImages.size() - 1 : i - 1]->GetImageView(), SamplerPoint)
+			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsHR[i == 0 ? m_ResourceCount - 1 : i - 1]->GetImageView(), SamplerPoint)
+			.Allocate(m_Scope);
+
+		uint32_t index = i == 0 ? m_TemporalVolumetrics.size() - 1 : i - 1;
+		m_TemporalVolumetrics[i] = DescriptorSetDescriptor()
+			.AddImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsLR[index]->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp))
+			.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *m_UBOBuffers[index])
 			.Allocate(m_Scope);
 	}
 
@@ -1310,9 +1322,9 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 	uboAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	uboAllocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-	m_UBOBuffers.resize(m_SwapchainImages.size());
-	m_UBOSets.resize(m_SwapchainImages.size());
-	for (uint32_t i = 0; i < m_UBOBuffers.size(); ++i)
+	m_UBOBuffers.resize(m_ResourceCount);
+	m_UBOSets.resize(m_ResourceCount);
+	for (uint32_t i = 0; i < m_ResourceCount; ++i)
 	{
 		m_UBOBuffers[i] = std::make_unique<Buffer>(m_Scope, uboInfo, uboAllocCreateInfo);
 
@@ -1604,11 +1616,11 @@ VkBool32 VulkanBase::brdf_precompute()
 	VmaAllocationCreateInfo allocCreateInfo{};
 	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	m_DiffuseIrradience.resize(m_SwapchainImages.size());
-	m_SpecularLUT.resize(m_SwapchainImages.size());
-	m_CubemapLUT.resize(m_SwapchainImages.size());
+	m_DiffuseIrradience.resize(m_ResourceCount);
+	m_SpecularLUT.resize(m_ResourceCount);
+	m_CubemapLUT.resize(m_ResourceCount);
 
-	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		VkImageCreateInfo hdrInfo{};
 		hdrInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1726,11 +1738,11 @@ VkBool32 VulkanBase::brdf_precompute()
 
 	vkDestroyFramebuffer(m_Scope.GetDevice(), Framebuffer, VK_NULL_HANDLE);
 
-	m_CubemapDescriptors.resize(m_SwapchainImages.size());
-	m_DiffuseDescriptors.resize(m_SwapchainImages.size());
-	m_ConvolutionDescriptors.resize(m_SwapchainImages.size());
-	m_SpecularDescriptors.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_SwapchainImages.size());
-	m_CubemapMipDescriptors.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_SwapchainImages.size());
+	m_CubemapDescriptors.resize(m_ResourceCount);
+	m_DiffuseDescriptors.resize(m_ResourceCount);
+	m_ConvolutionDescriptors.resize(m_ResourceCount);
+	m_SpecularDescriptors.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_ResourceCount);
+	m_CubemapMipDescriptors.resize(m_SpecularLUT[0].Image->GetMipLevelsCount() * m_ResourceCount);
 
 	VmaAllocationCreateInfo bufallocCreateInfo{};
 	bufallocCreateInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -1797,7 +1809,7 @@ VkBool32 VulkanBase::brdf_precompute()
 	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
 	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
-	for (size_t i = 0; i < m_SwapchainImages.size(); i++)
+	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		m_CubemapDescriptors[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOBuffers[i])
@@ -2119,7 +2131,7 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	Queue.Submit(cmd)
 		.Wait();
 
-	for (uint32_t Sample = 2; Sample <= 5; Sample++)
+	for (uint32_t Sample = 2; Sample <= 15; Sample++)
 	{
 		Queue.Wait();
 		vkBeginCommandBuffer(cmd, &cmdBegin);
@@ -2217,14 +2229,32 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 	m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_Volumetrics->descriptorSet = DescriptorSetDescriptor()
-		.AddUniformBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
-		.AddImageSampler(2,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(3,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(4,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(5,  VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(6,  VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
-		.AddImageSampler(7,  VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
+		.AddUniformBuffer(0, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
+		.AddImageSampler(1,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(2,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(3,  VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(4,  VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(5,  VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(6,  VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 		.Allocate(m_Scope);
+
+	VkDescriptorSetLayoutBinding bindngs[2];
+	bindngs[0].binding = 0;
+	bindngs[0].descriptorCount = 1;
+	bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindngs[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindngs[0].pImmutableSamplers = VK_NULL_HANDLE;
+	bindngs[1].binding = 1;
+	bindngs[1].descriptorCount = 1;
+	bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindngs[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	VkDescriptorSetLayoutCreateInfo dummyInfo{};
+	dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dummyInfo.bindingCount = 2;
+	dummyInfo.pBindings = bindngs;
+	VkDescriptorSetLayout dummy;
+	vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
 
 	VkPipelineColorBlendAttachmentState blendState{};
 	blendState.blendEnable = VK_FALSE;
@@ -2242,11 +2272,14 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.SetBlendAttachments(1, &blendState)
 		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_Volumetrics->descriptorSet->GetLayout())
+		.AddDescriptorLayout(dummy)
 		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.SetCullMode(VK_CULL_MODE_FRONT_BIT)
 		.SetRenderPass(m_Scope.GetLowResRenderPass(), 0)
 		.Construct(m_Scope);
+
+	vkDestroyDescriptorSetLayout(m_Scope.GetDevice(), dummy, VK_NULL_HANDLE);
 
 	return 1;
 }
@@ -2296,12 +2329,12 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	m_GrassSet.resize(m_SwapchainImages.size());
-	m_WaterSet.resize(m_SwapchainImages.size());
-	m_WaterLUT.resize(m_SwapchainImages.size());
-	m_TerrainLUT.resize(m_SwapchainImages.size());
-	m_TerrainSet.resize(m_SwapchainImages.size());
-	m_TerrainDrawSet.resize(m_SwapchainImages.size());
+	m_GrassSet.resize(m_ResourceCount);
+	m_WaterSet.resize(m_ResourceCount);
+	m_WaterLUT.resize(m_ResourceCount);
+	m_TerrainLUT.resize(m_ResourceCount);
+	m_TerrainSet.resize(m_ResourceCount);
+	m_TerrainDrawSet.resize(m_ResourceCount);
 
 	VkCommandBuffer clearCMD;
 	VkClearColorValue Color;
@@ -2314,7 +2347,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.AllocateCommandBuffers2(1, &clearCMD);
 
 	::BeginOneTimeSubmitCmd(clearCMD);
-	for (uint32_t i = 0; i < m_TerrainLUT.size(); i++)
+	for (uint32_t i = 0; i < m_ResourceCount; i++)
 	{
 		m_TerrainLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
 		m_TerrainLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT[i].Image);

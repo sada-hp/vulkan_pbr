@@ -8,7 +8,7 @@ layout (constant_id = 0) const uint frequency_worley = 4;
 layout (constant_id = 1) const uint frequency_perlin = 4;
 layout (constant_id = 2) const uint seed = 0;
 
-layout (binding = 0, r8) uniform writeonly image3D outImage;
+layout (binding = 0, r32f) uniform writeonly image3D outImage;
 
 void main()
 {
@@ -21,17 +21,17 @@ void main()
     NOISE_SEED++;
     float worley03 = 1.0 - worley(cell_loc, frequency_worley * 14);
     
-    float perlin = fbm_perlin(cell_loc, frequency_perlin, 4) * 0.5 + 0.5;
-    float fbm_worley = worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25;
+    float perlin = fbm_perlin(cell_loc, frequency_perlin, 8);
+    float fbm_worley = (worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25) / 1.75;
     float perlin_worley = remap(perlin, 0.0, 1.0, fbm_worley, 1.0);
 
     worley01 = 1.0 - worley(cell_loc, frequency_worley * 1);
     NOISE_SEED++;
-    worley02 = 1.0 - worley(cell_loc, frequency_worley * 3);
+    worley02 = 1.0 - worley(cell_loc, frequency_worley * 4);
     NOISE_SEED++;
     worley03 = 1.0 - worley(cell_loc, frequency_worley * 8);
     NOISE_SEED++;
-    float low_frequency_fbm = worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25;
+    float low_frequency_fbm = (worley01 * 1.0 + worley02 * 0.5 + worley03 * 0.25) / 1.75;
 
     float cloud_noise = remap(perlin_worley, -low_frequency_fbm, 1.0, 0.0, 1.0);
     imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(cloud_noise, 0.0, 0.0, 0.0));

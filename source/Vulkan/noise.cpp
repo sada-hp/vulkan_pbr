@@ -101,21 +101,21 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateWorley(const RenderScope& Scope, V
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateWorleyPerlin(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
 {
-	return generate("worley_perlin_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, worley_octaves, perlin_octaves });
+	return generate("worley_perlin_comp", Scope, VK_FORMAT_R32G32B32A32_SFLOAT, imageSize, { frequency, worley_octaves, perlin_octaves });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate("cloud_shape_comp", Scope, VK_FORMAT_R8_UNORM, imageSize, { worley_frequency, perlin_frequency, seed });
+	return generate("cloud_shape_comp", Scope, VK_FORMAT_R32_SFLOAT, imageSize, { worley_frequency, perlin_frequency, seed });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCloudDetailNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves)
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate("cloud_detail_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
+	return generate("cloud_detail_comp", Scope, VK_FORMAT_R32G32B32A32_SFLOAT, imageSize, { frequency, octaves, seed });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCheckerBoard(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency)

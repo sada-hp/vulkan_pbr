@@ -82,7 +82,7 @@ void UVWToWorldInscatter(out float R, out float CosViewZenith, out float CosSunZ
     float x = float(gl_GlobalInvocationID.x);
     float y = float(gl_GlobalInvocationID.y);
 
-    if (y < float(DIM_MU) * 0.5)
+    if (y < float(DIM_MU) * 0.5 - 1.0)
     {
         float D = 1.0 - y / (float(DIM_MU) * 0.5 - 1.0);
         D = min(max(Dminp, D * Dmaxp), Dmaxp * 0.999);

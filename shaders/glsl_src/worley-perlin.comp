@@ -8,7 +8,7 @@ layout (constant_id = 0) const uint frequency = 4;
 layout (constant_id = 1) const uint worley_octaves = 4;
 layout (constant_id = 2) const uint perlin_octaves = 4;
 
-layout (binding = 0, r11f_g11f_b10f) uniform writeonly image2D outImage;
+layout (binding = 0, rgba32f) uniform writeonly image2D outImage;
 
 void main()
 {
