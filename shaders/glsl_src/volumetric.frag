@@ -279,14 +279,14 @@ void MarchToCloud(inout RayMarch Ray)
     float phi = dot(ubo.SunDirection.xyz, Ray.Direction);
     float EdotV = dot(normalize(ubo.CameraPosition.xyz), Ray.Direction);
     float ray_length = distance(Ray.Start, Ray.End);
-    int step_mod = max(int(ray_length / (topBound - bottomBound)), 1);
+    float step_mod = max(float(ray_length / (topBound - bottomBound)), 1.0);
 
     float mean_depth = 0.0;
     float sample_density = 0.0;
     float mean_transmittance = 0.0;
 
     // skip empty space until cloud is found
-    int steps = min(16 * step_mod, 128), i = 0;
+    int steps = int(min(32 * step_mod, 96)), i = 0;
     Ray.Stepsize = ray_length / float(steps);
 
     bool found = false;
@@ -333,7 +333,7 @@ void MarchToCloud(inout RayMarch Ray)
     Ray.LastHit = Ray.Start;
     Ray.Position = Ray.End;
     Ray.Direction = isreverse ? -Ray.Direction : Ray.Direction;
-    steps = max(8 * step_mod, 24);
+    steps = max(int(6 * step_mod), 16);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
