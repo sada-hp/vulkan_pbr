@@ -24,7 +24,7 @@ void main()
 
             if (Brightness > 1.413)
             {
-                imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * 0.15);
+                imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * 0.065);
             }
             else
             {
@@ -50,7 +50,7 @@ void main()
             }
             else
             {
-            vec3 Color = imageLoad(BlurH, Texel).rgb;
+                vec3 Color = imageLoad(BlurH, Texel).rgb;
 
                 for(int i = 1; i < 5; i++)
                 {

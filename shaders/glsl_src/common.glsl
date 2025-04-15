@@ -141,6 +141,16 @@ vec3 GetWorldPosition(vec2 UV, float Depth)
     return WorldPosition.xyz / WorldPosition.w;
 }
 
+vec4 GetScreenPosition(vec4 World)
+{
+    World = vec4(ubo.ViewProjectionMatrix * World);
+    World.xyz = (World.xyz / World.w);
+    World.xy = World.xy * 0.5 + 0.5;
+    World.y = 1.0 - World.y;
+
+    return World;
+}
+
 dmat4 GetWorldMatrix(mat3x4 Orientation, dvec3 Offset)
 {
     return dmat4(Orientation[0][0], Orientation[0][1], Orientation[0][2], 0.0,

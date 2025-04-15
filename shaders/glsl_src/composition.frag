@@ -18,9 +18,8 @@ layout(binding = 10) uniform samplerCube DiffuseLUT;
 layout(binding = 11) uniform samplerCube SpecularLUT;
 layout(binding = 12) uniform sampler2D BRDFLUT;
 layout(binding = 13) uniform sampler3D CloudLowFrequency;
-layout(binding = 14) uniform sampler3D CloudHighFrequency;
-layout(binding = 15) uniform sampler2D WeatherMap;
-layout(binding = 16) uniform CloudLayer
+layout(binding = 14) uniform sampler2D WeatherMap;
+layout(binding = 15) uniform CloudLayer
 {
     float Coverage;
     float Density;
@@ -51,19 +50,20 @@ float SampleCloud(vec3 x0, float transmittance, float height)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.2, Clouds.Coverage), 0.0, 1.0));
 
-    float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
+    vec3 temp = texture(WeatherMap, uv.xz / 5.0).rgb;
+    float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage, 1.0));
+    base = height * saturate(remap(base, shape, 1.0, pow(Clouds.Coverage, 1.5), 1.0));
 
     return saturate(mix(5.0 * Clouds.Density, Clouds.Density / 2.0, transmittance) * base);
 }
 
 float SampleCloudShadow(vec3 x1)
 {
-    const int steps = 6;
+    const int steps = 5;
     float topBound = Rct;
     float bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
     float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), bottomBound);
@@ -86,17 +86,20 @@ float SampleCloudShadow(vec3 x1)
     return saturate(0.05 + transmittance);
 }
 
-void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow)
+void SampleAtmosphere(vec3 Eye, vec3 World, vec3 Normal, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow, inout float LightIntensity)
 {
     float Re = length(Eye);
     float len = distance(Eye, World);
     float T = saturate(len / 1e5);
-
+    LightIntensity = mix(1.0, 0.25, smoothstep(0.0, 1.0, Clouds.Coverage)) * MaxLightIntensity;
+    
     if (Clouds.Coverage == 0.0 || Re > Rt + Rcdelta)
     {
         AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, Atmosphere);
-        Atmosphere.S *= MaxLightIntensity;
-        Atmosphere.E *= MaxLightIntensity;
+        Shadow = Atmosphere.Shadow <= 0.1 ? mix(0.05, 1.0, Atmosphere.Shadow / 0.1) : 1.0;
+        Atmosphere.S *= Shadow * LightIntensity;
+        Atmosphere.E *= Shadow * LightIntensity;
+        Atmosphere.L *= Shadow;
         return;
     }
 
@@ -112,10 +115,10 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
 
     Atmosphere.T = AtmosphereEnd.T;
     Atmosphere.Shadow = AtmosphereStart.Shadow;
-    
+
     float w0 = 0.0;
     float incr = 1.0 / float(steps);
-    Atmosphere.S = MaxLightIntensity * AtmosphereStart.S;
+    Atmosphere.S = LightIntensity * AtmosphereStart.S;
 
     for (int i = 1; i <= steps; i++)
     {
@@ -124,12 +127,25 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
         float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
 
-        Shadow = mix(SampleCloudShadow(Ray), 1.0, a);
-        Atmosphere.S += Shadow * (MaxLightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - MaxLightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
+        vec4 ScreenUV = GetScreenPosition(vec4(Ray, 1.0));
+        if (a == 1.0)
+        {
+            Shadow = 1.0;
+        }
+        else
+        {
+            Shadow = mix(SampleCloudShadow(Ray), 1.0, a);
+            if (Atmosphere.Shadow <= 0.1)
+            {
+                Shadow = mix(0.05, Shadow, Atmosphere.Shadow / 0.1);
+            }
+        }
+
+        Atmosphere.S += Shadow * (LightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w1) - LightIntensity * mix(AtmosphereStart.S, AtmosphereEnd.S, w0));
         w0 = w1;
     }
 
-    Atmosphere.E = AtmosphereEnd.E * Shadow * MaxLightIntensity;
+    Atmosphere.E = AtmosphereEnd.E * Shadow * LightIntensity;
     Atmosphere.L = AtmosphereEnd.L * Shadow;
 }
 
@@ -150,9 +166,10 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
 
     float Shadow = 1.0;
     SAtmosphere Atmosphere;
-    SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow);
+    float LightIntensity = MaxLightIntensity;
+    SampleAtmosphere(Eye, World, N, -V, Sun, Atmosphere, Shadow, LightIntensity);
 
-    vec3 Illumination = MaxLightIntensity * Atmosphere.L * NdotL;
+    vec3 Illumination = LightIntensity * Atmosphere.L * NdotL;
 
     float A = Material.Roughness;
     float A2 = A * A;
@@ -180,7 +197,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     vec3 diffuse = Material.Albedo.rgb * irradiance;
     vec3 specular = reflection * (F * brdf.x + brdf.y);
     vec3 ambient  = Atmosphere.L * Material.AO * (kD * diffuse + specular);
-    vec3 scattering = mix(1.0, 0.25, Clouds.Coverage) * Atmosphere.S;
+    vec3 scattering = Atmosphere.S;
 
     return scattering + ambient + Illumination * Lo;
     // return ambient + Illumination * Lo;

@@ -1249,9 +1249,8 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_SpecularLUT[i].Views[0]->GetImageView(), SamplerLinear)
 			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_BRDFLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(13, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
-			.AddImageSampler(14, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
-			.AddImageSampler(15, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
-			.AddUniformBuffer(16, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
+			.AddImageSampler(14, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+			.AddUniformBuffer(15, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 
 		m_PostProcessDescriptors[i] = DescriptorSetDescriptor()

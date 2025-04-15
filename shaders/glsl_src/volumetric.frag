@@ -31,8 +31,7 @@ void UpdateRay(inout RayMarch Ray)
 
 void UpdateRay(inout RayMarch Ray, float Stepsize)
 {
-    Ray.Stepsize = Stepsize;
-    Ray.Position += Ray.Direction * Ray.Stepsize;
+    Ray.Position += Ray.Direction * Stepsize;
     Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
 }
 
@@ -129,12 +128,13 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.2, Clouds.Coverage), 0.0, 1.0));
 
-    float weather1 = 1.0 - texture(WeatherMap, uv.xz / 5.0).r;
+    vec3 temp = texture(WeatherMap, uv.xz / 5.0).rgb;
+    float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
     
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, Clouds.Coverage, 1.0));
+    base = height * saturate(remap(base, shape, 1.0, pow(Clouds.Coverage, 1.5), 1.0));
 
     return base;
 }
@@ -172,44 +172,50 @@ void Blend(in RayMarch Ray, vec4 World)
         NDC = (NDC / NDC.w) * 0.5 + 0.5;
         if (NDC.x >= 0.0 && NDC.y >= 0.0 && NDC.y <= 1.0 && NDC.x <= 1.0)
         {
-            outScattering = mix(outScattering, texture(PreviousFrame, NDC.xy), 0.4);
+            outScattering = mix(outScattering, texture(PreviousFrame, NDC.xy), 0.25);
         }
     }
 
     if (outScattering.a != 0.0)
     {
-        SkyColor += MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, Ray.Direction, SunDir);
+        SkyColor += SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, Ray.Direction, SunDir);
+
+        if (Hits.TopCloud > 0.0)
+        {
+            vec3 HitPoint = Eye + Ray.Direction * Hits.TopCloud;
+
+            SAtmosphere Atmosphere;
+            AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, 1.0, 1.0, Eye, HitPoint, SunDir, Atmosphere);
+            float PhaseF = HGDPhaseCloud(dot(ubo.SunDirection.xyz, Ray.Direction));
+            
+            vec3 n = normalize(HitPoint);
+            float pole = abs(dot(n, vec3(0, 1, 0)));
+            vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+            vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+            float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+            float right = 1.0 - left;
+            float mask1 = left * texture(WeatherMap, 50.0 * uv1).b + right * texture(WeatherMap, 50.0 * uv2).b;
+            float mask2 = left * texture(WeatherMap, 6.0 * uv1).r + right * texture(WeatherMap, 6.0 * uv2).r;
+            float mask3 = left * texture(WeatherMap, vec2(85.0, 25.0) * uv1).r + right * texture(WeatherMap, vec2(85.0, 25.0) * uv2).r;
+
+            float altocumulus = (left * texture(WeatherMap, 700.0 * uv1).g + right * texture(WeatherMap, 700.0 * uv2).g);
+            float altocumulus_mask2 = saturate(mask2 - 0.25) / 0.75;
+            float altocumulus_mask1 = saturate(altocumulus_mask2 * remap(saturate(mask1 - 0.2) / 0.8, altocumulus_mask2, 1.0, 0.0, 1.0));
+            altocumulus = altocumulus_mask1 * altocumulus_mask2 * altocumulus;
+
+            float cirrus = (left * texture(WeatherMap, vec2(125,15) * uv1).r + right * texture(WeatherMap, vec2(125,15) * uv2).r);
+            float cirrus_mask = saturate(mask3 - 0.35) / 0.65;
+            cirrus = cirrus_mask * cirrus;
+
+            float high_level = ((saturate((cirrus + altocumulus) - 0.2) / 0.8) + (cirrus_mask * saturate((1.0 - altocumulus_mask2) - 0.5) / 0.5) * cirrus);
+            SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * high_level;
+        }
+
+        SkyColor *= MaxLightIntensity;
     }
     
     outScattering.rgb = mix(outScattering.rgb, SkyColor, outScattering.a * (1.0 - saturate(Hits.Ground)));
-
-#if 0
-    float PhaseF = HGDPhaseCloud(dot(ubo.SunDirection.xyz, Ray.Direction));
-    float Hit = SphereMinDistance(Eye, Ray.Direction, vec3(0.0), Rct);
-    if (Hit > 0.0)
-    {
-        vec3 n = normalize(Eye + Ray.Direction * Hit);
-        float pole = abs(dot(n, vec3(0, 1, 0)));
-        vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
-        vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
-
-        float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
-        float right = 1.0 - left;
-        float mask = left * texture(WeatherMap, 5.0 * uv1).b + right * texture(WeatherMap, 5.0 * uv2).b;
-
-        float www = 0.5 * (left * texture(WeatherMap, 700.0 * uv1).g + right * texture(WeatherMap, 700.0 * uv2).g);
-        float y = left * texture(WeatherMap, vec2(250.0, 25.0) * uv1).r + right * texture(WeatherMap, vec2(250.0, 25.0) * uv2).r;
-        www = saturate(remap(www, y, 1.0, 0.0, 1.0));
-
-        // SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * mask;
-
-        mask = left * texture(WeatherMap, 5.0 * -uv1).b + right * texture(WeatherMap, 5.0 * -uv2).b;
-        mask = saturate(mask - 0.6) / 0.4;
-        y = left * texture(WeatherMap, vec2(15.0, 65.0) * uv1).r + right * texture(WeatherMap, vec2(15.0, 65.0) * uv2).r;
-        y = smootherstep(0.0, 1.0, saturate(y - 0.2) / 0.8);
-        // SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * mask * y;
-        }
-#endif
 }
 
 // volumetric-cloudscapes-of-horizon-zero-dawn
@@ -223,16 +229,8 @@ float SampleCone(RayMarch Ray, int mip)
 
         if (cone_density < 0.3)
         {
-            float density = 0.0;
-            if ((density = SampleCloudShape(Ray, mip + 1)) > 0.0)
-            {
-                cone_density += SampleCloudDetail(Ray, density, mip + 1);
-            }
-        }
-        else
             cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1);
-
-        Ray.Stepsize *= i >= 5 ? 2.0 : 1.0;
+        }
     }
 
     return cone_density;
@@ -242,7 +240,7 @@ float MultiScatter(float phi, float e, float ds)
 {
     float luminance = 0.0;
     float a = 1.0, b = 1.0, c = 1.0;
-    for (int i = 0; i < 15; i++)
+    for (int i = 0; i < 5; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
         a *= 0.5;
@@ -280,33 +278,48 @@ void MarchToCloud(inout RayMarch Ray)
 
     float phi = dot(ubo.SunDirection.xyz, Ray.Direction);
     float EdotV = dot(normalize(ubo.CameraPosition.xyz), Ray.Direction);
-    float w = saturate(10.0 * pow(abs(EdotV), 5.0));
+    float ray_length = distance(Ray.Start, Ray.End);
+    int step_mod = max(int(ray_length / (topBound - bottomBound)), 1);
 
     float mean_depth = 0.0;
     float sample_density = 0.0;
     float mean_transmittance = 0.0;
 
-    // take larger steps and
     // skip empty space until cloud is found
-    int steps = int(ceil(mix(128, 32, w))), i = steps - 1;
-    Ray.Stepsize = distance(Ray.Start, Ray.End) / float(steps);
+    int steps = min(16 * step_mod, 128), i = 0;
+    Ray.Stepsize = ray_length / float(steps);
 
     bool found = false;
-    for (i; i >= 0 && steps > 1; i -= 1)
+    bool isreverse = false;
+    for (i = steps; i > 0; i--)
     {
         UpdateRay(Ray);
 
-        if ((sample_density = SampleCloudShape(Ray, int(!found))) > 0)
+        if (!isreverse && ((sample_density = SampleCloudShape(Ray, 1)) > 0))
         {
-            if ((sample_density = SampleCloudDetail(Ray, sample_density, int(!found))) > 0)
+            if ((sample_density = SampleCloudDetail(Ray, sample_density, 1)) > 0)
             {
-                Ray.Position -= Ray.Stepsize * Ray.Direction;
                 Ray.End = Ray.Position;
-                Ray.Stepsize /= 2.0;
+
                 steps /= 2;
                 i = steps - 1;
+                Ray.Stepsize = Ray.Stepsize / float(steps);
+                
+                Ray.Direction = -Ray.Direction;
+                isreverse = true;
                 found = true;
             }
+        }
+        else if (isreverse && ((sample_density = SampleCloudShape(Ray, 0)) > 0))
+        {
+            if ((sample_density = SampleCloudDetail(Ray, sample_density, 0)) > 0)
+            {
+                Ray.End = Ray.Position;
+            }
+        }
+        else if (isreverse)
+        {
+            break;
         }
     }
 
@@ -315,17 +328,19 @@ void MarchToCloud(inout RayMarch Ray)
         return;
     }
 
-    // go more precise for clouds
+    // go again for clouds
     Ray.FirstHit = Ray.End;
+    Ray.LastHit = Ray.Start;
     Ray.Position = Ray.End;
-    steps = int(ceil(mix(32, 16, w)));
+    Ray.Direction = isreverse ? -Ray.Direction : Ray.Direction;
+    steps = max(8 * step_mod, 24);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
     float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
 
     float incr = 1.0 / float(steps);
-    for (i = steps - 1; i >= 0; i--)
+    for (i = steps; i >= 0; i--)
     {
         UpdateRay(Ray, Stepsize, float(steps - i) * incr);
         
@@ -382,8 +397,8 @@ void main()
     Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 
     Hits.Camera = length(RayOrigin);
-    float muHoriz = -sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
-    float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera - muHoriz;
+    float muHoriz = sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
+    float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera + muHoriz;
 
     if (Clouds.Coverage > 0 && (horizon > 0 || Hits.Camera > bottomBound))
     {
@@ -394,7 +409,7 @@ void main()
         }
         else if (Hits.Camera > topBound)
         {
-            if (Hits.Ground == 0)
+            if (horizon >= 0)
             {
                 Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
                 Ray.Start = RayOrigin + Ray.Direction * SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
@@ -407,7 +422,7 @@ void main()
         }
         else
         {
-            if (Hits.Ground == 0)
+            if (horizon >= 0)
             {
                 Ray.End = RayOrigin;
                 Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
