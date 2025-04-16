@@ -4,14 +4,14 @@
 layout (constant_id = 0) const float Rg = 6360.0 * 1e3;
 layout (constant_id = 1) const float Rt = 6420.0 * 1e3;
 
-#define TRANSMITTANCE_SAMPLES 500
-#define INSCATTERING_SAMPLES 50
-#define INSCATTERING_SPHERE_SAMPLES 16
+#define TRANSMITTANCE_SAMPLES 1500
+#define INSCATTERING_SAMPLES 500
+#define INSCATTERING_SPHERE_SAMPLES 32
 #define IRRADIANCE_SAMPLES 32
 
 float Rdelta = Rt - Rg;
 float Rcb = Rg + 0.15 * Rdelta;
-float Rct = Rg + 0.7 * Rdelta;
+float Rct = Rg + 0.85 * Rdelta;
 float Rcdelta = Rct - Rcb;
 
 const float HR = 8.0;
@@ -26,9 +26,9 @@ const vec3 BetaR = vec3(5.8e-3, 1.35e-2, 3.31e-2);
 #else
     // clear sky
     const float HM = 1.2;
-    const vec3 BetaMSca = vec3(20e-3);
+    const vec3 BetaMSca = vec3(21e-3);
     const vec3 BetaMEx = BetaMSca / 0.9;
-    const float MieG = 0.8;
+    const float MieG = 0.76;
 #endif
 
 const float MaxLightIntensity = 50.0;

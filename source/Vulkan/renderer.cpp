@@ -595,8 +595,8 @@ bool VulkanBase::BeginFrame()
 		submitInfo.pWaitDstStageMask = nullptr;
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &m_CubemapAsync[m_ResourceIndex].Commands;
-		submitInfo.signalSemaphoreCount = 0;
-		submitInfo.pSignalSemaphores = nullptr;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = signalSemaphores.data();
 		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, m_CubemapAsync[m_ResourceIndex].Fence);
 	}
 
@@ -764,10 +764,10 @@ void VulkanBase::EndFrame()
 		vkEndCommandBuffer(m_DeferredSync[m_ResourceIndex].Commands);
 
 		VkSubmitInfo submitInfo{};
-		std::vector<VkPipelineStageFlags> waitStages;
-		std::vector<VkSemaphore> waitSemaphores;
-		waitSemaphores.reserve(2);
-		waitStages.reserve(2);
+		std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
+		std::vector<VkSemaphore> waitSemaphores = { m_CubemapAsync[m_ResourceIndex].Semaphore };
+		waitSemaphores.reserve(3);
+		waitStages.reserve(3);
 		
 		std::vector<VkSemaphore> signalSemaphores = { m_DeferredSync[m_ResourceIndex].Semaphore };
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

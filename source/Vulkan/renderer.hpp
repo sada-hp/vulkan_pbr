@@ -120,6 +120,7 @@ namespace GR
 class VulkanBase final : public GR::Renderer
 {
 private:
+
 	const uint32_t LRr = 2;
 	const uint32_t CubeR = 128;
 

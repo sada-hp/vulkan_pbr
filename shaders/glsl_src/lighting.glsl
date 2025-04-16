@@ -52,7 +52,7 @@ float HGDPhase(float a, float ghg, float gd, float kd, float w)
     return mix(hgp, dp, w);
 }
 
-float HGDPhase(float a)
+float HGDPhaseCloud(float a)
 {
     float d = mix(5.0, 50.0, MieG);
 
@@ -64,7 +64,7 @@ float HGDPhase(float a)
     return HGDPhase(a, ghg, gd, kd, w);
 }
 
-float HGDPhase(float a, float g)
+float HGDPhaseCloud(float a, float g)
 {
     float d = mix(5.0, 50.0, MieG);
 
@@ -76,7 +76,7 @@ float HGDPhase(float a, float g)
     return HGDPhase(a, g * ghg, g * gd, kd, w);
 }
 
-float HGDPhaseCloud(float a)
+float HGDPhase(float a)
 {
     float d = mix(1.5, 5.0, 1.0 - MieG);
 
@@ -88,7 +88,7 @@ float HGDPhaseCloud(float a)
     return HGDPhase(a, ghg, gd, kd, w);
 }
 
-float HGDPhaseCloud(float a, float g)
+float HGDPhase(float a, float g)
 {
     float d = mix(1.5, 5.0, 1.0 - MieG);
 
@@ -321,7 +321,7 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
 
  #ifndef SKY_SCATTER_ONLY   
     // Sun
-    Color += TWO_PI * vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
+    Color += TWO_PI * Transmittance * vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
 #endif
 
     return Color;

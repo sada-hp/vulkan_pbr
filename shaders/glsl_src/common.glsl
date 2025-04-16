@@ -13,6 +13,12 @@ float smootherstep(float e0, float e1, float x)
 	return x * x * x * (x * (6.0 * x - 15.0) + 10.0);
 }
 
+float inverse_smoothstep(float e0, float e1, float x)
+{
+	x = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+	return 0.5 - sin(asin(1.0 - 2.0 * x) / 3.0) ;
+}
+
 float remap(float orig, float old_min, float old_max, float new_min, float new_max)
 {
     return new_min + (((orig - old_min) / (old_max - old_min)) * (new_max - new_min));

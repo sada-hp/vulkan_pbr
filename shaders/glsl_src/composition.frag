@@ -86,7 +86,7 @@ float SampleCloudShadow(vec3 x1)
     return saturate(0.05 + transmittance);
 }
 
-void SampleAtmosphere(vec3 Eye, vec3 World, vec3 Normal, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow, inout float LightIntensity)
+void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow, inout float LightIntensity)
 {
     float Re = length(Eye);
     float len = distance(Eye, World);
@@ -150,12 +150,12 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 Normal, vec3 View, vec3 Sun, ou
 }
 
 // get specular and ambient part from sunlight
-vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Material)
+vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SMaterial Material)
 {
     vec3 Lo = vec3(0.0);
     vec3 N = Material.Normal;
     vec3 S = Sun;
-    vec3 V = normalize(Eye - World);
+    vec3 V = View;
     vec3 H = normalize(V + S);
 
     float NdotV = abs(dot(N, V)) + 1e-5;
@@ -167,7 +167,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 Sun, in SMaterial Materi
     float Shadow = 1.0;
     SAtmosphere Atmosphere;
     float LightIntensity = MaxLightIntensity;
-    SampleAtmosphere(Eye, World, N, -V, Sun, Atmosphere, Shadow, LightIntensity);
+    SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow, LightIntensity);
 
     vec3 Illumination = LightIntensity * Atmosphere.L * NdotL;
 
@@ -211,13 +211,14 @@ void main()
     float Depth    = subpassLoad(SceneDepth).r;
     vec4 Deferred  = subpassLoad(HDRDeferred).rgba;
     vec3 Normal    = normalize(subpassLoad(HDRNormals).rgb);
+
+    vec3 Eye   = ubo.CameraPosition.xyz;
+    vec3 Sun   = normalize(ubo.SunDirection.xyz);
+    vec3 World = GetWorldPosition(UV, Depth);
+    vec3 View = normalize(Eye - World);
  
     if (Color.a != 0.0)
     {
-        vec3 Eye   = ubo.CameraPosition.xyz;
-        vec3 Sun   = normalize(ubo.SunDirection.xyz);
-        vec3 World = GetWorldPosition(UV, Depth);
-        
         SMaterial Material;
         Material.Roughness  = Deferred.g;
         Material.Metallic   = Deferred.b;
@@ -227,7 +228,7 @@ void main()
         Material.Specular   = Deferred.a;
         Material.Normal     = Normal;
         
-        Color.rgb = DirectSunlight(Eye, World, Sun, Material);
+        Color.rgb = DirectSunlight(Eye, World, View, Sun, Material);
 
         if (Depth < SkyDepth)
         {
@@ -237,12 +238,16 @@ void main()
             float a = 1.0 - SkyColor.a;
             float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
             Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
+            Color.a = max(a, Color.a);
         }
     }
     else
     {
         Color.rgb = SkyColor.rgb;
+        Color.a = 1.0 - SkyColor.a;
     }
+
+    Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
 
     outColor = vec4(Color.rgb, 1.0);
 }

@@ -40,7 +40,7 @@ vec3 ComputeDeltaEn(int Order, float R, float CosSunZenith)
             vec3 Ray = GetInscattering(DeltaSR, R, W.z, CosSunZenith, CosViewun).rgb;
             vec3 Mie = GetInscattering(DeltaSM, R, W.z, CosSunZenith, CosViewun).rgb;
 
-            DeltaE += (Ray * RayleighPhase(CosViewun) + Mie * MiePhase(CosViewun)) * dW;
+            DeltaE += (Ray * RayleighPhase(CosViewun) + Mie * HGDPhase(CosViewun)) * dW;
         }
     }
 
