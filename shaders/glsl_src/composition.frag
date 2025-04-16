@@ -3,23 +3,22 @@
 #include "lighting.glsl"
 #include "brdf.glsl"
 
-layout(input_attachment_index = 0, binding = 1) uniform subpassInput HDRColor;
-layout(input_attachment_index = 1, binding = 2) uniform subpassInput HDRNormals;
-layout(input_attachment_index = 2, binding = 3) uniform subpassInput HDRDeferred;
-layout(input_attachment_index = 3, binding = 4) uniform subpassInput SceneDepth;
+layout(binding = 1) uniform sampler2D HDRColor;
+layout(binding = 2) uniform sampler2D HDRNormals;
+layout(binding = 3) uniform sampler2D HDRDeferred;
+layout(binding = 4) uniform sampler2D SceneDepth;
+// layout(binding = 5) uniform sampler2D SceneBackground;
+// layout(binding = 6) uniform sampler2D BackgroundDepth;
 
-layout(binding = 5) uniform sampler2D SceneBackground;
-layout(binding = 6) uniform sampler2D BackgroundDepth;
-
-layout(binding = 7) uniform sampler2D TransmittanceLUT;
-layout(binding = 8) uniform sampler2D IrradianceLUT;
-layout(binding = 9) uniform sampler3D InscatteringLUT;
-layout(binding = 10) uniform samplerCube DiffuseLUT;
-layout(binding = 11) uniform samplerCube SpecularLUT;
-layout(binding = 12) uniform sampler2D BRDFLUT;
-layout(binding = 13) uniform sampler3D CloudLowFrequency;
-layout(binding = 14) uniform sampler2D WeatherMap;
-layout(binding = 15) uniform CloudLayer
+layout(binding = 5) uniform sampler2D TransmittanceLUT;
+layout(binding = 6) uniform sampler2D IrradianceLUT;
+layout(binding = 7) uniform sampler3D InscatteringLUT;
+layout(binding = 8) uniform samplerCube DiffuseLUT;
+layout(binding = 9) uniform samplerCube SpecularLUT;
+layout(binding = 10) uniform sampler2D BRDFLUT;
+layout(binding = 11) uniform sampler3D CloudLowFrequency;
+layout(binding = 12) uniform sampler2D WeatherMap;
+layout(binding = 13) uniform CloudLayer
 {
     float Coverage;
     float Density;
@@ -205,12 +204,12 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
 
 void main()
 {
-    vec4 SkyColor  = texture(SceneBackground, UV);
-    float SkyDepth = texture(BackgroundDepth, UV).r;
-    vec4 Color     = subpassLoad(HDRColor);
-    float Depth    = subpassLoad(SceneDepth).r;
-    vec4 Deferred  = subpassLoad(HDRDeferred).rgba;
-    vec3 Normal    = normalize(subpassLoad(HDRNormals).rgb);
+    // vec4 SkyColor  = texture(SceneBackground, UV);
+    // float SkyDepth = texture(BackgroundDepth, UV).r;
+    vec4 Color     = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
+    float Depth    = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
+    vec4 Deferred  = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
+    vec3 Normal    = normalize(texelFetch(HDRNormals, ivec2(gl_FragCoord.xy), 0).rgb);
 
     vec3 Eye   = ubo.CameraPosition.xyz;
     vec3 Sun   = normalize(ubo.SunDirection.xyz);
@@ -230,24 +229,24 @@ void main()
         
         Color.rgb = DirectSunlight(Eye, World, View, Sun, Material);
 
-        if (Depth < SkyDepth)
-        {
-            vec3 CloudPosition = GetWorldPosition(UV, SkyDepth);
-            float d = distance(CloudPosition, World);
+        //if (Depth < SkyDepth)
+        //{
+        //    vec3 CloudPosition = GetWorldPosition(UV, SkyDepth);
+        //    float d = distance(CloudPosition, World);
 
-            float a = 1.0 - SkyColor.a;
-            float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
-            Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
-            Color.a = max(a, Color.a);
-        }
+        //    float a = 1.0 - SkyColor.a;
+        //    float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
+        //    Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
+        //    Color.a = max(a, Color.a);
+        //}
     }
-    else
-    {
-        Color.rgb = SkyColor.rgb;
-        Color.a = 1.0 - SkyColor.a;
-    }
+    //else
+    //{
+    //    Color.rgb = SkyColor.rgb;
+    //    Color.a = 1.0 - SkyColor.a;
+    //}
 
-    Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
+    // Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
 
     outColor = vec4(Color.rgb, 1.0);
 }

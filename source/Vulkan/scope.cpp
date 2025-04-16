@@ -54,7 +54,7 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	// HDR attachment
 	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -96,76 +96,28 @@ RenderScope& RenderScope::CreateDefaultRenderPass()
 	attachments[3].flags = 0;
 
 	std::array<VkAttachmentReference, 3> hdr_ref
-	{ 
-		VkAttachmentReference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}, 
-		VkAttachmentReference{1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}, 
-		VkAttachmentReference{2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL} 
+	{
+		VkAttachmentReference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+		VkAttachmentReference{1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+		VkAttachmentReference{2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}
 	};
 
 	std::array<VkAttachmentReference, 1> depth_ref
-	{ 
-		VkAttachmentReference{3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} 
-	};
-
-	std::array<VkAttachmentReference, 4> input_attachments
 	{
-		VkAttachmentReference{0, VK_IMAGE_LAYOUT_GENERAL},
-		VkAttachmentReference{1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-		VkAttachmentReference{2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-		VkAttachmentReference{3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+		VkAttachmentReference{3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}
 	};
 
-	std::array<VkSubpassDescription, 2> subpassDescriptions{};
+	std::array<VkSubpassDescription, 1> subpassDescriptions{};
 	subpassDescriptions[0].colorAttachmentCount = hdr_ref.size();
 	subpassDescriptions[0].pColorAttachments = hdr_ref.data();
 	subpassDescriptions[0].pDepthStencilAttachment = depth_ref.data();
 	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-	subpassDescriptions[1].colorAttachmentCount = 1;
-	subpassDescriptions[1].pColorAttachments = &input_attachments[0];
-	subpassDescriptions[1].inputAttachmentCount = input_attachments.size();
-	subpassDescriptions[1].pInputAttachments = input_attachments.data();
-	subpassDescriptions[1].pDepthStencilAttachment = nullptr;
-	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
-	std::array<VkSubpassDependency, 4> dependencies;
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = 1;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-	dependencies[2].srcSubpass = 1;
-	dependencies[2].dstSubpass = 1;
-	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[2].srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[2].dependencyFlags = 0;
-
-	dependencies[3].srcSubpass = 1;
-	dependencies[3].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[3].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[3].dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	dependencies[3].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[3].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[3].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
 	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	createInfo.attachmentCount = attachments.size();
 	createInfo.pAttachments = attachments.data();
-	createInfo.dependencyCount = dependencies.size();
-	createInfo.pDependencies = dependencies.data();
+	createInfo.dependencyCount = 0;
+	createInfo.pDependencies = VK_NULL_HANDLE;
 	createInfo.subpassCount = subpassDescriptions.size();
 	createInfo.pSubpasses = subpassDescriptions.data();
 

@@ -55,7 +55,9 @@ void main()
         const float a = Push.Roughness * Push.Roughness;
         for(uint i = 0u; i < Samples; i++)
         {
-            vec2 Xi = In.sSample[i].xy;
+            vec4 Current = In.sSample[i];
+            
+            vec2 Xi = Current.xy;
             vec3 H  = ImportanceSampleGGX(TBN, Xi, a);
             vec3 L  = normalize(2.0 * dot(V, H) * H - V);
 
@@ -67,7 +69,7 @@ void main()
 
                 float GGX = D_DistributionGGX(NdotH, Push.Roughness) / (4.0f * HdotV) + 0.001;
                 float OmegaS = 1.0 / (Samples * GGX);
-                float OmegaP = In.sSample[i].z;
+                float OmegaP = Current.z;
 
                 float MipLevel = max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0f);
 

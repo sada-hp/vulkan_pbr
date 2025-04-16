@@ -152,7 +152,7 @@ private:
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
 	std::vector<VkFramebuffer> m_FramebuffersHR   = {};
-	std::vector<VkFramebuffer> m_FramebuffersLR   = {};
+	// std::vector<VkFramebuffer> m_FramebuffersLR   = {};
 	std::vector<VkFramebuffer> m_FramebuffersCP   = {};
 	std::vector<VkFramebuffer> m_FramebuffersPP   = {};
 
@@ -181,6 +181,7 @@ private:
 	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
 
 	std::vector<VulkanSynchronization> m_PresentSync = {};
+	std::vector<VulkanSynchronization> m_ComposeSync = {};
 	std::vector<VulkanSynchronization> m_DeferredSync = {};
 	std::vector<VulkanSynchronization> m_TerrainAsync = {};
 	std::vector<VulkanSynchronization> m_CubemapAsync = {};
@@ -198,7 +199,8 @@ private:
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
 
-	std::unique_ptr<GraphicsObject> m_Volumetrics = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<DescriptorSet> m_VolumetricsDescriptor = VK_NULL_HANDLE;
 
 	VulkanTexture m_VolumeShape = {};
 	VulkanTexture m_VolumeDetail = {};
