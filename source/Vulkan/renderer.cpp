@@ -2220,7 +2220,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 4u, 4u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
-	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 4u, 4u);
+	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
 	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat); 

@@ -148,7 +148,7 @@ float SampleCloudDetail(in RayMarch Ray, float base, int lod)
     float high_frequency_fbm = (high_frequency_noise.r * 1.0 + high_frequency_noise.g * 0.5 + high_frequency_noise.b * 0.25) / 1.75;
     float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    base = mix(10.0 * Clouds.Density, Clouds.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0));
+    base = mix(5.0 * Clouds.Density, Clouds.Density / 5.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0));
     return saturate(base);
 }
 
@@ -339,6 +339,7 @@ void MarchToCloud(inout RayMarch Ray)
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
     float ToAEP = distance(ubo.CameraPosition.xyz, Ray.Start);
 
+    float Dist = 0.0;
     float incr = 1.0 / float(steps);
     for (i = steps; i >= 0; i--)
     {
@@ -348,18 +349,19 @@ void MarchToCloud(inout RayMarch Ray)
         if ((sample_density = SampleCloudShape(Ray, mip)) > 0)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
-        if (sample_density > 0.0) 
+        Dist += Ray.Stepsize;
+        if (sample_density > 0.0)
         {
-            float extinction = max(sample_density, 1e-6);
+            float extinction = sample_density + 1e-7;
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
             vec3 E = extinction * MaxLightIntensity * vec3(MarchToLight(Ray.Position, ubo.SunDirection.xyz, phi, 6, mip));
             E = vec3(E - transmittance * E) / extinction;
             outScattering.rgb += E * outScattering.a;
             outScattering.a *= transmittance;
 
-            float Dist = ((float(steps - i + 1) * Ray.Stepsize + ToCamera) / ToAEP);
-            mean_depth += mix(Ray.Height, 1.0, Dist) * outScattering.a;
-            mean_transmittance += outScattering.a * mix(1.0 - Ray.Height, 1.0, Dist);
+            float DistAEP = (Dist + ToCamera) / ToAEP;
+            mean_depth += mix(Ray.Height, 1.0, DistAEP) * outScattering.a;
+            mean_transmittance += outScattering.a * mix(1.0 - Ray.Height, 1.0, DistAEP);
             Ray.LastHit = Ray.Position;
         }
     }

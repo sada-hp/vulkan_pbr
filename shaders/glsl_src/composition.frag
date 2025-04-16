@@ -58,7 +58,7 @@ float SampleCloud(vec3 x0, float transmittance, float height)
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
     base = height * saturate(remap(base, shape, 1.0, pow(Clouds.Coverage, 1.5), 1.0));
 
-    return saturate(mix(5.0 * Clouds.Density, Clouds.Density / 2.0, transmittance) * base);
+    return saturate(mix(2.0 * Clouds.Density, Clouds.Density / 2.0, transmittance) * base);
 }
 
 float SampleCloudShadow(vec3 x1)
