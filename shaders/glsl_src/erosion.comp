@@ -67,8 +67,8 @@ bool test_run()
 {
     ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
-    float Kw = 0.01;
-    float dt = 0.6;
+    float Kw = 0.001;
+    float dt = 0.5;
 
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;
@@ -148,8 +148,8 @@ void erosion_loop()
 {
     ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
-    float Kw = 0.01;
-    float dt = 0.6;
+    float Kw = 0.001;
+    float dt = 0.5;
 
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;

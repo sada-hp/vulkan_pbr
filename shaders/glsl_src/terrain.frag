@@ -86,7 +86,7 @@ void main()
 
     // -water
     w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
-    w = saturate(w + DampenValue(WaterAmount, 150.0));
+    w = saturate(w + DampenValue(WaterAmount, 85.0));
     Material.Albedo.rgb = mix(Material.Albedo.rgb, WaterColor, w);
     Material.Roughness = mix(Material.Roughness, 0.0, w * w * w);
     Material.AO = mix(Material.AO, 1.0, w);

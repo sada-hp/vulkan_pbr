@@ -203,10 +203,12 @@ private:
 	RenderScope m_Scope = {};
 	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
-	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {}; 
 	std::unique_ptr<Buffer> m_CloudLayer = {};
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOTempSets = {};
 
 	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_VolumetricsBetweenPipeline = VK_NULL_HANDLE;
@@ -248,7 +250,7 @@ private:
 
 	uint32_t m_TerrainDispatches = 0u;
 
-	uint32_t m_ImageIndex = 0;
+	std::vector<uint32_t> m_ImageIndex = {};
 	uint32_t m_ResourceIndex = 0;
 	uint32_t m_ResourceCount = 0;
 	uint64_t m_FrameCount = 0;

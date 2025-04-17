@@ -1,9 +1,8 @@
 #version 460
-#include "ubo.glsl"
 #include "fxaa.glsl"
 
-layout(binding = 1) uniform sampler2D HDRColor;
-layout(binding = 2) uniform sampler2D Blurred;
+layout(binding = 0) uniform sampler2D HDRColor;
+layout(binding = 1) uniform sampler2D Blurred;
 
 layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 outColor;
@@ -30,7 +29,7 @@ vec3 Tonemap2(vec3 L)
 
 void main()
 {
-    vec3 Color = fxaa_apply(HDRColor, UV, ubo.Resolution);
+    vec3 Color = fxaa_apply(HDRColor, UV, textureSize(HDRColor, 0).xy);
     Color = Tonemap(Color + texture(Blurred, UV).rgb);
     outColor = vec4(Color, 1.0);
 }
