@@ -133,7 +133,7 @@ RenderScope& RenderScope::CreateCompositionRenderPass()
 
 	attachments[0].format = GetHDRFormat();
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;

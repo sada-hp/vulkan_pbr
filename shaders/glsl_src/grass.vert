@@ -11,6 +11,7 @@ layout(push_constant) uniform constants
 struct Vertex
 {
     vec4 Position;
+    vec4 World;
     vec4 UV;
 };
 
@@ -91,20 +92,13 @@ void main()
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
     Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % (noiseSize.x * noiseSize.y)];
 
-    ivec3 texelId = ivec3(round(vert.UV.xy * (noiseSize - 1)), vert.Position.y);
-
-    float Height = texelFetch(NoiseMap, texelId, 0).r;
     WorldPosition = vec4(0.0, 0.0, 0.0, 1.0);
 
-    float hFrac = (Height - MinHeight) / (MaxHeight - MinHeight);
+    float hFrac = vert.World.w;
     if (hFrac > 0.01)
     {
-        dvec3 Camera = ubo.WorldUp.xyz;
-        dmat3 Orientation = GetTerrainOrientation(Camera);
-        dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(max(vert.Position.y, deltaS))));
-        vec3 ObjectPosition = vec3(Orientation * vec3(vert.Position.x, Height, vert.Position.z) + Center);
-        vec3 ObjectCenterNorm = normalize(ObjectPosition);
-        vec3 ObjectCenter = ObjectCenterNorm * (Rg + Height);
+        vec3 ObjectCenter = vert.World.xyz;
+        vec3 ObjectCenterNorm = normalize(ObjectCenter);
 
         float anim = gl_InstanceIndex + ubo.Time * 1e-1;
         vec3 hash = noise3(ObjectCenter + ObjectCenterNorm * gl_InstanceIndex);
@@ -126,19 +120,19 @@ void main()
         AO = saturate(LocalPosition.y / 6.0);
         LocalPosition *= (saturate(abs(hash) + 0.35) * vec2(6.0, 10.0).xyx);
 
-        float lean = max(AO, 0.25) * perlin(ObjectPosition.xz + anim, 10);
+        float lean = max(AO, 0.25) * perlin(ObjectCenter.xz + anim, 10);
         mat3 RotX = transpose(mat3(vec3(1.0, 0.0, 0.0), 
                     vec3(0.0, cos(lean), -sin(lean)), 
                     vec3(0.0, sin(lean), cos(lean))
         ));
 
-        float bank = noise(ObjectPosition.xz);
+        float bank = noise(ObjectCenter.xz);
         mat3 RotZ = transpose(mat3(vec3(cos(bank), sin(bank), 0.0), 
                     vec3(-sin(bank), cos(bank), 0.0), 
                     vec3(0.0, 0.0, 1.0)
         ));
 
-        float face = noise(ObjectPosition.zy);
+        float face = noise(ObjectCenter.zy);
         mat3 RotY = transpose(mat3(vec3(cos(face), 0.0, -sin(face)), 
                     vec3(0.0, 1.0, 0.0), 
                     vec3(sin(face), 0.0, cos(face))
@@ -147,7 +141,7 @@ void main()
         mat3 Rot = RotZ * RotX * RotY;
         WorldPosition = vec4((Rot * (LocalPosition + Scale * exp2(vert.Position.y) * vec3(hash.x, 0.0, hash.z))) + ObjectCenter, 1.0);
 
-#if 1
+#if 0
         ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
         float d = texelFetch(NoiseMap, texelIdD, 0).r;
 

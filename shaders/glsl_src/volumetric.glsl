@@ -1,8 +1,4 @@
-#version 460
-
 #define USE_CLOUD_MIE
-
-layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 #include "ubo.glsl"
 #include "lighting.glsl"
@@ -10,6 +6,20 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 float topBound;
 float bottomBound;
+vec4 outScattering;
+float Depth;
+
+// used for shadow sampling
+vec3 light_kernel[] =
+{
+    vec3(0.57735, 0.57735, 0.57735),
+    vec3(-0.677686, 0.690636, 0.252514),
+    vec3(0.289651, 0.1549, 0.944515),
+    vec3(0.871223, 0.400051, 0.284481),
+    vec3(0.0914922, 0.494058, 0.864602),
+    vec3(0.488603, 0.531976, 0.691569),
+    vec3(0.260733, 0.921748, 0.287052)
+};
 
 struct RayMarch
 {
@@ -24,6 +34,31 @@ struct RayMarch
     float T;
     float A;
 };
+
+struct
+{
+    float Camera;
+    float TopCloud;
+    float BottomCloud;
+    float Ground;
+} Hits;
+
+layout(set = 1, binding = 0) uniform CloudLayer
+{
+    float Coverage;
+    float Density;
+    float WindSpeed;
+} Clouds;
+
+layout(set = 1, binding = 1) uniform sampler3D CloudLowFrequency;
+layout(set = 1, binding = 2) uniform sampler3D CloudHighFrequency;
+layout(set = 1, binding = 3) uniform sampler2D WeatherMap;
+layout(set = 1, binding = 4) uniform sampler2D TransmittanceLUT;
+layout(set = 1, binding = 5) uniform sampler2D IrradianceLUT;
+layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
+
+layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
+layout(set = 2, binding = 1, r32f) uniform image2D outDepth;
 
 void UpdateRay(inout RayMarch Ray)
 {
@@ -50,63 +85,6 @@ void UpdateRayInverseSmooth(inout RayMarch Ray, float Stepsize, float f)
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
 }
-
-// used for shadow sampling
-vec3 light_kernel[] =
-{
-    vec3(0.57735, 0.57735, 0.57735),
-    vec3(-0.677686, 0.690636, 0.252514),
-    vec3(0.289651, 0.1549, 0.944515),
-    vec3(0.871223, 0.400051, 0.284481),
-    vec3(0.0914922, 0.494058, 0.864602),
-    vec3(0.488603, 0.531976, 0.691569),
-    vec3(0.260733, 0.921748, 0.287052)
-};
-
-struct
-{
-    float Camera;
-    float TopCloud;
-    float BottomCloud;
-    float Ground;
-} Hits;
-
-vec4 outScattering;
-
-layout(set = 1, binding = 0) uniform CloudLayer
-{
-    float Coverage;
-    float Density;
-    float WindSpeed;
-} Clouds;
-
-layout(set = 1, binding = 1) uniform sampler3D CloudLowFrequency;
-layout(set = 1, binding = 2) uniform sampler3D CloudHighFrequency;
-layout(set = 1, binding = 3) uniform sampler2D WeatherMap;
-layout(set = 1, binding = 4) uniform sampler2D TransmittanceLUT;
-layout(set = 1, binding = 5) uniform sampler2D IrradianceLUT;
-layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
-
-layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
-layout(set = 2, binding = 1) uniform sampler2D PreviousFrame;
-layout(set = 2, binding = 2) uniform UnfiormBufferOld
-{
-    dmat4 ViewProjectionMatrix;
-    dmat4 ViewMatrix;
-    dmat4 ViewMatrixInverse;
-    dvec4 CameraPositionFP64;
-    mat4 ProjectionMatrix;
-    mat4 ProjectionMatrixInverse;
-    vec4 CameraPosition;
-    vec4 SunDirection;
-    vec4 WorldUp;
-    vec4 CameraUp;
-    vec4 CameraRight;
-    vec4 CameraForward;
-    vec2 Resolution;
-    double CameraRadius;
-    float Time;
-} ubo_old;
 
 vec3 GetUV(vec3 p, float scale, float speed_mod)
 {
@@ -176,13 +154,6 @@ void Blend(in RayMarch Ray, vec4 World)
         vec3 Radiance      = Atmosphere.L;
         vec3 Scattering    = Atmosphere.S  * MaxLightIntensity;
         outScattering.rgb = Scattering + Radiance * outScattering.rgb;
-
-        vec4 NDC = vec4(ubo_old.ViewProjectionMatrix * World);
-        NDC = (NDC / NDC.w) * 0.5 + 0.5;
-        if (NDC.x >= 0.0 && NDC.y >= 0.0 && NDC.y <= 1.0 && NDC.x <= 1.0)
-        {
-            outScattering = mix(outScattering, textureLod(PreviousFrame, NDC.xy, 0), 0.25);
-        }
     }
 
     if (outScattering.a != 0.0)
@@ -336,7 +307,7 @@ void MarchToCloud(inout RayMarch Ray)
     Ray.FirstHit = Ray.End;
     Ray.LastHit = Ray.Start;
     Ray.Direction = -Ray.Direction;
-    steps = min(int(24 * step_mod), 64);
+    steps = min(int(16 * step_mod), 32);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToCamera = distance(ubo.CameraPosition.xyz, Ray.FirstHit);
@@ -381,75 +352,6 @@ void MarchToCloud(inout RayMarch Ray)
 
         vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
         vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
-        // gl_FragDepth = max(clip1.z / clip1.w, clip2.z / clip2.w);
+        Depth = max(clip1.z / clip1.w, clip2.z / clip2.w);
     }
-}
-
-void main()
-{
-    // gl_FragDepth = 0.0;
-
-    vec2 size = imageSize(outImage).xy;
-    vec2 ScreenUV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
-    vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
-    vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
-    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * ScreenView);
-    vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
-    vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
-    outScattering = vec4(0.0, 0.0, 0.0, 1.0);
-
-    RayMarch Ray;
-    Ray.Direction = normalize(ScreenWorld.xyz / ScreenWorld.w);
-
-    topBound = Rct;
-    bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
-
-    Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-    Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
-    Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
-
-    Hits.Camera = length(RayOrigin);
-    float muHoriz = sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
-    float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera + muHoriz;
-
-    if (Clouds.Coverage > 0 && (horizon > 0 || Hits.Camera > bottomBound))
-    {
-        if (Hits.Camera < bottomBound)
-        {
-            Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
-            Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
-        }
-        else if (Hits.Camera > topBound)
-        {
-            if (horizon >= 0)
-            {
-                Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
-                Ray.Start = RayOrigin + Ray.Direction * SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
-            }
-            else
-            {
-                Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
-                Ray.Start = RayOrigin + Ray.Direction * Hits.BottomCloud;
-            }
-        }
-        else
-        {
-            if (horizon >= 0)
-            {
-                Ray.End = RayOrigin;
-                Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
-            }
-            else
-            {
-                Ray.End = RayOrigin;
-                Ray.Start = RayOrigin + Ray.Direction * Hits.BottomCloud;
-            }
-        }
-
-        MarchToCloud(Ray);
-    }
-
-    Blend(Ray, ScreenWorld);
-
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), outScattering);
 }

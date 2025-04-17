@@ -9,32 +9,14 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 struct Vertex
 {
     vec4 Position;
+    vec4 World;
     vec4 UV;
 };
 
 layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray terrainImage;
-layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
+layout (std140, set = 1, binding = 1) buffer TerrainReference{
 	Vertex at[];
 } vertices;
-layout (set = 1, binding = 2) uniform sampler2DArray terrainImageOld;
-layout (set = 1, binding = 3) uniform UnfiormBufferOld
-{
-    dmat4 ViewProjectionMatrix;
-    dmat4 ViewMatrix;
-    dmat4 ViewMatrixInverse;
-    dvec4 CameraPositionFP64;
-    mat4 ProjectionMatrix;
-    mat4 ProjectionMatrixInverse;
-    vec4 CameraPosition;
-    vec4 SunDirection;
-    vec4 WorldUp;
-    vec4 CameraUp;
-    vec4 CameraRight;
-    vec4 CameraForward;
-    vec2 Resolution;
-    double CameraRadius;
-    float Time;
-} ubo_old;
 
 layout (constant_id = 2) const uint VertexCount = 0;
 layout (constant_id = 3) const float Scale = 0;
@@ -136,27 +118,26 @@ void main()
         int Level = int(vertex.Position.y);
 
         dvec3 Camera1 = ubo.WorldUp.xyz;
-        dvec3 Camera2 = ubo_old.WorldUp.xyz;
         dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(max(Level, deltaS))));
-        dvec3 Center2 = round(RoundToIncrement(Camera2 * Rg, Scale * exp2(max(Level, deltaS))));
 
         vec4 Val = vec4(0.0);
         ivec3 Texel = ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level);
-        if (Center1 == Center2)
-        {
-            Val = texelFetch(terrainImageOld, Texel, 0);
-        }
-        else
-        {
-            dmat3 Orientation1 = GetTerrainOrientation(Camera1);
-            dvec3 ObjectPosition = round(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1);
-            vec3 Normal = vec3(normalize(ObjectPosition));
-            vec2 Noise = abs(0.5 * terrain_fbm(Normal, 100.0, 15) + 0.25 * terrain_fbm(Normal, 400.0, 15) + 0.25 * terrain_fbm(Normal, 800.0, 15));
-            Noise.x = smootherstep(0.0, 1.0, Noise.x);
-            Val.xy = vec2(MinHeight + Noise.x * (MaxHeight - MinHeight), Noise.y);
-        }
+        dmat3 Orientation1 = GetTerrainOrientation(Camera1);
+        vec3 ObjectPosition = round(vec3(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1));
+        vec3 OldPosition    = vec3(vertex.World.xyz);
+        vec3 Normal = vec3(normalize(ObjectPosition));
 
-        imageStore(terrainImage, Texel, Val);
+        if (RoundToIncrement(normalize(OldPosition), 0.0001) != RoundToIncrement(Normal, 0.0001))
+        {
+            Val.xy = abs(0.5 * terrain_fbm(Normal, 100.0, 5) + 0.25 * terrain_fbm(Normal, 400.0, 10) + 0.25 * terrain_fbm(Normal, 800.0, 15));
+            Val.x = smootherstep(0.0, 1.0, Val.x);
+            
+            float h = Val.x;
+            Val.xy = vec2(MinHeight + Val.x * (MaxHeight - MinHeight), Val.y);
+
+            imageStore(terrainImage, Texel, Val);
+            vertices.at[gl_GlobalInvocationID.x].World = vec4(Normal * (Rg + Val.x), h);
+        }
     }
     else if (gl_GlobalInvocationID.x < VertexCount)
     {

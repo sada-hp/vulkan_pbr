@@ -1,0 +1,27 @@
+#version 460
+#include "common.glsl"
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D HDRColor;
+layout (binding = 1, rgba32f) uniform readonly image2D BlurH;
+layout (binding = 2, rgba32f) uniform image2D BlurV;
+
+void main()
+{
+    ivec2 Texel = ivec2(gl_GlobalInvocationID.xy);
+
+    if (Texel.x < imageSize(BlurV).x && Texel.y < imageSize(BlurV).y)
+    {
+        vec4 Color = texelFetch(HDRColor, Texel, 0);
+        float Brightness = dot(Color.rgb, vec3(0.2126, 0.7152, 0.0722));
+
+        if (Brightness > 1.413)
+        {
+            imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * 0.065);
+        }
+        else
+        {
+            imageStore(BlurV, Texel, vec4(0.0));
+        }
+    }
+}

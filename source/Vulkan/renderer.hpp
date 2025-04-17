@@ -114,6 +114,9 @@ namespace GR
 #else
 		static constexpr float Rt = ATMOSPHERE_RADIUS;
 #endif
+
+		static constexpr float Rcb = Rg + 0.15 * (Rt - Rg);
+		static constexpr float Rct = Rg + 0.85 * (Rt - Rg);
 	};
 };
 
@@ -158,12 +161,17 @@ private:
 
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_BlurPipeline         = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_BlendingPipeline     = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_CubemapPipeline      = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_CubemapMipPipeline   = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline  = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline  = VK_NULL_HANDLE;
 
+	std::unique_ptr<ComputePipeline> m_BlurSetupPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_BlurHorizontalPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_BlurVerticalPipeline = VK_NULL_HANDLE;
+
+	std::vector<std::unique_ptr<DescriptorSet>> m_BlendingDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
@@ -180,6 +188,7 @@ private:
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
 	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
 
+	std::vector<VulkanSynchronization> m_ApplySync = {};
 	std::vector<VulkanSynchronization> m_PresentSync = {};
 	std::vector<VulkanSynchronization> m_ComposeSync = {};
 	std::vector<VulkanSynchronization> m_DeferredSync = {};
@@ -199,7 +208,9 @@ private:
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
 
-	std::unique_ptr<ComputePipeline> m_VolumetricsPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsBetweenPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsUnderPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<DescriptorSet> m_VolumetricsDescriptor = VK_NULL_HANDLE;
 
 	VulkanTexture m_VolumeShape = {};
@@ -232,6 +243,8 @@ private:
 
 	std::unique_ptr<GraphicsPipeline> m_GrassPipeline = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
+
+	std::vector<std::unique_ptr<Buffer>> TerrainVBs = {};
 
 	uint32_t m_TerrainDispatches = 0u;
 

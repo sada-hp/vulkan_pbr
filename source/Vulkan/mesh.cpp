@@ -11,8 +11,7 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t 
 	sbInfo.size = sizeof(MeshVertex) * numVertices;
 
 	VmaAllocationCreateInfo sbAlloc{};
-	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
-	sbAlloc.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	sbAlloc.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
 	vertexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 
@@ -36,15 +35,14 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size
 
 	VkBufferCreateInfo sbInfo{};
 	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	sbInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	sbInfo.queueFamilyIndexCount = queueFamilies.size();
 	sbInfo.pQueueFamilyIndices = queueFamilies.data();
 	sbInfo.size = sizeof(TerrainVertex) * numVertices;
 
 	VmaAllocationCreateInfo sbAlloc{};
-	sbAlloc.usage = VMA_MEMORY_USAGE_AUTO;
-	sbAlloc.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+	sbAlloc.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
 	vertexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 

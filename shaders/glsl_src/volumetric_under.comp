@@ -1,0 +1,46 @@
+#version 460
+#include "volumetric.glsl"
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+void main()
+{
+    // gl_FragDepth = 0.0;
+
+    vec2 size = imageSize(outImage).xy;
+    vec2 ScreenUV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
+    vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
+    vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
+    vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * ScreenView);
+    vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
+    vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
+    outScattering = vec4(0.0, 0.0, 0.0, 1.0);
+    Depth = 0.0;
+
+    RayMarch Ray;
+    Ray.Direction = normalize(ScreenWorld.xyz / ScreenWorld.w);
+
+    topBound = Rct;
+    bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
+
+    Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
+    Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
+    Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
+
+    Hits.Camera = length(RayOrigin);
+    float muHoriz = sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
+    float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera + muHoriz;
+
+    if (horizon > 0)
+    {
+        Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
+        Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
+
+        MarchToCloud(Ray);
+    }
+
+    Blend(Ray, ScreenWorld);
+
+    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), outScattering);
+    imageStore(outDepth, ivec2(gl_GlobalInvocationID.xy), vec4(Depth));
+}

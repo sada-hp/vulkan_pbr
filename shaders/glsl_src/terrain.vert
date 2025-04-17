@@ -16,7 +16,8 @@ layout(push_constant) uniform constants
 } PushConstants;
 
 layout(location = 0) in vec4 vertPosition;
-layout(location = 1) in vec4 vertUV;
+layout(location = 1) in vec4 worldPosition;
+layout(location = 2) in vec4 vertUV;
 
 layout(location = 0) out vec4 WorldPosition;
 layout(location = 1) out vec2 VertPosition;
@@ -52,52 +53,12 @@ void main()
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
     VertPosition = vertPosition.xz;
     Diameter = vertUV.w;
-    ivec3 texelId = ivec3(round(vertUV.xy * (noiseSize - 1)), Level);
+ 
+    TBN = mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0));
 
-    Height = texelFetch(NoiseMap, texelId, 0).r;
-
-    dvec3 Camera = ubo.WorldUp.xyz;
-    dmat3 Orientation = GetTerrainOrientation(Camera);
-    dvec3 Center = round(RoundToIncrement(Camera * Rg, Scale * exp2(max(Level, deltaS))));
-
-    ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
-    float d = texelFetch(NoiseMap, texelIdD, 0).r;
-
-    ivec3 texelIdR = clamp_coords(texelId + ivec3(1, 0, 0));
-    float r = texelFetch(NoiseMap, texelIdR, 0).r;
-
-    vec3 A = vec3(Orientation * vec3(vertPosition.x, Height, vertPosition.z) + Center);
-    vec3 B = vec3(Orientation * vec3(vertPosition.x + Scale * exp2(texelIdR.z), r, vertPosition.z) + Center);
-    vec3 C = vec3(Orientation * vec3(vertPosition.x, d, vertPosition.z + Scale * exp2(texelIdD.z)) + Center);
-
-    vec3 AC = C - A;
-    vec3 AB = B - A;
-
-    vec3 Normal = normalize(cross(AC, AB));
-
-    vec2 Auv = vec2(vertPosition.x, vertPosition.z) / vertUV.w;
-    vec2 Buv = vec2(vertPosition.x + Scale * exp2(Level), vertPosition.z) / vertUV.w;
-    vec2 Cuv = vec2(vertPosition.x, vertPosition.z + Scale * exp2(Level)) / vertUV.w;
-    Auv.y = 1.0 - Auv.y;
-    Buv.y = 1.0 - Buv.y;
-    Cuv.y = 1.0 - Cuv.y;
-    vec2 delta1 = Buv - Auv;
-    vec2 delta2 = Cuv - Auv;
-
-    float f = 1.0 / (delta1.x * delta2.y - delta1.y * delta2.x);
-
-    vec3 Tangent;
-    Tangent.x = f * (delta2.y * AB.x - delta1.y * AC.x);
-    Tangent.y = f * (delta2.y * AB.y - delta1.y * AC.y);
-    Tangent.z = f * (delta2.y * AB.z - delta1.y * AC.z);
-
-    Tangent = normalize(Tangent);
-    vec3 Bitangent = normalize(cross(Normal, Tangent));
-    TBN = mat3(Tangent, Bitangent, Normal);
-
-    WorldPosition = vec4(vec3(normalize(A)) * (Rg + Height), 1.0);
+    WorldPosition = vec4(worldPosition.xyz, 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 
-    Height = Seed == 0 ? 1.0 : (Height - MinHeight) / (MaxHeight - MinHeight);
+    Height = Seed == 0 ? 1.0 : worldPosition.w;
 }

@@ -246,7 +246,10 @@ void main()
     //    Color.a = 1.0 - SkyColor.a;
     //}
 
-    // Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
+    if (Color.a != 1.0)
+    {
+        Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
+    }
 
     outColor = vec4(Color.rgb, 1.0);
 }

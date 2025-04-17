@@ -374,56 +374,56 @@ namespace GR
 #if 1
 						if (!uniquePositions.contains(Ap * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ap, 1.0 }, Auv);
+							vertices.emplace_back(glm::vec4{ Ap, 1.0 }, glm::vec4{ Ap, 1.0 }, Auv);
 							uniquePositions[Ap * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						A = uniquePositions[Ap * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Bp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Bp, 1.0 }, Buv);
+							vertices.emplace_back(glm::vec4{ Bp, 1.0 }, glm::vec4{ Bp, 1.0 }, Buv);
 							uniquePositions[Bp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						B = uniquePositions[Bp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Cp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Cp, 1.0 }, Cuv);
+							vertices.emplace_back(glm::vec4{ Cp, 1.0 }, glm::vec4{ Cp, 1.0 }, Cuv);
 							uniquePositions[Cp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						C = uniquePositions[Cp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Dp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Dp, 1.0 }, Duv);
+							vertices.emplace_back(glm::vec4{ Dp, 1.0 }, glm::vec4{ Dp, 1.0 }, Duv);
 							uniquePositions[Dp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						D = uniquePositions[Dp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Ep * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ep, 1.0 }, Euv);
+							vertices.emplace_back(glm::vec4{ Ep, 1.0 }, glm::vec4{ Ep, 1.0 }, Euv);
 							uniquePositions[Ep * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						E = uniquePositions[Ep * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Fp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Fp, 1.0 }, Fuv);
+							vertices.emplace_back(glm::vec4{ Fp, 1.0 }, glm::vec4{ Fp, 1.0 }, Fuv);
 							uniquePositions[Fp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						F = uniquePositions[Fp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Gp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Gp, 1.0 }, Guv);
+							vertices.emplace_back(glm::vec4{ Gp, 1.0 }, glm::vec4{ Gp, 1.0 }, Guv);
 							uniquePositions[Gp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						G = uniquePositions[Gp * glm::vec3(1, 0, 1)];
 
 						if (!uniquePositions.contains(Hp * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Hp, 1.0 }, Huv);
+							vertices.emplace_back(glm::vec4{ Hp, 1.0 }, glm::vec4{ Hp, 1.0 }, Huv);
 							H = vertices.size() - 1;
 							uniquePositions[Hp * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
@@ -431,7 +431,7 @@ namespace GR
 
 						if (!uniquePositions.contains(Ip * glm::vec3(1, 0, 1)))
 						{
-							vertices.emplace_back(glm::vec4{ Ip, 1.0 }, Iuv);
+							vertices.emplace_back(glm::vec4{ Ip, 1.0 }, glm::vec4{ Ip, 1.0 }, Iuv);
 							uniquePositions[Ip * glm::vec3(1, 0, 1)] = vertices.size() - 1;
 						}
 						I = uniquePositions[Ip * glm::vec3(1, 0, 1)];
