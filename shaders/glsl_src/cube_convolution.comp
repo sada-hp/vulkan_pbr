@@ -40,7 +40,7 @@ void main()
         for (int i = 0; i < Count; i++)
         {
             vec4 Current = In.dSample[i];
-            outColor += textureLod(EnvironmentLUT, Current.x * R + Current.y * U + Current.z * N, 2).rgb * Current.w;
+            outColor += textureLod(EnvironmentLUT, Current.x * R + Current.y * U + Current.z * N, 0).rgb * Current.w;
         }
 
         imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(outColor * ColorNorm, 1.0));

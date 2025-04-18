@@ -4,6 +4,11 @@
 Buffer::Buffer(const RenderScope& InScope, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo)
 	: Scope(&InScope)
 {
+	gpuOnly = allocCreateInfo.usage == VMA_MEMORY_USAGE_GPU_ONLY;
+
+	if (gpuOnly)
+		const_cast<VkBufferCreateInfo*>(&createInfo)->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
 	VkBool32 res = vmaCreateBuffer(Scope->GetAllocator(), &createInfo, &allocCreateInfo, &buffer, &memory, &allocInfo) == VK_SUCCESS;
 	descriptorInfo.buffer = buffer;
 	descriptorInfo.offset = 0;
@@ -53,18 +58,54 @@ Buffer& Buffer::Update(void* data, size_t data_size)
 	if (data_size == VK_WHOLE_SIZE)
 		data_size = allocInfo.size;
 
-	if (!mappedMemory)
+	if (gpuOnly)
 	{
-		Map();
-		memcpy(mappedMemory, data, data_size);
-		UnMap();
+		VmaAllocationCreateInfo bufallocCreateInfo{};
+		bufallocCreateInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+		bufallocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+		VkBufferCreateInfo bufInfo{};
+		bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		bufInfo.size = data_size;
+		bufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+		std::unique_ptr<Buffer> stageBuffer = std::make_unique<Buffer>(*Scope, bufInfo, bufallocCreateInfo);
+		memcpy(stageBuffer->mappedMemory, data, data_size);
+
+		VkCommandBuffer cmd;
+		Scope->GetQueue(VK_QUEUE_TRANSFER_BIT)
+			.AllocateCommandBuffers(1, &cmd);
+
+		::BeginOneTimeSubmitCmd(cmd);
+
+		VkBufferCopy region{};
+		region.size = bufInfo.size;
+		vkCmdCopyBuffer(cmd, stageBuffer->GetBuffer(), buffer, 1, &region);
+
+		::EndCommandBuffer(cmd);
+		Scope->GetQueue(VK_QUEUE_TRANSFER_BIT)
+			.Submit(cmd)
+			.Wait()
+			.FreeCommandBuffers(1, &cmd);
+
+		vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
 	}
 	else
 	{
-		memcpy(mappedMemory, data, data_size);
-	}
+		if (!mappedMemory)
+		{
+			Map();
+			memcpy(mappedMemory, data, data_size);
+			UnMap();
+		}
+		else
+		{
+			memcpy(mappedMemory, data, data_size);
+		}
 
-	vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
+		vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
+	}
 
 	return *this;
 }

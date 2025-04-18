@@ -11,7 +11,7 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t 
 	sbInfo.size = sizeof(MeshVertex) * numVertices;
 
 	VmaAllocationCreateInfo sbAlloc{};
-	sbAlloc.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+	sbAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	vertexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 
@@ -19,8 +19,8 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t 
 	sbInfo.size = sizeof(uint32_t) * numIndices;
 	indexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 
-	vertexBuffer->Map().Update(vertices).UnMap();
-	indexBuffer->Map().Update(indices).UnMap();
+	vertexBuffer->Update(vertices);
+	indexBuffer->Update(indices);
 
 	verticesCount = numVertices;
 	indicesCount = numIndices;
@@ -42,7 +42,7 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size
 	sbInfo.size = sizeof(TerrainVertex) * numVertices;
 
 	VmaAllocationCreateInfo sbAlloc{};
-	sbAlloc.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+	sbAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	vertexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 
@@ -50,8 +50,8 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size
 	sbInfo.size = sizeof(uint32_t) * numIndices;
 	indexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
 
-	vertexBuffer->Map().Update(vertices).UnMap();
-	indexBuffer->Map().Update(indices).UnMap();
+	vertexBuffer->Update(vertices);
+	indexBuffer->Update(indices);
 
 	verticesCount = numVertices;
 	indicesCount = numIndices;

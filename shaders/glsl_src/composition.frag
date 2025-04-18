@@ -90,11 +90,11 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
     float Re = length(Eye);
     float len = distance(Eye, World);
     float T = saturate(len / 1e5);
-    LightIntensity = mix(1.0, 0.25, smoothstep(0.0, 1.0, Clouds.Coverage)) * MaxLightIntensity;
+    LightIntensity = mix(1.0, 0.05, smoothstep(0.0, 1.0, Clouds.Coverage * Clouds.Coverage)) * MaxLightIntensity;
     
     if (Clouds.Coverage == 0.0 || Re > Rt + Rcdelta)
     {
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, Atmosphere);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT,  Eye, World, Sun, Atmosphere);
         Shadow = Atmosphere.Shadow <= 0.1 ? mix(0.05, 1.0, Atmosphere.Shadow / 0.1) : 1.0;
         Atmosphere.S *= Shadow * LightIntensity;
         Atmosphere.E *= Shadow * LightIntensity;
@@ -109,8 +109,8 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
     vec3 Ray = Eye;
 
     SAtmosphere AtmosphereStart, AtmosphereEnd;
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
-    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, T, 1.0, Eye, World, Sun, AtmosphereEnd);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, Eye + View * Stepsize, Sun, AtmosphereStart);
+    AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, AtmosphereEnd);
 
     Atmosphere.T = AtmosphereEnd.T;
     Atmosphere.Shadow = AtmosphereStart.Shadow;
@@ -202,10 +202,48 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
     // return ambient + Illumination * Lo;
 }
 
+vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
+{
+    vec3 SkyColor = SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, View, Sun);
+    float Hit = SphereMinDistance(Eye, View, vec3(0.0), Rct);
+
+    if (Hit > 0.0)
+    {
+        vec3 HitPoint = Eye + View * Hit;
+
+        SAtmosphere Atmosphere;
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, HitPoint, Sun, Atmosphere);
+        float PhaseF = HGDPhaseCloud(dot(Sun, View));
+        
+        vec3 n = normalize(HitPoint);
+        float pole = abs(dot(n, vec3(0, 1, 0)));
+        vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+        vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+        float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+        float right = 1.0 - left;
+        float mask1 = left * texture(WeatherMap, 50.0 * uv1).b + right * texture(WeatherMap, 50.0 * uv2).b;
+        float mask2 = left * texture(WeatherMap, 6.0 * uv1).r + right * texture(WeatherMap, 6.0 * uv2).r;
+        float mask3 = left * texture(WeatherMap, vec2(85.0, 25.0) * uv1).r + right * texture(WeatherMap, vec2(85.0, 25.0) * uv2).r;
+
+        float altocumulus = (left * texture(WeatherMap, 700.0 * uv1).g + right * texture(WeatherMap, 700.0 * uv2).g);
+        float altocumulus_mask2 = saturate(mask2 - 0.25) / 0.75;
+        float altocumulus_mask1 = saturate(altocumulus_mask2 * remap(saturate(mask1 - 0.2) / 0.8, altocumulus_mask2, 1.0, 0.0, 1.0));
+        altocumulus = altocumulus_mask1 * altocumulus_mask2 * altocumulus;
+
+        float cirrus = (left * texture(WeatherMap, vec2(125,15) * uv1).r + right * texture(WeatherMap, vec2(125,15) * uv2).r);
+        float cirrus_mask = saturate(mask3 - 0.35) / 0.65;
+        cirrus = cirrus_mask * cirrus;
+
+        float high_level = saturate((saturate((cirrus + altocumulus) - 0.2) / 0.8) + (cirrus_mask * saturate((1.0 - altocumulus_mask2) - 0.5) / 0.5) * cirrus);
+        SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * high_level;
+    }
+
+    return SkyColor * MaxLightIntensity;
+}
+
 void main()
 {
-    // vec4 SkyColor  = texture(SceneBackground, UV);
-    // float SkyDepth = texture(BackgroundDepth, UV).r;
     vec4 Color     = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
     float Depth    = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Deferred  = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
@@ -228,27 +266,11 @@ void main()
         Material.Normal     = Normal;
         
         Color.rgb = DirectSunlight(Eye, World, View, Sun, Material);
-
-        //if (Depth < SkyDepth)
-        //{
-        //    vec3 CloudPosition = GetWorldPosition(UV, SkyDepth);
-        //    float d = distance(CloudPosition, World);
-
-        //    float a = 1.0 - SkyColor.a;
-        //    float b = 1.0 - saturate(exp(-d * Clouds.Density * 0.01));
-        //    Color.rgb = mix(SkyColor.rgb, Color.rgb, 1.0 - a * b);
-        //    Color.a = max(a, Color.a);
-        //}
     }
-    //else
-    //{
-    //    Color.rgb = SkyColor.rgb;
-    //    Color.a = 1.0 - SkyColor.a;
-    //}
 
     if (Color.a != 1.0)
     {
-        Color.rgb += (1.0 - Color.a) * MaxLightIntensity * SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, -View, Sun);
+        Color.rgb += (1.0 - Color.a) * GetSkyColor(Eye, -View, Sun);
     }
 
     outColor = vec4(Color.rgb, 1.0);

@@ -202,7 +202,7 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu, vec3 v, vec3 x0)
 }
 
 // precomputed-atmospheric-scattering
-void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, sampler3D InscatteringLUT, float T, float A, vec3 Eye, vec3 Target, vec3 sun, out SAtmosphere Atmosphere) 
+void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, sampler3D InscatteringLUT, vec3 Eye, vec3 Target, vec3 Sun, out SAtmosphere Atmosphere) 
 {
     float Re = length(Eye);
 
@@ -230,10 +230,10 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 #endif
 
         float Rp = max(length(Target), Rg);
-        float VdotL = dot(View, sun);
-        float EdotL = dot(Eye, sun) / Re;
+        float VdotL = dot(View, Sun);
+        float EdotL = dot(Eye, Sun) / Re;
         float PdotV = dot(Target, View) / Rp;
-        float PdotL = dot(Target, sun) / Rp;
+        float PdotL = dot(Target, Sun) / Rp;
 
         float PhaseR = RayleighPhase(VdotL);
 
@@ -282,7 +282,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
         Atmosphere.Shadow = saturate(PdotL);
-        Atmosphere.S = (T * max(inscatter.rgb * PhaseR, 0.0) + A * max(GetMie(inscatter) * PhaseM, 0.0));
+        Atmosphere.S = (max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0));
 
         if (EdotL < 0.0)
         {

@@ -1,4 +1,5 @@
 #version 460
+#include "constants.glsl"
 #include "common.glsl"
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -17,7 +18,7 @@ void main()
 
         if (Brightness > 1.413)
         {
-            imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * 0.065);
+            imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * (1.0 / float(MaxLightIntensity)));
         }
         else
         {

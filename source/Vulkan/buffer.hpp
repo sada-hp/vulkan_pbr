@@ -57,6 +57,7 @@ private:
 	VmaAllocationInfo allocInfo = {};
 	VkDescriptorBufferInfo descriptorInfo = {};
 	void* mappedMemory = VK_NULL_HANDLE;
+	VkBool32 gpuOnly = VK_FALSE;
 
 	const RenderScope* Scope = VK_NULL_HANDLE;
 };

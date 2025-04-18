@@ -21,21 +21,10 @@ layout (constant_id = 5) const uint Seed = 0;
 layout (set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 layout (set = 1, binding = 1, r32f) uniform image2DArray target;
 
-float sample_height(ivec3 texel, ivec3 Offset)
+vec4 sample_height(ivec3 texel)
 {
-    float h1 = 99999999999.0;
-    if (texel.x + Offset.x < imageSize(target).x && texel.y + Offset.y < imageSize(target).y)
-    {
-        h1 = texelFetch(NoiseMap, texel + Offset, 0).r;
-    }
-
-    float h2 = 99999999999.0;
-    if (texel.x - Offset.x >= 0 && texel.y - Offset.y >= 0)
-    {
-        h2 = texelFetch(NoiseMap, texel - Offset, 0).r;
-    }
-
-    return round(min(h1, h2));
+    vec2 UV = (vec2(texel.xy) + 0.5) / vec2(textureSize(NoiseMap, 0).xy);
+    return floor(textureGather(NoiseMap, vec3(UV, texel.z), 0)).wzxy;
 }
 
 void spill(ivec3 Texel, float xp, float zp, float w, int radius)
@@ -73,16 +62,11 @@ bool test_run()
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;
 
-    float h = sample_height(Texel, ivec3(0));
+    vec4 dH = sample_height(Texel);
+    float h = dH.x;
 
-    if (h <= MinHeight * 1.01)
+    if (h <= MinHeight * 1.05)
         return false;
-
-    vec4 dH = vec4(h,
-        sample_height(Texel, ivec3(1, 0, 0)),
-        sample_height(Texel, ivec3(0, 1, 0)),
-        sample_height(Texel, ivec3(1, 1, 0))
-    );
 
     float dx = 0.0, dz = 0.0;
     float s = 0.0, v = 0.0, w = texelFetch(NoiseMap, Texel, 0).g * 1000.0;
@@ -117,12 +101,8 @@ bool test_run()
         if (Texel.x + 1 >= imageSize(target).x || Texel.y + 1 >= imageSize(target).y)
             return false;
 
-        float nh00 = sample_height(Texel, ivec3(0));
-        float nh10 = sample_height(Texel, ivec3(1, 0, 0));
-        float nh01 = sample_height(Texel, ivec3(0, 1, 0));
-        float nh11 = sample_height(Texel, ivec3(1, 1, 0));
-
-        float nh = mix(nh00, nh10, nxf) * (1-nzf) + mix(nh01, nh11, nxf) * nzf;
+        dH = sample_height(Texel);
+        float nh = mix(dH.x, dH.y, nxf) * (1-nzf) + mix(dH.z, dH.w, nxf) * nzf;
 
         if (nh >= h)
         {
@@ -138,7 +118,6 @@ bool test_run()
         xf=nxf; zf=nzf;
 
         h=nh;
-        dH = vec4(nh00, nh10, nh01, nh11);
     }
 
     return h <= MinHeight * 1.01;
@@ -154,13 +133,11 @@ void erosion_loop()
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;
 
-    float h = sample_height(Texel, ivec3(0));
+    vec4 dH = sample_height(Texel);
+    float h = dH.x;
 
-    vec4 dH = vec4(h,
-        sample_height(Texel, ivec3(1, 0, 0)),
-        sample_height(Texel, ivec3(0, 1, 0)),
-        sample_height(Texel, ivec3(1, 1, 0))
-    );
+    if (h <= MinHeight * 1.05)
+        return;
 
     float dx = 0.0, dz = 0.0;
     float s = 0.0, v = 0.0, w = texelFetch(NoiseMap, Texel, 0).g * 1000.0;
@@ -194,12 +171,8 @@ void erosion_loop()
         float nxf = fract(nxp);
         float nzf = fract(nzp);
 
-        float nh00 = sample_height(Texel, ivec3(0));
-        float nh10 = sample_height(Texel, ivec3(1, 0, 0));
-        float nh01 = sample_height(Texel, ivec3(0, 1, 0));
-        float nh11 = sample_height(Texel, ivec3(1, 1, 0));
-
-        float nh = mix(nh00, nh10, nxf) * (1-nzf) + mix(nh01, nh11, nxf) * nzf;
+        dH = sample_height(Texel);
+        float nh = mix(dH.x, dH.y, nxf) * (1-nzf) + mix(dH.z, dH.w, nxf) * nzf;
 
         if (nh >= h)
         {
@@ -215,7 +188,6 @@ void erosion_loop()
         xf=nxf; zf=nzf;
 
         h=nh;
-        dH = vec4(nh00, nh10, nh01, nh11);
     }
 
     spill(Texel, xp, zp, Kw * w, 1);

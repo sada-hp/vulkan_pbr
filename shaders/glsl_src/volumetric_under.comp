@@ -5,8 +5,6 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main()
 {
-    // gl_FragDepth = 0.0;
-
     vec2 size = imageSize(outImage).xy;
     vec2 ScreenUV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
@@ -22,8 +20,18 @@ void main()
 
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
+    float inDepth = imageLoad(outDepth, ivec2(gl_GlobalInvocationID.xy)).r;
+    vec3 inWorld = GetWorldPosition(ScreenUV, inDepth);
 
-    Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
+    Params.Coverage = Clouds.Coverage;
+    Params.CoverageSq = Params.Coverage * Params.Coverage;
+    Params.HeightFactor = pow(Params.Coverage, 1.5);
+    Params.BottomSmoothnessFactor = mix(0.05, 0.2, Params.Coverage);
+    Params.LightIntensity = mix(1.0, 0.05, Params.CoverageSq)  * MaxLightIntensity;
+    Params.Ambient = mix(0.025, 0.01, Clouds.Coverage * Clouds.Coverage);
+    Params.Wind = ubo.Time * 0.01;
+
+    Hits.Ground = distance(inWorld, RayOrigin);
     Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
     Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 
@@ -34,12 +42,10 @@ void main()
     if (horizon > 0)
     {
         Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
-        Ray.Start = RayOrigin + Ray.Direction * Hits.TopCloud;
+        Ray.Start = RayOrigin + Ray.Direction * min(Hits.TopCloud, Hits.Ground);
 
-        MarchToCloud(Ray);
+        MarchToCloud(Ray, distance(Ray.Start, Ray.End));
     }
-
-    Blend(Ray, ScreenWorld);
 
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), outScattering);
     imageStore(outDepth, ivec2(gl_GlobalInvocationID.xy), vec4(Depth));

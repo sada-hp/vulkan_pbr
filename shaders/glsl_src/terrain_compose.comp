@@ -19,7 +19,6 @@ layout(push_constant) uniform constants
 } 
 PushConstants;
 
-
 layout (constant_id = 2) const uint VertexCount = 0;
 layout (constant_id = 3) const float Scale = 0;
 layout (constant_id = 4) const float MinHeight = 0;
@@ -28,8 +27,8 @@ layout (constant_id = 6) const uint Seed = 0;
 
 void main()
 {
-    ivec3 Texel = ivec3(imageSize(terrainImage).xy / 4 + gl_GlobalInvocationID.xy, PushConstants.Sample + 1);
-    ivec3 OldTexel = ivec3(gl_GlobalInvocationID.xy * 2, PushConstants.Sample);
+    ivec3 Texel = ivec3(imageSize(terrainImage).xy / 4 + gl_GlobalInvocationID.xy, PushConstants.Sample);
+    ivec3 OldTexel = ivec3(gl_GlobalInvocationID.xy * 2, PushConstants.Sample - 1);
     if (OldTexel.x < imageSize(terrainImage).x && OldTexel.y < imageSize(terrainImage).y)
     {
         float Norm = 1.0;

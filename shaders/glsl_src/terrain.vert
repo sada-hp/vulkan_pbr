@@ -28,21 +28,26 @@ layout(location = 5) out mat3 TBN;
 
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
-ivec3 clamp_coords(ivec3 texel)
+void GetTBN()
 {
-    ivec2 size = textureSize(NoiseMap, 0).xy;
-    ivec2 onefourth = size / 4;
-    ivec2 threefourth = 3 * onefourth;
+    dvec3 Camera = ubo.WorldUp.xyz;
+    float sampleScale = Scale * exp2(vertPosition.y);
+    dmat3 Orientation = GetTerrainOrientation(Camera);
+    vec4 dH = textureGather(NoiseMap, vec3(vertUV.xy, vertPosition.y), 0);
 
-    // if texel is outside the bounds of current level    
-    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
-    {
-        texel.z += 1;
-        texel.x = onefourth.x + (texel.x < 0 ? texel.x : int(ceil(float(texel.x) / 2)));
-        texel.y = onefourth.y + (texel.y < 0 ? texel.y : int(ceil(float(texel.y) / 2)));
-    }
+    vec3 Normal = normalize(vec3(dH.w - dH.z, sampleScale, dH.w - dH.x));
 
-    return texel;
+    vec2 dUV = vec2(sampleScale / vertUV.w, 0.0);
+    float f = 1.0 / (dUV.x * dUV.x);
+
+    vec3 Tangent;
+    Tangent.x = f * dUV.x * sampleScale;
+    Tangent.y = f * dUV.x * (dH.z - dH.w);
+    Tangent.z = 0.0;
+
+    Tangent = normalize(Tangent);
+    vec3 Bitangent = normalize(cross(Normal, Tangent));
+    TBN = mat3(Orientation * mat3(Tangent, Bitangent, Normal));
 }
 
 void main()
@@ -50,13 +55,11 @@ void main()
     NOISE_SEED = Seed;
     Level = int(vertPosition.y);
 
-    ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
-    VertPosition = vertPosition.xz;
+    GetTBN();
     Diameter = vertUV.w;
- 
-    TBN = mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0));
-
+    VertPosition = vertPosition.xz;
     WorldPosition = vec4(worldPosition.xyz, 1.0);
+
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     WorldPosition.xyz -= ubo.CameraPosition.xyz;
 

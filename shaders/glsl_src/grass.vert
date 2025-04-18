@@ -70,23 +70,6 @@ layout(location = 1) out vec4 WorldPosition;
 layout(location = 2) out float AO;
 layout(location = 3) out vec3 Normal;
 
-ivec3 clamp_coords(ivec3 texel)
-{
-    ivec2 size = textureSize(NoiseMap, 0).xy;
-    ivec2 onefourth = size / 4;
-    ivec2 threefourth = 3 * onefourth;
-
-    // if texel is outside the bounds of current level    
-    if (texel.x >= size.x || texel.y >= size.y || texel.x < 0 || texel.y < 0)
-    {
-        texel.z += 1;
-        texel.x = onefourth.x + (texel.x < 0 ? texel.x : int(ceil(float(texel.x) / 2)));
-        texel.y = onefourth.y + (texel.y < 0 ? texel.y : int(ceil(float(texel.y) / 2)));
-    }
-
-    return texel;
-}
-
 void main()
 {
     ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
@@ -141,20 +124,12 @@ void main()
         mat3 Rot = RotZ * RotX * RotY;
         WorldPosition = vec4((Rot * (LocalPosition + Scale * exp2(vert.Position.y) * vec3(hash.x, 0.0, hash.z))) + ObjectCenter, 1.0);
 
-#if 0
-        ivec3 texelIdD = clamp_coords(texelId + ivec3(0, 1, 0));
-        float d = texelFetch(NoiseMap, texelIdD, 0).r;
-
-        ivec3 texelIdR = clamp_coords(texelId + ivec3(1, 0, 0));
-        float r = texelFetch(NoiseMap, texelIdR, 0).r;
-
-        vec3 B = vec3(Orientation * vec3(vert.Position.x + Scale * exp2(texelIdR.z), r, vert.Position.z) + Center);
-        vec3 C = vec3(Orientation * vec3(vert.Position.x, d, vert.Position.z + Scale * exp2(texelIdD.z)) + Center);
-
-        vec3 AC = C - ObjectPosition;
-        vec3 AB = B - ObjectPosition;
-
-        vec3 Normal = normalize(cross(AC, AB));
+#if 1
+        dvec3 Camera = ubo.WorldUp.xyz;
+        float sampleScale = Scale * exp2(vert.Position.y);
+        dmat3 Orientation = GetTerrainOrientation(Camera);
+        vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, vert.Position.y), 0);
+        vec3 Normal = normalize(vec3(dH.w - dH.z, sampleScale, dH.w - dH.x));
 
         if (saturate(10.0 * (1.0 - saturate(abs(dot(Normal, normalize(WorldPosition.xyz)))))) > 0.5)
         {
