@@ -91,6 +91,7 @@ void main()
     Material.Roughness = mix(Material.Roughness, 0.0, w * w * w);
     Material.AO = mix(Material.AO, 1.0, w);
     Material.Normal = normalize(mix(normalize(TBN * Material.Normal), TBN[2], w));
+    float spec = mix(0.1, 1.0, w);
 #else
     Material = GrassMaterial;
     Material.Normal = normalize(TBN * Material.Normal);
@@ -100,5 +101,5 @@ void main()
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(Material.Normal, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), 0.1);
+    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), spec);
 }

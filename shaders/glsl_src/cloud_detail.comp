@@ -8,9 +8,9 @@ layout (constant_id = 1) const uint octaves = 1;
 layout (constant_id = 2) const uint seed = 0;
 
 #if local_size_z == 1
-    layout (binding = 0, rgba32f) uniform writeonly image2D outImage;
+    layout (binding = 0, r11f_g11f_b10f) uniform writeonly image2D outImage;
 #else
-    layout (binding = 0, rgba32f) uniform writeonly image3D outImage;
+    layout (binding = 0, r11f_g11f_b10f) uniform writeonly image3D outImage;
 #endif
 
 void main()

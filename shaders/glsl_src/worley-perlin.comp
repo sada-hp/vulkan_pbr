@@ -15,7 +15,7 @@ void main()
     const vec2 cell_loc = vec2(gl_GlobalInvocationID.xy) / vec2(gl_NumWorkGroups.xy);
 
     float w = 1.0 - fbm_worley(cell_loc, frequency, worley_octaves);
-    float p = fbm_perlin(cell_loc, frequency, perlin_octaves);
+    float p = fbm_perlin(cell_loc, frequency, perlin_octaves) * 0.5 + 0.5;
     float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
 
     imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(p, w, perlin_worley, 0.0));

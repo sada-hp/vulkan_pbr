@@ -115,7 +115,7 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateCloudDetailNoise(const RenderScope
 {
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
-	return generate("cloud_detail_comp", Scope, VK_FORMAT_R32G32B32A32_SFLOAT, imageSize, { frequency, octaves, seed });
+	return generate("cloud_detail_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCheckerBoard(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency)

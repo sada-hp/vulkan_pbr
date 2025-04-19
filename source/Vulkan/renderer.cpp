@@ -2519,7 +2519,9 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	{
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
-			.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
+			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
+			.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			// .AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
 			// .AddUniformBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOBuffers[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			.Allocate(m_Scope);

@@ -103,20 +103,24 @@ void main()
         AO = saturate(LocalPosition.y / 6.0);
         LocalPosition *= (saturate(abs(hash) + 0.35) * vec2(6.0, 10.0).xyx);
 
-        float lean = max(AO, 0.25) * perlin(ObjectCenter.xz + anim, 10);
-        mat3 RotX = transpose(mat3(vec3(1.0, 0.0, 0.0), 
+        float p1;
+        vec2 d1, d2;
+        perlind(ObjectCenter.xz, 10, p1, d1, d2);
+
+        float lean = max(AO, 0.25) * perlin(vec2(p1, dot(d1, d2)) + anim, 10);
+        mat3 RotX = inverse(mat3(vec3(1.0, 0.0, 0.0), 
                     vec3(0.0, cos(lean), -sin(lean)), 
                     vec3(0.0, sin(lean), cos(lean))
         ));
 
-        float bank = noise(ObjectCenter.xz);
-        mat3 RotZ = transpose(mat3(vec3(cos(bank), sin(bank), 0.0), 
+        float bank = noise(d1);
+        mat3 RotZ = inverse(mat3(vec3(cos(bank), sin(bank), 0.0), 
                     vec3(-sin(bank), cos(bank), 0.0), 
                     vec3(0.0, 0.0, 1.0)
         ));
 
-        float face = noise(ObjectCenter.zy);
-        mat3 RotY = transpose(mat3(vec3(cos(face), 0.0, -sin(face)), 
+        float face = noise(d2);
+        mat3 RotY = inverse(mat3(vec3(cos(face), 0.0, -sin(face)), 
                     vec3(0.0, 1.0, 0.0), 
                     vec3(sin(face), 0.0, cos(face))
         ));

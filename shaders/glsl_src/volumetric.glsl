@@ -51,6 +51,7 @@ struct
     float LightIntensity;
     float Ambient;
     float Wind;
+    float Density;
 } Params;
 
 layout(set = 1, binding = 0) uniform CloudLayer
@@ -132,7 +133,7 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
     
     base *= weather1;
-    float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
+    float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;
     base = height * saturate(remap(base, shape, 1.0, Params.HeightFactor, 1.0));
 
     return base;
@@ -147,7 +148,7 @@ float SampleCloudDetail(in RayMarch Ray, float base, int lod)
     float high_frequency_fbm = (high_frequency_noise.r * 1.0 + high_frequency_noise.g * 0.5 + high_frequency_noise.b * 0.25) / 1.75;
     float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    base = mix(2.0 * Clouds.Density, Clouds.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0));
+    base = mix(2.0 * Params.Density, Params.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0));
     return saturate(base);
 }
 
@@ -159,7 +160,7 @@ float SampleCone(RayMarch Ray, int mip)
     for (int i = 0; i <= 6; i++)
     {
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
-        cone_density += Clouds.Density * SampleCloudShape(Ray, mip + 1);
+        cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
 
         Ray.Stepsize *= i >= 5 ? 2.0 : 1.0;
     }
@@ -171,7 +172,7 @@ float MultiScatter(float phi, float e, float ds)
 {
     float luminance = 0.0;
     float a = 1.0, b = 1.0, c = 1.0;
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 10; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
         a *= 0.5;
@@ -201,7 +202,7 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
         }
         else
         {
-            cone_density += SampleCloudShape(Ray, mip + 1);
+            cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
         }
     }
 
@@ -222,7 +223,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     float sample_density = 0.0;
 
     // skip empty space until cloud is found
-    int steps = int(min(32 * step_mod, 96)), i = 0;
+    int steps = int(min(32 * step_mod, 64)), i = 0;
     Ray.Stepsize = ray_length / float(steps);
 
     bool found = false;

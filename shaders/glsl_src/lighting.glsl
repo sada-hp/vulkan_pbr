@@ -244,7 +244,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 #endif
         float Rpe = distance(Eye, Target);
         Atmosphere.T = GetTransmittance(TransmittanceLUT, Re, EdotV, View, Target);
-        Atmosphere.L = Atmosphere.T * GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
+        Atmosphere.L = GetTransmittanceWithShadow(TransmittanceLUT, Rp, PdotL, Re, EdotL);
         Atmosphere.E = GetIrradiance(IrradianceLUT, Rp, PdotL);
 
         const float EPS = 0.008;
@@ -293,6 +293,9 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
 
 vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 Eye, vec3 View, vec3 Sun)
 {
+    if (SphereMinDistance(Eye, View, vec3(0.0), Rg) > 0.0)
+        return vec3(0.0);
+
     vec3 Color = vec3(0.0);
     float Re = length(Eye);
     float EdotV = saturateAngle(dot(Eye, View) / Re);

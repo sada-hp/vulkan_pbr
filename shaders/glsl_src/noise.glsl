@@ -177,7 +177,7 @@ float perlin(vec3 x0, float freq)
     vec3 gg = noise3(mod(i + of.xyy, freq));
     vec3 gh = noise3(mod(i + of.yyy, freq));
 
-    float va = dot(ga, f);
+    float va = dot(ga, f - of.xxx);
     float vb = dot(gb, f - of.yxx);
     float vc = dot(gc, f - of.xyx);
     float vd = dot(gd, f - of.yyx);
@@ -186,7 +186,7 @@ float perlin(vec3 x0, float freq)
     float vg = dot(gg, f - of.xyy);
     float vh = dot(gh, f - of.yyy);
     
-    vec3 u = smoothstep(0.0, 1.0, f);
+    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
     
     return va + 
            u.x * (vb - va) + 
@@ -248,7 +248,7 @@ float fbm_perlin(vec2 x, float f, uint n)
         NOISE_SEED++;
 	}
 
-	return clamp(v / as, -1.0, 1.0) * 0.5 + 0.5;
+	return clamp(v / as, -1.0, 1.0);
 }
 
 float fbm_perlin(vec3 x, float f, uint n) 
@@ -265,7 +265,7 @@ float fbm_perlin(vec3 x, float f, uint n)
         NOISE_SEED++;
 	}
 
-	return clamp(v / as, -1.0, 1.0) * 0.5 + 0.5;
+	return clamp(v / as, -1.0, 1.0);
 }
 
 float fbm_perlin_turb(vec3 x, float f, uint n) 
@@ -282,7 +282,7 @@ float fbm_perlin_turb(vec3 x, float f, uint n)
         NOISE_SEED++;
 	}
 
-	return clamp(v / as, -1.0, 1.0) * 0.5 + 0.5;
+	return clamp(v / as, -1.0, 1.0);
 }
 
 #endif

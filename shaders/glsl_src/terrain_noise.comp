@@ -14,9 +14,13 @@ struct Vertex
 };
 
 layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray terrainImage;
-layout (std140, set = 1, binding = 1) buffer TerrainReference{
+layout (set = 1, binding = 1) uniform sampler2DArray terrainImageOld;
+layout (std140, set = 1, binding = 2) buffer TerrainReference{
 	Vertex at[];
 } vertices;
+layout (std140, set = 1, binding = 3) readonly buffer TerrainReference2{
+	Vertex at[];
+} verticesOld;
 
 layout (constant_id = 2) const uint VertexCount = 0;
 layout (constant_id = 3) const float Scale = 0;
@@ -114,29 +118,40 @@ void main()
     if (NOISE_SEED != 0 && gl_GlobalInvocationID.x < VertexCount)
     {
         Vertex vertex = vertices.at[gl_GlobalInvocationID.x];
+        Vertex oldVertex = verticesOld.at[gl_GlobalInvocationID.x];
 
         int Level = int(vertex.Position.y);
+        float adjustScale = Scale * exp2(max(Level, deltaS));
 
         dvec3 Camera1 = ubo.WorldUp.xyz;
-        dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, Scale * exp2(max(Level, deltaS))));
+        dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, adjustScale));
 
         vec4 Val = vec4(0.0);
         ivec3 Texel = ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level);
         dmat3 Orientation1 = GetTerrainOrientation(Camera1);
         vec3 ObjectPosition = round(vec3(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1));
-        vec3 OldPosition    = vec3(vertex.World.xyz);
         vec3 Normal = vec3(normalize(ObjectPosition));
 
-        if (RoundToIncrement(normalize(OldPosition), 0.0001) != RoundToIncrement(Normal, 0.0001))
+        float halfSurfaceRadius = Rg + 0.5 * (MaxHeight - MinHeight);
+        vec3 commonSurface = halfSurfaceRadius * RoundToIncrement(halfSurfaceRadius * Normal, adjustScale);
+        if (RoundToIncrement(halfSurfaceRadius * normalize(vertex.World.xyz), adjustScale) != commonSurface)
         {
-            Val.xy = abs(0.5 * terrain_fbm(Normal, 100.0, 5) + 0.25 * terrain_fbm(Normal, 400.0, 10) + 0.25 * terrain_fbm(Normal, 800.0, 15));
-            Val.x = smootherstep(0.0, 1.0, Val.x);
-            
-            float h = Val.x;
-            Val.xy = vec2(MinHeight + Val.x * (MaxHeight - MinHeight), Val.y);
+            if (RoundToIncrement(halfSurfaceRadius * normalize(oldVertex.World.xyz), adjustScale) == commonSurface)
+            {
+                imageStore(terrainImage, Texel, texelFetch(terrainImageOld, Texel, 0));
+                vertices.at[gl_GlobalInvocationID.x].World = verticesOld.at[gl_GlobalInvocationID.x].World;
+            }
+            else
+            {
+                Val.xy = abs(0.5 * terrain_fbm(Normal, 100.0, 5) + 0.25 * terrain_fbm(Normal, 400.0, 10) + 0.25 * terrain_fbm(Normal, 800.0, 15));
+                Val.x = smootherstep(0.0, 1.0, Val.x);
+                
+                float h = Val.x;
+                Val.xy = vec2(MinHeight + Val.x * (MaxHeight - MinHeight), Val.y);
 
-            imageStore(terrainImage, Texel, Val);
-            vertices.at[gl_GlobalInvocationID.x].World = vec4(Normal * (Rg + Val.x), h);
+                imageStore(terrainImage, Texel, Val);
+                vertices.at[gl_GlobalInvocationID.x].World = vec4(Normal * (Rg + Val.x), h);
+            }
         }
     }
     else if (gl_GlobalInvocationID.x < VertexCount)
