@@ -1301,9 +1301,9 @@ VkBool32 VulkanBase::create_frame_pipelines()
 	m_BlurDescriptors.resize(m_ResourceCount);
 	m_SSRDescriptors.resize(m_ResourceCount);
 
-	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
-	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
+	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp, 1);
+	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp, 1);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat, 1);
 
 	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
@@ -1319,10 +1319,10 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(8, VK_SHADER_STAGE_FRAGMENT_BIT, m_DiffuseIrradience[i].View->GetImageView(), SamplerLinear)
-			.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, m_SpecularLUT[i].Views[0]->GetImageView(), SamplerLinear)
+			.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, m_SpecularLUT[i].Views[0]->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp, m_SpecularLUT[i].Views[0]->GetSubresourceRange().levelCount))
 			.AddImageSampler(10, VK_SHADER_STAGE_FRAGMENT_BIT, m_BRDFLUT.View->GetImageView(), SamplerLinear)
-			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
-			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp, m_VolumeShape.View->GetSubresourceRange().levelCount))
+			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearRepeat, m_VolumeWeather.View->GetSubresourceRange().levelCount))
 			.AddUniformBuffer(13, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 
@@ -1648,12 +1648,10 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_pbr_set(const VulkanImageView&
 	, const VulkanImageView& nh
 	, const VulkanImageView& arm) const
 {
-	const VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
-
 	return DescriptorSetDescriptor()
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
-		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, albedo.GetSubresourceRange().levelCount))
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, nh.GetSubresourceRange().levelCount))
+		.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, arm.GetSubresourceRange().levelCount))
 		.Allocate(m_Scope);
 }
 
@@ -1682,12 +1680,10 @@ std::unique_ptr<DescriptorSet> VulkanBase::create_terrain_set(const VulkanImageV
 	, const VulkanImageView& nh
 	, const VulkanImageView& arm) const
 {
-	const VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat);
-
 	return DescriptorSetDescriptor()
-		.AddImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), SamplerRepeat)
-		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), SamplerRepeat)
-		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), SamplerRepeat)
+		.AddImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT, albedo.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, albedo.GetSubresourceRange().levelCount))
+		.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, nh.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, nh.GetSubresourceRange().levelCount))
+		.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, arm.GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, arm.GetSubresourceRange().levelCount))
 		// .AddImageSampler(4, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT.View->GetImageView(), SamplerRepeat)
 		.Allocate(m_Scope);
 }
@@ -1922,9 +1918,9 @@ VkBool32 VulkanBase::brdf_precompute()
 	m_SpecularPrecompute = std::make_unique<Buffer>(m_Scope, bufInfo, bufallocCreateInfo);
 	m_SpecularPrecompute->Update(specSamples.data(), sizeof(glm::vec4)* specSamples.size());
 
-	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp);
-	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp);
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat);
+	VkSampler SamplerPoint = m_Scope.GetSampler(ESamplerType::PointClamp, 1);
+	VkSampler SamplerLinear = m_Scope.GetSampler(ESamplerType::LinearClamp, 1);
+	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::LinearRepeat, 1);
 	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
 		m_CubemapDescriptors[i] = DescriptorSetDescriptor()
@@ -1940,7 +1936,7 @@ VkBool32 VulkanBase::brdf_precompute()
 			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
-			.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_CubemapLUT[i].Views[0]->GetImageView(), SamplerLinear)
+			.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_CubemapLUT[i].Views[0]->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp, m_CubemapLUT[i].Views[0]->GetSubresourceRange().levelCount))
 			.Allocate(m_Scope);
 
 		m_DiffuseDescriptors[i] = DescriptorSetDescriptor()
@@ -2057,13 +2053,11 @@ VkBool32 VulkanBase::atmosphere_precompute()
 	VmaAllocationCreateInfo imageAlloc{};
 	imageAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp);
-	VkSampler ImageSampler2 = m_Scope.GetSampler(ESamplerType::BillinearClamp);
+	VkSampler ImageSampler = m_Scope.GetSampler(ESamplerType::PointClamp, 1);
+	VkSampler ImageSampler2 = m_Scope.GetSampler(ESamplerType::BillinearClamp, 1);
 
-	imageCI.mipLevels = static_cast<uint32_t>(std::floor(std::log2(256u))) + 1;
 	m_TransmittanceLUT.Image = std::make_unique<VulkanImage>(m_Scope, imageCI, imageAlloc);
 	m_TransmittanceLUT.View = std::make_unique<VulkanImageView>(m_Scope, *m_TransmittanceLUT.Image);
-	imageCI.mipLevels = 1;
 
 	TrDSO = DescriptorSetDescriptor()
 		.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView())
@@ -2339,15 +2333,14 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
-	VkSampler SamplerRepeat = m_Scope.GetSampler(ESamplerType::BillinearRepeat); 
-	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp);
+	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp, 1);
 
 	// m_Volumetrics = std::make_unique<GraphicsObject>();
 	m_VolumetricsDescriptor = DescriptorSetDescriptor()
 		.AddUniformBuffer(0, VK_SHADER_STAGE_COMPUTE_BIT, *m_CloudLayer)
-		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeShape.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeDetail.View->GetImageView(), SamplerRepeat)
-		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeWeather.View->GetImageView(), SamplerRepeat)
+		.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeShape.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeShape.View->GetSubresourceRange().levelCount))
+		.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeDetail.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeDetail.View->GetSubresourceRange().levelCount))
+		.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeWeather.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeWeather.View->GetSubresourceRange().levelCount))
 		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
 		.AddImageSampler(5, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
 		.AddImageSampler(6, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
@@ -2519,7 +2512,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	{
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
-			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
 			.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
 			.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			// .AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
@@ -2527,17 +2520,17 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.Allocate(m_Scope);
 
 		m_WaterSet[i] = DescriptorSetDescriptor()
-			.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
+			.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
 			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_WaterLUT[i].View->GetImageView())
 			.Allocate(m_Scope);
 
 		m_TerrainDrawSet[i] = DescriptorSetDescriptor()
-			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearMirror))
-			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
+			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearMirror, 1))
+			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
 			.Allocate(m_Scope);
 
 		m_GrassSet[i] = DescriptorSetDescriptor()
-			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
+			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
 			.AddStorageBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *TerrainVBs[i])
 			// .AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp))
 			.Allocate(m_Scope);

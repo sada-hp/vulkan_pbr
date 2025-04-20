@@ -164,14 +164,14 @@ VulkanImage& VulkanImage::TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffe
 	barrier.dstQueueFamilyIndex = queue2;
 	barrier.image = image;
 	barrier.subresourceRange = subRange;
-	barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+	barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
 	barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
 	if (cmd1 != VK_NULL_HANDLE)
-		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	if (cmd2 != VK_NULL_HANDLE)
-		vkCmdPipelineBarrier(cmd2, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkCmdPipelineBarrier(cmd2, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	return *this;
 }
@@ -318,6 +318,8 @@ VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, cons
 	Info.subresourceRange.baseMipLevel = SubResource.baseMipLevel;
 	Info.subresourceRange.layerCount = SubResource.layerCount;
 	Info.subresourceRange.levelCount = SubResource.levelCount;
+
+	subRange = SubResource;
 
 	if ((Image.GetImageFlags() & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0)
 	{

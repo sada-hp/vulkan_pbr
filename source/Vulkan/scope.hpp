@@ -82,7 +82,7 @@ public:
 
 	inline const uint32_t& GetMaxFramesInFlight() const { return m_FramesInFlight; };
 
-	const VkSampler& GetSampler(ESamplerType Type) const;
+	const VkSampler& GetSampler(ESamplerType Type, uint32_t Mips) const;
 
 	inline const Queue& GetQueue(VkQueueFlagBits Type) const 
 	{
@@ -92,7 +92,7 @@ public:
 
 private:
 	std::unordered_map<VkQueueFlagBits, Queue> m_Queues;
-	mutable std::unordered_map<ESamplerType, VkSampler> m_Samplers;
+	mutable std::vector<std::tuple<ESamplerType, uint32_t, VkSampler>> m_Samplers;
 
 	uint32_t m_FramesInFlight = 1u;
 

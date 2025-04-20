@@ -423,8 +423,8 @@ void RenderScope::Destroy()
 {
 	m_Queues.clear();
 
-	for (auto pair : m_Samplers)
-		vkDestroySampler(m_LogicalDevice, pair.second, VK_NULL_HANDLE);
+	for (auto tuple : m_Samplers)
+		vkDestroySampler(m_LogicalDevice, tuple._Get_rest()._Get_rest()._Myfirst._Val, VK_NULL_HANDLE);
 	m_Samplers.clear();
 
 	if (m_DescriptorPool != VK_NULL_HANDLE)
@@ -473,42 +473,51 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& m_DescriptorPool != VK_NULL_HANDLE;
 }
 
-const VkSampler& RenderScope::GetSampler(ESamplerType Type) const
+const VkSampler& RenderScope::GetSampler(ESamplerType Type, uint32_t Mips) const
 {
-	if (m_Samplers.count(Type) == 0)
+	for (auto tuple : m_Samplers)
 	{
-		const bool Point = Type == ESamplerType::PointClamp || Type == ESamplerType::PointMirror || Type == ESamplerType::PointRepeat;
-		const bool Repeat = Type == ESamplerType::PointRepeat || Type == ESamplerType::LinearRepeat || Type == ESamplerType::BillinearRepeat;
-		const bool Mirror = Type == ESamplerType::PointMirror || Type == ESamplerType::LinearMirror || Type == ESamplerType::BillinearMirror;
-		const bool Anisotropy = Type == ESamplerType::BillinearClamp || Type == ESamplerType::BillinearRepeat || Type == ESamplerType::BillinearMirror;
-
-		VkSamplerCreateInfo samplerInfo{};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
-		samplerInfo.minFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeV = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeW = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-		if (Anisotropy)
+		if (tuple._Myfirst._Val == Type && tuple._Get_rest()._Myfirst._Val == Mips)
 		{
-			VkPhysicalDeviceProperties properties{};
-			vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
-
-			samplerInfo.anisotropyEnable = VK_TRUE;
-			samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+			return tuple._Get_rest()._Get_rest()._Myfirst._Val;
 		}
-
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK; 
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
-		samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0;
-		samplerInfo.minLod = 0.0;
-		samplerInfo.maxLod = 20.0;
-		vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &m_Samplers[Type]);
 	}
 
-	return m_Samplers[Type];
+	VkSampler sampler = VK_NULL_HANDLE;
+
+	const bool Point = Type == ESamplerType::PointClamp || Type == ESamplerType::PointMirror || Type == ESamplerType::PointRepeat;
+	const bool Repeat = Type == ESamplerType::PointRepeat || Type == ESamplerType::LinearRepeat || Type == ESamplerType::BillinearRepeat;
+	const bool Mirror = Type == ESamplerType::PointMirror || Type == ESamplerType::LinearMirror || Type == ESamplerType::BillinearMirror;
+	const bool Anisotropy = Type == ESamplerType::BillinearClamp || Type == ESamplerType::BillinearRepeat || Type == ESamplerType::BillinearMirror;
+
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+	samplerInfo.minFilter = Point ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = Repeat ? (Mirror ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT : VK_SAMPLER_ADDRESS_MODE_REPEAT) : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+	if (Anisotropy)
+	{
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
+
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+	}
+
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
+	samplerInfo.mipmapMode = Point ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0;
+	samplerInfo.minLod = 0.0;
+	samplerInfo.maxLod = static_cast<float>(Mips);
+	vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &sampler);
+
+	m_Samplers.emplace_back(std::tuple(Type, Mips, sampler));
+
+	return sampler;
 }
