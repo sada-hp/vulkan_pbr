@@ -46,6 +46,26 @@ struct CloudLayerProfile
 	float WindSpeed = 1.0;
 };
 /*
+* 
+*/
+struct TerrainLayerProfile
+{
+	bool operator==(TerrainLayerProfile& other)
+	{
+		return AltitudeF == other.AltitudeF
+			&& SlopeF == other.SlopeF
+			&& ConcavityF == other.ConcavityF
+			&& Sharpness == other.Sharpness
+			&& Lakes == other.Lakes;
+	}
+
+	float AltitudeF = 0.1;
+	float SlopeF = 0.375;
+	float ConcavityF = 0.5;
+	float Sharpness = 0.5;
+	float Lakes = 0.75;
+};
+/*
 * !@brief Dummy to inherit from
 */
 struct Texture

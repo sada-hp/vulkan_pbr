@@ -92,6 +92,8 @@ namespace GR
 
 		virtual void SetCloudLayerSettings(CloudLayerProfile settings) = 0;
 
+		virtual void SetTerrainLayerSettings(TerrainLayerProfile settings) = 0;
+
 #ifdef INCLUDE_GUI
 		ImGuiContext* GetImguiContext() const { return m_GuiContext; }
 #endif
@@ -207,6 +209,7 @@ private:
 	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {}; 
 	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {}; 
 	std::unique_ptr<Buffer> m_CloudLayer = {};
+	std::unique_ptr<Buffer> m_TerrainLayer = {};
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSkySets = {};
@@ -296,6 +299,8 @@ public:
 	* @param[in] settings - new parameters of cloud rendering
 	*/
 	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings) override;
+
+	GRAPI void SetTerrainLayerSettings(TerrainLayerProfile settings) override;
 	/*
 	* !@brief INTERNAL. Import image file into the memory using specified format
 	*

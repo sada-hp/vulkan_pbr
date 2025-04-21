@@ -244,6 +244,8 @@ VulkanBase::~VulkanBase() noexcept
 	vkDestroyDescriptorPool(m_Scope.GetDevice(), m_ImguiPool, VK_NULL_HANDLE);
 #endif
 
+	m_TerrainLayer.reset();
+
 	m_GrassSet.resize(0);
 	m_GrassPipeline.reset();
 
@@ -486,7 +488,7 @@ bool VulkanBase::BeginFrame()
 		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_WaterCompute);
 		m_WaterSet[m_ResourceIndex]->BindSet(1, m_TerrainAsync[m_ResourceIndex].Commands, *m_WaterCompute);
 		m_WaterCompute->BindPipeline(m_TerrainAsync[m_ResourceIndex].Commands);
-		vkCmdDispatch(m_TerrainAsync[m_ResourceIndex].Commands, ceil(float(m_WaterLUT[0].Image->GetExtent().width) / 8.f), ceil(float(m_WaterLUT[0].Image->GetExtent().height) / 4.f), m_WaterLUT[0].Image->GetArrayLayers() / 2);
+		vkCmdDispatch(m_TerrainAsync[m_ResourceIndex].Commands, ceil(float(m_WaterLUT[0].Image->GetExtent().width) / 8.f), ceil(float(m_WaterLUT[0].Image->GetExtent().height) / 4.f), m_WaterLUT[0].Image->GetArrayLayers());
 		m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
 		m_TerrainLUT[m_ResourceIndex].Image->TransferOwnership(m_TerrainAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
@@ -1084,6 +1086,11 @@ void VulkanBase::Wait() const
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
 	m_CloudLayer->Update(&settings, sizeof(CloudLayerProfile));
+}
+
+void VulkanBase::SetTerrainLayerSettings(TerrainLayerProfile settings)
+{
+	m_TerrainLayer->Update(&settings, sizeof(TerrainLayerProfile));
 }
 
 #pragma region Initialization
@@ -2392,6 +2399,19 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	std::sort(queueFamilies.begin(), queueFamilies.end());
 	queueFamilies.resize(std::distance(queueFamilies.begin(), std::unique(queueFamilies.begin(), queueFamilies.end())));
 
+	VmaAllocationCreateInfo layerAllocCreateInfo{};
+	layerAllocCreateInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+	VkBufferCreateInfo terrainLayerInfo{};
+	terrainLayerInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	terrainLayerInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	terrainLayerInfo.size = sizeof(TerrainLayerProfile);
+	terrainLayerInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	m_TerrainLayer = std::make_unique<Buffer>(m_Scope, terrainLayerInfo, layerAllocCreateInfo);
+
+	TerrainLayerProfile defaultTerrain{};
+	m_TerrainLayer->Update(&defaultTerrain, sizeof(TerrainLayerProfile));
+
 	TerrainVBs.resize(m_ResourceCount);
 
 	VkCommandBuffer cmd;
@@ -2512,9 +2532,10 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	{
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
-			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
-			.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
-			.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])
+			.AddUniformBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TerrainLayer)
+			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
+			.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
+			.AddStorageBuffer(4, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			// .AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp))
 			// .AddUniformBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOBuffers[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			.Allocate(m_Scope);

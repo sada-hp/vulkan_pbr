@@ -14,11 +14,18 @@ struct Vertex
 };
 
 layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray terrainImage;
-layout (set = 1, binding = 1) uniform sampler2DArray terrainImageOld;
-layout (std140, set = 1, binding = 2) buffer TerrainReference{
+layout(set = 1, binding = 1) uniform TerrainLayer
+{
+    float Ea;
+    float Es;
+    float Ec;
+    float Sharpness;
+} Params;
+layout (set = 1, binding = 2) uniform sampler2DArray terrainImageOld;
+layout (std140, set = 1, binding = 3) buffer TerrainReference{
 	Vertex at[];
 } vertices;
-layout (std140, set = 1, binding = 3) readonly buffer TerrainReference2{
+layout (std140, set = 1, binding = 4) readonly buffer TerrainReference2{
 	Vertex at[];
 } verticesOld;
 
@@ -79,13 +86,13 @@ vec2 terrain_fbm(vec3 n, float freq, float octaves)
             DNp2 += right * _DNp2;
         }
 
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), 0.4 );
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), Params.Ec );
         fbm += SlopeF * AltitudeF * Np;
         river_network += SlopeF * AltitudeF * abs(Np);
 
-        Gp = Gp + DNp;
-        SlopeF = (1.0 / 1.0 + dot(Gp, Gp));
-        AltitudeF *= mix(gi, gi * max(0.0, Np), 0.35);
+        Gp = Gp + DNp * Params.Es;
+        SlopeF = 1.0 / (1.0 + dot(Gp, Gp));
+        AltitudeF *= mix(gi, gi * max(0.0, Np), Params.Ea);
         Ampltude *= GainA;
         freq *= GainF;
         GainF *= 1.025;

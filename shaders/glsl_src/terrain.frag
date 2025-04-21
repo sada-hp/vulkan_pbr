@@ -77,7 +77,7 @@ void main()
 
     // -to-sand
     w = Height <= 0.02 ? smootherstep(0.0, 1.0, 1.0 - Height / 0.02) : 0.0;
-    w = saturate(w + DampenValue(WaterAmount, 15.0));
+    w = saturate(w + DampenValue(WaterAmount, 35.0));
     Material = mixmat(Material, SandMaterial, w);
 
     // -to-snow
@@ -86,7 +86,7 @@ void main()
 
     // -water
     w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
-    w = saturate(w + DampenValue(WaterAmount, 35.0));
+    w = saturate(w + DampenValue(WaterAmount, 75.0));
     Material.Albedo.rgb = mix(Material.Albedo.rgb, WaterColor, w);
     Material.Roughness = mix(Material.Roughness, 0.0, w * w * w);
     Material.AO = mix(Material.AO, 1.0, w);

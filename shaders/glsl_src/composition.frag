@@ -89,7 +89,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
 {
     float Re = length(Eye);
     float len = distance(Eye, World);
-    LightIntensity = mix(1.0, 0.05, smoothstep(0.0, 1.0, Clouds.Coverage * Clouds.Coverage)) * MaxLightIntensity;
+    LightIntensity = mix(1.0, 0.05, smoothstep(0.0, 1.0, Clouds.Coverage)) * MaxLightIntensity;
     
     if (Clouds.Coverage == 0.0 || Re > Rt + Rcdelta)
     {
