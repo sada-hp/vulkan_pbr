@@ -4,6 +4,9 @@
 #include "common.glsl"
 #include "noise.glsl"
 
+#define HEX_COMPUTE
+#include "hextiling.glsl"
+
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Vertex
@@ -13,19 +16,33 @@ struct Vertex
     vec4 UV;
 };
 
-layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray terrainImage;
-layout(set = 1, binding = 1) uniform TerrainLayer
+struct TerrainLayer
 {
     float Ea;
     float Es;
     float Ec;
+    int Octaves;
     float Sharpness;
-} Params;
+    int Op;
+    float Frequency;
+    float Offset;
+};
+
+layout (set = 1, binding = 0, rgba32f) uniform writeonly image2DArray terrainImage;
+layout (std140, set = 1, binding = 1) readonly buffer TerrainLayersBuffer
+{
+    layout(offset = 0) int Count;
+    layout(offset = 4) float TileScale;
+    layout(offset = 16) TerrainLayer at[];
+} Layers;
+
 layout (set = 1, binding = 2) uniform sampler2DArray terrainImageOld;
-layout (std140, set = 1, binding = 3) buffer TerrainReference{
+layout (std140, set = 1, binding = 3) buffer TerrainReferenceBuffer
+{
 	Vertex at[];
 } vertices;
-layout (std140, set = 1, binding = 4) readonly buffer TerrainReference2{
+layout (std140, set = 1, binding = 4) readonly buffer TerrainReferenceOld
+{
 	Vertex at[];
 } verticesOld;
 
@@ -36,19 +53,13 @@ layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
 layout (constant_id = 7) const float deltaS = 0;
 
-vec2 terrain_fbm(vec3 n, float freq, float octaves)
+vec2 terrain_fbm(vec3 n, vec2 uv, int l)
 {
-    float pole = abs(dot(n, vec3(0, 1, 0)));
-    vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
-    vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
-
-    float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
-    float right = 1.0 - left;
-
     float fbm = 0.0;
     float Ampltude = 1.0;
     float GainA = 0.5;
     float GainF = 2.0;
+    float freq = Layers.at[l].Frequency;
 
     float AltitudeF = Ampltude;
     float SlopeF = Ampltude;
@@ -56,61 +67,33 @@ vec2 terrain_fbm(vec3 n, float freq, float octaves)
     float river_network = 0.0;
 
     vec2 Gp = vec2(0.0);
-    for (int i = 0; i < octaves; i++)
+    for (int i = 0; i < Layers.at[l].Octaves; i++)
     {
         float Np = 0.0;
         vec2 DNp = vec2(0.0);
         vec2 DNp2 = vec2(0.0);
+        perlind(uv, freq, Np, DNp, DNp2);
+        Np = saturateAngle((Layers.at[l].Offset + Np));
 
-        if (left > 0.0)
-        {
-            float _Np = 0.0;
-            vec2 _DNp = vec2(0.0);
-            vec2 _DNp2 = vec2(0.0);
-            perlind(uv1, freq, _Np, _DNp, _DNp2);
+        float nb = abs(Np);
+        float nr = 1.0 - nb;
+        Np = Layers.at[l].Sharpness >= 0 ? mix(Np, nr, Layers.at[l].Sharpness) : mix(Np, nb, abs(Layers.at[l].Sharpness));
 
-            Np += left * _Np;
-            DNp += left * _DNp;
-            DNp2 += left * _DNp2;
-        }
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), Layers.at[l].Ec );
+        Gp = Gp + DNp * Layers.at[l].Es;
+        SlopeF = 1.0 / (1.0 + dot(Gp, Gp));
+        AltitudeF *= mix(gi, gi * max(0.0, Np), Layers.at[l].Ea);
+        freq *= GainF;
 
-        if (right > 0.0)
-        {
-            float _Np = 0.0;
-            vec2 _DNp = vec2(0.0);
-            vec2 _DNp2 = vec2(0.0);
-            perlind(uv2, freq, _Np, _DNp, _DNp2);
-
-            Np += right * _Np;
-            DNp += right * _DNp;
-            DNp2 += right * _DNp2;
-        }
-
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), Params.Ec );
         fbm += SlopeF * AltitudeF * Np;
         river_network += SlopeF * AltitudeF * abs(Np);
-
-        Gp = Gp + DNp * Params.Es;
-        SlopeF = 1.0 / (1.0 + dot(Gp, Gp));
-        AltitudeF *= mix(gi, gi * max(0.0, Np), Params.Ea);
-        Ampltude *= GainA;
-        freq *= GainF;
-        GainF *= 1.025;
-
-        NOISE_SEED++;
     }
-
-    float nb = abs(fbm);
-    float nr = 1.0 - nb;
-    float worley = (left * worley(-uv1, 65.0) + right * worley(-uv2, 65.0));
-    float w = worley * 2.0 - 1.0;
-    fbm = w >= 0 ? mix(fbm, nr, w) : mix(fbm, nb, abs(w));
 
     river_network = saturate(pow(river_network, 1.0 / 1.5));
     river_network = saturate(river_network - 0.5) * 2.0;
     river_network = saturate(river_network);
 
-    return vec2(abs(fbm), river_network);
+    return vec2(fbm, river_network);
 }
 
 float sample_perlin_sphere(vec3 Normal, float freq)
@@ -148,11 +131,51 @@ void main()
                 imageStore(terrainImage, Texel, texelFetch(terrainImageOld, Texel, 0));
                 vertices.at[gl_GlobalInvocationID.x].World = verticesOld.at[gl_GlobalInvocationID.x].World;
             }
-            else
+            else if (Layers.Count > 0)
             {
-                Val.xy = abs(0.5 * terrain_fbm(Normal, 100.0, 5) + 0.25 * terrain_fbm(Normal, 400.0, 10) + 0.25 * terrain_fbm(Normal, 800.0, 15));
-                Val.x = smootherstep(0.0, 1.0, Val.x);
-                
+#if 1
+                float pole = abs(dot(Normal, vec3(0, 1, 0)));
+                vec2 uv1 = 0.5 + vec2(atan(Normal.z, Normal.x) * ONE_OVER_2PI, asin(Normal.y) * ONE_OVER_2PI);
+                vec2 uv2 = 0.5 + vec2(atan(Normal.x, Normal.y) * ONE_OVER_2PI, asin(Normal.z) * ONE_OVER_2PI);
+                float pole_w = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+
+                HexParams p1, p2;
+                GetHexParams(Layers.TileScale * uv1, p1);
+                GetHexParams(Layers.TileScale * uv2, p2);
+
+                vec3 Lw = vec3(0.299, 0.587, 0.114);
+                vec3 Dw = vec3(dot(vec3(1.0, 0.0, 0.0), Lw), dot(vec3(0.0, 1.0, 0.0), Lw), dot(vec3(0.0, 0.0, 1.0), Lw));
+
+                Dw = mix(vec3(1.0), Dw, vec3(0.6));
+                vec3 Ww1 = vec3(0.0), Ww2 = vec3(0.0);
+                if (Layers.Count > 1)
+                {
+                    vec3 W1 = Dw * pow(vec3(p1.w1, p1.w2, p1.w3), vec3(7));
+                    vec3 W2 = Dw * pow(vec3(p2.w1, p2.w2, p2.w3), vec3(7));
+                    W1 /= (W1.x + W1.y + W1.z);
+                    W2 /= (W2.x + W2.y + W2.z);
+                    Ww1 = ProduceHexWeights(W1, p1.v1, p1.v2, p1.v3);
+                    Ww2 = ProduceHexWeights(W2, p2.v1, p2.v2, p2.v3);
+                }
+                else
+                {
+                    Ww1 = vec3(1.0);
+                    Ww2 = vec3(1.0);
+                }
+#endif
+
+                vec2 T1 = vec2(0.0), T2 = vec2(0.0);
+                for (int i = 0; i < min(Layers.Count, 3); i++)
+                {
+                    T1 += Ww1[i] * terrain_fbm(Normal, uv1, i);
+                    T2 += Ww2[i] * terrain_fbm(Normal, uv2, i);
+                }
+
+                T1.x = smootherstep(0.0, 1.0, T1.x);
+                T2.x = smootherstep(0.0, 1.0, T2.x);
+
+                Val.xy = mix(T1, T2, 1.0 - pole_w);
+
                 float h = Val.x;
                 Val.xy = vec2(MinHeight + Val.x * (MaxHeight - MinHeight), Val.y);
 

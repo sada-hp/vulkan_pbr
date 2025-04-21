@@ -45,9 +45,9 @@ struct Buffer
 
 	Buffer& UnMap();
 
-	Buffer& Update(void* data, size_t data_size = VK_WHOLE_SIZE);
+	Buffer& Update(void* data, size_t data_size = VK_WHOLE_SIZE, size_t offset = 0);
 
-	Buffer& Update(VkCommandBuffer cmd, void* data, size_t data_size = VK_WHOLE_SIZE);
+	Buffer& Update(VkCommandBuffer cmd, void* data, size_t data_size = VK_WHOLE_SIZE, size_t offset = 0);
 
 	uint32_t GetSize() { return allocInfo.size; };
 

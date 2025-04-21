@@ -55,15 +55,18 @@ struct TerrainLayerProfile
 		return AltitudeF == other.AltitudeF
 			&& SlopeF == other.SlopeF
 			&& ConcavityF == other.ConcavityF
-			&& Sharpness == other.Sharpness
-			&& Lakes == other.Lakes;
+			&& Octaves == other.Octaves;
 	}
 
 	float AltitudeF = 0.1;
 	float SlopeF = 0.375;
 	float ConcavityF = 0.5;
-	float Sharpness = 0.5;
-	float Lakes = 0.75;
+	int Octaves = 15;
+	
+	float Sharpness = 0.0;
+	int Op = 0;
+	float Frequency = 500.0;
+	float Offset;
 };
 /*
 * !@brief Dummy to inherit from

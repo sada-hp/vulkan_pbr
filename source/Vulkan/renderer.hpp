@@ -92,7 +92,7 @@ namespace GR
 
 		virtual void SetCloudLayerSettings(CloudLayerProfile settings) = 0;
 
-		virtual void SetTerrainLayerSettings(TerrainLayerProfile settings) = 0;
+		virtual void SetTerrainLayerSettings(float Scale, int Count, TerrainLayerProfile* settings) = 0;
 
 #ifdef INCLUDE_GUI
 		ImGuiContext* GetImguiContext() const { return m_GuiContext; }
@@ -300,7 +300,7 @@ public:
 	*/
 	GRAPI void SetCloudLayerSettings(CloudLayerProfile settings) override;
 
-	GRAPI void SetTerrainLayerSettings(TerrainLayerProfile settings) override;
+	GRAPI void SetTerrainLayerSettings(float Scale, int Count, TerrainLayerProfile* settings) override;
 	/*
 	* !@brief INTERNAL. Import image file into the memory using specified format
 	*

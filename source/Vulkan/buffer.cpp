@@ -53,7 +53,7 @@ Buffer& Buffer::UnMap()
 	return *this;
 }
 
-Buffer& Buffer::Update(void* data, size_t data_size)
+Buffer& Buffer::Update(void* data, size_t data_size, size_t offset)
 {
 	if (data_size == VK_WHOLE_SIZE)
 		data_size = allocInfo.size;
@@ -81,6 +81,8 @@ Buffer& Buffer::Update(void* data, size_t data_size)
 
 		VkBufferCopy region{};
 		region.size = bufInfo.size;
+		region.dstOffset = offset;
+		region.srcOffset = 0;
 		vkCmdCopyBuffer(cmd, stageBuffer->GetBuffer(), buffer, 1, &region);
 
 		::EndCommandBuffer(cmd);
@@ -88,34 +90,31 @@ Buffer& Buffer::Update(void* data, size_t data_size)
 			.Submit(cmd)
 			.Wait()
 			.FreeCommandBuffers(1, &cmd);
-
-		vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
 	}
 	else
 	{
 		if (!mappedMemory)
 		{
 			Map();
-			memcpy(mappedMemory, data, data_size);
+			memcpy(((char*)mappedMemory) + offset, data, data_size);
 			UnMap();
 		}
 		else
 		{
-			memcpy(mappedMemory, data, data_size);
+			memcpy(((char*)mappedMemory + offset), data, data_size);
 		}
-
-		vmaFlushAllocation(Scope->GetAllocator(), memory, 0, data_size);
 	}
+	vmaFlushAllocation(Scope->GetAllocator(), memory, offset, data_size);
 
 	return *this;
 }
 
-Buffer& Buffer::Update(VkCommandBuffer cmd, void* data, size_t data_size)
+Buffer& Buffer::Update(VkCommandBuffer cmd, void* data, size_t data_size, size_t offset)
 {
 	if (data_size == VK_WHOLE_SIZE)
 		data_size = allocInfo.size;
 
-	vkCmdUpdateBuffer(cmd, buffer, 0, data_size, data);
+	vkCmdUpdateBuffer(cmd, buffer, offset, data_size, data);
 
 	return *this;
 }

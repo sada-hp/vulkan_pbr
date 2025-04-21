@@ -1088,9 +1088,11 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 	m_CloudLayer->Update(&settings, sizeof(CloudLayerProfile));
 }
 
-void VulkanBase::SetTerrainLayerSettings(TerrainLayerProfile settings)
+void VulkanBase::SetTerrainLayerSettings(float Scale, int Count, TerrainLayerProfile* settings)
 {
-	m_TerrainLayer->Update(&settings, sizeof(TerrainLayerProfile));
+	m_TerrainLayer->Update(&Count, sizeof(int));
+	m_TerrainLayer->Update(&Scale, sizeof(float), sizeof(int));
+	m_TerrainLayer->Update(settings, Count * sizeof(TerrainLayerProfile), 16u);
 }
 
 #pragma region Initialization
@@ -2404,13 +2406,17 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 
 	VkBufferCreateInfo terrainLayerInfo{};
 	terrainLayerInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	terrainLayerInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	terrainLayerInfo.size = sizeof(TerrainLayerProfile);
+	terrainLayerInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	terrainLayerInfo.size = 100 * sizeof(TerrainLayerProfile) + sizeof(TerrainLayerProfile);
 	terrainLayerInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	m_TerrainLayer = std::make_unique<Buffer>(m_Scope, terrainLayerInfo, layerAllocCreateInfo);
 
+	int Layers = 1;
+	float Scale = 1e1;
 	TerrainLayerProfile defaultTerrain{};
-	m_TerrainLayer->Update(&defaultTerrain, sizeof(TerrainLayerProfile));
+	m_TerrainLayer->Update(&Layers, sizeof(int));
+	m_TerrainLayer->Update(&Layers, Scale, sizeof(int));
+	m_TerrainLayer->Update(&defaultTerrain, 100 * sizeof(TerrainLayerProfile), 16u);
 
 	TerrainVBs.resize(m_ResourceCount);
 
@@ -2532,7 +2538,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	{
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
-			.AddUniformBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TerrainLayer)
+			.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, *m_TerrainLayer)
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[(i == 0 ? m_TerrainLUT.size() : i) - 1].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
 			.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
 			.AddStorageBuffer(4, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])

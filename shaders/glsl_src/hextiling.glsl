@@ -10,7 +10,9 @@ struct HexParams
     vec2 st1, st2, st3;
     ivec2 v1, v2, v3;
     float w1, w2, w3;
+#ifndef HEX_COMPUTE
     vec2 dSTdx, dSTdy;
+#endif
 };
 
 void TrangleGrid(in vec2 st, 
@@ -59,8 +61,10 @@ vec3 ProduceHexWeights(vec3 W, ivec2 vertex1, ivec2 vertex2, ivec2 vertex3)
 
 void GetHexParams(in vec2 st, out HexParams params)
 {
+#ifndef HEX_COMPUTE
     params.dSTdx = dFdx(st);
     params.dSTdy = dFdy(st);
+#endif
     TrangleGrid(st, params.w1, params.w2, params.w3, params.v1, params.v2, params.v3);
     
     params.st1 = st + noise2(params.v1);
@@ -68,6 +72,7 @@ void GetHexParams(in vec2 st, out HexParams params)
     params.st3 = st + noise2(params.v3);
 }
 
+#ifndef HEX_COMPUTE
 void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material)
 {
     vec4 c1 = textureGrad(col, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
@@ -97,3 +102,4 @@ void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int 
     Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
     Material.Normal = 2.0 * (W.x * n1.rgb + W.y * n2.rgb + W.z * n3.rgb) - 1.0;
 }
+#endif
