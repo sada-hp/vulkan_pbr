@@ -22,9 +22,10 @@ layout(location = 2) in vec4 vertUV;
 layout(location = 0) out vec4 WorldPosition;
 layout(location = 1) out vec2 VertPosition;
 layout(location = 2) out flat float Diameter;
-layout(location = 3) out float Height;
-layout(location = 4) out flat int Level;
-layout(location = 5) out mat3 TBN;
+layout(location = 3) out flat float Diameter2;
+layout(location = 4) out float Height;
+layout(location = 5) out flat int Level;
+layout(location = 6) out mat3 TBN;
 
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
@@ -57,11 +58,10 @@ void main()
 
     GetTBN();
     Diameter = vertUV.w;
+    Diameter2 = vertUV.z;
     VertPosition = vertPosition.xz;
     WorldPosition = vec4(worldPosition.xyz, 1.0);
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
-    WorldPosition.xyz -= ubo.CameraPosition.xyz;
-
     Height = Seed == 0 ? 1.0 : worldPosition.w;
 }

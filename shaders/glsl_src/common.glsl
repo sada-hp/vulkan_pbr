@@ -16,7 +16,16 @@ float smootherstep(float e0, float e1, float x)
 float inverse_smoothstep(float e0, float e1, float x)
 {
 	x = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
-	return 0.5 - sin(asin(1.0 - 2.0 * x) / 3.0) ;
+	return 0.5 - sin(asin(1.0 - 2.0 * x) / 3.0);
+}
+
+float ridge_smoothstep(float e0, float e1, float x)
+{
+	x = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+    float sm = x * x * (3 - 2 * x);
+    float inv = 0.5 - sin(asin(1.0 - 2.0 * x) / 3.0);
+
+    return sm * inv;
 }
 
 float remap(float orig, float old_min, float old_max, float new_min, float new_max)
@@ -47,6 +56,42 @@ vec4 saturate(vec4 x)
 float saturateAngle(float x)
 {
     return clamp(-1.0, 1.0, x);
+}
+
+vec4 SampleOnSphere(vec3 Position, sampler2D Target, float Scale)
+{
+    float l = length(Position);
+    vec3 n = Position / l;
+    float pole = abs(dot(n, vec3(0, 1, 0)));
+    vec2 uv1 = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
+    vec2 uv2 = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
+
+    float left = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
+    float right = 1.0 - left;
+
+    vec4 Out = vec4(0.0);
+    if (left > 0.0)
+        Out += left * texture(Target, uv1 * l * Scale);
+
+    if (right > 0.0)
+        Out += right * texture(Target, uv2 * l * Scale);
+
+    return Out;
+}
+
+vec4 SampleProject(vec3 Position, sampler2D Target, float Scale)
+{
+    Position *= Scale;
+    vec4 s1 = texture(Target, Position.xz);
+    vec4 s2 = texture(Target, Position.xy);
+    vec4 s3 = texture(Target, Position.yz);
+
+    vec3 n = normalize(Position);
+    float a1 = abs(dot(n, vec3(0, 1, 0)));
+    float a2 = abs(dot(n, vec3(0, 0, 1)));
+    float a3 = abs(dot(n, vec3(1, 0, 0)));
+
+    return (s1 * a1 + s2 * a2 + s3 * a3) / (a1 + a2 + a3);
 }
 
 vec2 SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius)

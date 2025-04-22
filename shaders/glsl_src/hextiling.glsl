@@ -10,6 +10,7 @@ struct HexParams
     vec2 st1, st2, st3;
     ivec2 v1, v2, v3;
     float w1, w2, w3;
+    float contrast;
 #ifndef HEX_COMPUTE
     vec2 dSTdx, dSTdy;
 #endif
@@ -59,7 +60,7 @@ vec3 ProduceHexWeights(vec3 W, ivec2 vertex1, ivec2 vertex2, ivec2 vertex3)
     return res;
 }
 
-void GetHexParams(in vec2 st, out HexParams params)
+void GetHexParams(float contrast, in vec2 st, out HexParams params)
 {
 #ifndef HEX_COMPUTE
     params.dSTdx = dFdx(st);
@@ -70,10 +71,22 @@ void GetHexParams(in vec2 st, out HexParams params)
     params.st1 = st + noise2(params.v1);
     params.st2 = st + noise2(params.v2);
     params.st3 = st + noise2(params.v3);
+    params.contrast = contrast;
+}
+
+vec3 Gain3(vec3 W, float r)
+{
+    // Increase contrast when r > 0.5 and
+    // reduce contrast if less.
+    float k = log(max(1.0 - r, 1e-3)) / log(0.5);
+    vec3 s = 2*step(0.5, W);
+    vec3 m = 2*(1 - s);
+    vec3 res = 0.5*s + 0.25*m * pow(max(vec3(0.0), s + W*m), vec3(k));
+    return res.xyz / (res.x+res.y+res.z);
 }
 
 #ifndef HEX_COMPUTE
-void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material)
+void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material, out vec3 Weights)
 {
     vec4 c1 = textureGrad(col, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
     vec4 c2 = textureGrad(col, vec3(Params.st2, Layer), Params.dSTdx, Params.dSTdy);
@@ -94,6 +107,7 @@ void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int 
     vec3 W = Dw * pow(vec3(Params.w1, Params.w2, Params.w3), vec3(7));
 
     W /= (W.x + W.y + W.z);
+    W = Params.contrast == 0.5 ? W : Gain3(W, Params.contrast);
 
     Material.Albedo = W.x * c1 + W.y * c2 + W.z * c3;
     Material.AO = W.x * a1.r + W.y * a2.r + W.z * a3.r;
@@ -101,5 +115,7 @@ void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int 
     Material.Metallic = W.x * a1.b + W.y * a2.b + W.z * a3.b;
     Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
     Material.Normal = 2.0 * (W.x * n1.rgb + W.y * n2.rgb + W.z * n3.rgb) - 1.0;
+
+    Weights = ProduceHexWeights(W, Params.v1, Params.v2, Params.v3);
 }
 #endif

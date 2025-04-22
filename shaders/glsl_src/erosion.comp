@@ -57,7 +57,7 @@ bool test_run()
     ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
     float Kw = 0.001;
-    float dt = 0.5;
+    float dt = 0.1;
 
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;
@@ -69,7 +69,7 @@ bool test_run()
         return false;
 
     float dx = 0.0, dz = 0.0;
-    float s = 0.0, v = 0.0, w = texelFetch(NoiseMap, Texel, 0).g * 1000.0;
+    float s = 0.0, v = 0.0, w = 10000.0;
 
     while (w > 0.01)
     {
@@ -120,7 +120,7 @@ bool test_run()
         h=nh;
     }
 
-    return h <= MinHeight * 1.01;
+    return h <= MinHeight * 1.0001;
 }
 
 void erosion_loop()
@@ -128,7 +128,7 @@ void erosion_loop()
     ivec3 Texel = ivec3(gl_GlobalInvocationID.xyz);
 
     float Kw = 0.001;
-    float dt = 0.5;
+    float dt = 0.1;
 
     float xf = 0.0, zf = 0.0;
     float xp = Texel.x, zp = Texel.y;
@@ -136,13 +136,10 @@ void erosion_loop()
     vec4 dH = sample_height(Texel);
     float h = dH.x;
 
-    if (h <= MinHeight * 1.05)
-        return;
-
     float dx = 0.0, dz = 0.0;
-    float s = 0.0, v = 0.0, w = texelFetch(NoiseMap, Texel, 0).g * 1000.0;
+    float s = 0.0, v = 0.0, w = 1000.0;
 
-    while (w > 0.01)
+    while (h > MinHeight * 1.0001)
     {
         spill(Texel, xp, zp, Kw * w, 1);
 
@@ -182,15 +179,13 @@ void erosion_loop()
         float dh = h - nh;
         float slope = dh;
 
-        w *= 1 - Kw;
-
         xp=nxp; zp=nzp;
         xf=nxf; zf=nzf;
 
         h=nh;
     }
 
-    spill(Texel, xp, zp, Kw * w, 1);
+    spill(Texel, xp, zp, Kw * w, 4);
 }
 
 void main()
