@@ -111,17 +111,6 @@ vec3 GetUV(vec3 p, float scale, float wind)
     return scale * uv + wind;
 }
 
-void GetUV(in RayMarch Ray, out vec3 UVA1, out vec3 UVA2)
-{
-    vec3 n = normalize(Ray.Position);
-    float pole = abs(dot(n, vec3(0, 1, 0)));
-    UVA1.xy = 0.5 + vec2(atan(n.z, n.x) * ONE_OVER_2PI, asin(n.y) * ONE_OVER_2PI);
-    UVA2.xy = 0.5 + vec2(atan(n.x, n.y) * ONE_OVER_2PI, asin(n.z) * ONE_OVER_2PI);
-
-    UVA1.z = pole > 0.9 ? 0.0 : (pole >= 0.8 ? 1.0 - ((pole - 0.8) / (0.9 - 0.8)) : 1.0);
-    UVA2.z = 1.0 - UVA1.z;
-}
-
 // Cheaper version of Sample-Density
 float SampleCloudShape(in RayMarch Ray, int lod)
 {
@@ -133,9 +122,9 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = textureLod(WeatherMap, uv.xz / 5.0, 0).rgb;
+    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(texture(WeatherMap, uv.zx / 40.0).r + 0.2);
+    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / topBound).r + 0.2);
     
     base *= weather1;
     float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;

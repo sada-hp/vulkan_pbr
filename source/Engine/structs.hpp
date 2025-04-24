@@ -36,9 +36,7 @@ struct CloudLayerProfile
 {
 	bool operator==(CloudLayerProfile& other)
 	{
-		return Coverage == other.Coverage
-			&& Density == other.Density
-			&& WindSpeed == other.WindSpeed;
+		return  memcmp(this, &other, sizeof(CloudLayerProfile)) == 0;
 	}
 
 	float Coverage = 0.5;
@@ -52,10 +50,7 @@ struct TerrainLayerProfile
 {
 	bool operator==(TerrainLayerProfile& other)
 	{
-		return AltitudeF == other.AltitudeF
-			&& SlopeF == other.SlopeF
-			&& ConcavityF == other.ConcavityF
-			&& Octaves == other.Octaves;
+		return memcmp(this, &other, sizeof(TerrainLayerProfile)) == 0;
 	}
 
 	float AltitudeF = 0.1;

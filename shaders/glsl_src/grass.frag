@@ -26,7 +26,7 @@ void main()
     N = normalize(N + mix(0.85, 1.0, AO) * ubo.SunDirection.xyz);
 
     HexParams Tiling;
-    GetHexParams((ubo.CameraPosition + CenterPosition).xz * 5e-4, Tiling);
+    GetHexParams(1.0, (ubo.CameraPosition + CenterPosition).xz * 5e-4, Tiling);
 
     vec4 c1 = textureGrad(AlbedoMap, vec3(Tiling.st1, 0), Tiling.dSTdx, Tiling.dSTdy);
     vec4 c2 = textureGrad(AlbedoMap, vec3(Tiling.st2, 0), Tiling.dSTdx, Tiling.dSTdy);
