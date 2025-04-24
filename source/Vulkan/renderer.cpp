@@ -172,7 +172,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ApplySync.size(), m_ApplySync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), m_PresentSync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), m_TerrainAsync.data());
-	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
+	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_DeferredSync.size(), m_DeferredSync.data());
 	::CreateSyncronizationStruct2(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_TransferAsync.size(), m_TransferAsync.data());
 	::CreateSyncronizationStruct2(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ComposeSync.size(), m_ComposeSync.data());
@@ -272,6 +272,7 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_VolumetricsAbovePipeline.reset();
 	m_VolumetricsUnderPipeline.reset();
+	m_VolumetricsComposePipeline.reset();
 	m_VolumetricsBetweenPipeline.reset();
 	m_VolumetricsDescriptor.reset();
 	m_UBOTempBuffers.resize(0);
@@ -298,7 +299,7 @@ VulkanBase::~VulkanBase() noexcept
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ApplySync.size(), m_ApplySync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), m_PresentSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), m_TerrainAsync.data());
-	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
+	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_DeferredSync.size(), m_DeferredSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_TransferAsync.size(), m_TransferAsync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ComposeSync.size(), m_ComposeSync.data());
@@ -485,8 +486,7 @@ bool VulkanBase::BeginFrame()
 		Color.float32[0] = 0.0;
 		vkCmdClearColorImage(m_TerrainAsync[m_ResourceIndex].Commands, m_WaterLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_WaterLUT[m_ResourceIndex].Image->GetSubResourceRange());
 
-		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_WaterCompute);
-		m_WaterSet[m_ResourceIndex]->BindSet(1, m_TerrainAsync[m_ResourceIndex].Commands, *m_WaterCompute);
+		m_WaterSet[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_WaterCompute);
 		m_WaterCompute->BindPipeline(m_TerrainAsync[m_ResourceIndex].Commands);
 		vkCmdDispatch(m_TerrainAsync[m_ResourceIndex].Commands, ceil(float(m_WaterLUT[0].Image->GetExtent().width) / 8.f), ceil(float(m_WaterLUT[0].Image->GetExtent().height) / 4.f), m_WaterLUT[0].Image->GetArrayLayers());
 		m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
@@ -512,40 +512,20 @@ bool VulkanBase::BeginFrame()
 
 		vkBeginCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands, &beginInfo);
 
-		if (m_FrameCount >= m_ResourceCount)
-		{
-			m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_CubemapAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-			m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_CubemapAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-		}
-
 		uint32_t mips = m_SpecularLUT[m_ResourceIndex].Image->GetMipLevelsCount();
 		uint32_t X = CubeR / 8 + uint32_t(CubeR % 8 > 0);
 		uint32_t Y = CubeR / 4 + uint32_t(CubeR % 4 > 0);
 
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
 
 		m_CubemapPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
 		m_CubemapDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_CubemapPipeline);
 		vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, X, Y, 6u);
 
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-
-		m_CubemapMipPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
-		for (uint32_t mip = 1; mip < mips; mip++)
-		{
-			uint32_t ScaledR = CubeR >> mip;
-			uint32_t scaledX = ceil(float(ScaledR) / 8.f);
-			uint32_t scaledY = ceil(float(ScaledR) / 4.f);
-
-			m_CubemapMipDescriptors[m_ResourceIndex * mips + mip]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_CubemapMipPipeline);
-			vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, scaledX, scaledY, 6u);
-
-			m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-		}
-
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->GenerateMipMaps(m_CubemapAsync[m_ResourceIndex].Commands);
 
 		m_ConvolutionPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
 		m_ConvolutionDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_ConvolutionPipeline);
@@ -567,8 +547,8 @@ bool VulkanBase::BeginFrame()
 			vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, scaledX, scaledY, 6u);
 		}
 
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 
 		VkImageCopy copy{};
 		copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -580,14 +560,11 @@ bool VulkanBase::BeginFrame()
 		copy.extent = { CubeR, CubeR, 1 };
 		vkCmdCopyImage(m_CubemapAsync[m_ResourceIndex].Commands, m_CubemapLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_SpecularLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_REMAINING_MIP_LEVELS, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_REMAINING_MIP_LEVELS, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
-
-		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(m_CubemapAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(m_CubemapAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 
 		vkEndCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands);
 
@@ -601,7 +578,7 @@ bool VulkanBase::BeginFrame()
 		submitInfo.pCommandBuffers = &m_CubemapAsync[m_ResourceIndex].Commands;
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores.data();
-		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, VK_NULL_HANDLE);
 	}
 
 	// Draw Low Resolution Background
@@ -629,8 +606,16 @@ bool VulkanBase::BeginFrame()
 		m_UBOSkySets[m_ResourceIndex]->BindSet(0, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
 		m_VolumetricsDescriptor->BindSet(1, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
 		m_TemporalVolumetrics[m_ResourceIndex]->BindSet(2, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
+		Pipeline->PushConstants(m_BackgroundAsync[m_ResourceIndex].Commands, &m_ResourceIndex, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
 		Pipeline->BindPipeline(m_BackgroundAsync[m_ResourceIndex].Commands);
- 		vkCmdDispatch(m_BackgroundAsync[m_ResourceIndex].Commands, ceil(float(m_HdrAttachmentsLR[0]->GetExtent().width) / 8), ceil(float(m_HdrAttachmentsLR[0]->GetExtent().height) / 4), 1);
+ 		vkCmdDispatch(m_BackgroundAsync[m_ResourceIndex].Commands, ceil(float(m_HdrAttachmentsLR[0]->GetExtent().width) / 16), ceil(float(m_HdrAttachmentsLR[0]->GetExtent().height) / 4), 1);
+
+		m_HdrAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+
+		m_TemporalVolumetrics[m_ResourceIndex]->BindSet(0, m_BackgroundAsync[m_ResourceIndex].Commands, *m_VolumetricsComposePipeline);
+		m_VolumetricsComposePipeline->BindPipeline(m_BackgroundAsync[m_ResourceIndex].Commands);
+		m_VolumetricsComposePipeline->PushConstants(m_BackgroundAsync[m_ResourceIndex].Commands, &m_ResourceIndex, sizeof(int), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+		vkCmdDispatch(m_BackgroundAsync[m_ResourceIndex].Commands, ceil(float(m_HdrAttachmentsLR[0]->GetExtent().width) / 16), ceil(float(m_HdrAttachmentsLR[0]->GetExtent().height) / 4), 1);
 
 		m_HdrAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 		// m_DepthAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
@@ -765,9 +750,6 @@ void VulkanBase::EndFrame()
 	{
 		vkBeginCommandBuffer(m_ComposeSync[m_ResourceIndex].Commands, &beginInfo);
 
-		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_ComposeSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_ComposeSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-
 		std::array<VkClearValue, 1> clearValues;
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 
@@ -800,9 +782,6 @@ void VulkanBase::EndFrame()
 		m_CompositionPipeline->BindPipeline(m_ComposeSync[m_ResourceIndex].Commands);
 		vkCmdDraw(m_ComposeSync[m_ResourceIndex].Commands, 3, 1, 0, 0);
 		vkCmdEndRenderPass(m_ComposeSync[m_ResourceIndex].Commands);
-
-		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(m_ComposeSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(m_ComposeSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 
 		vkEndCommandBuffer(m_ComposeSync[m_ResourceIndex].Commands);
 
@@ -1354,6 +1333,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 		m_TemporalVolumetrics[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i]->GetImageView())
 			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i]->GetImageView())
+			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i == 0 ? m_ResourceCount - 1 : i - 1]->GetImageView(), SamplerPoint)
 			.Allocate(m_Scope);
 
 		m_BlendingDescriptors[i] = DescriptorSetDescriptor()
@@ -1362,6 +1342,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i]->GetImageView(), SamplerLinear)
 			.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsHR[i]->GetImageView(), SamplerLinear)
 			.AddUniformBuffer(4, VK_SHADER_STAGE_COMPUTE_BIT, *m_CloudLayer)
+			.AddStorageImage(5, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i == m_ResourceCount - 1 ? 0 : i + 1]->GetImageView())
 			.Allocate(m_Scope);
 	}
 
@@ -1433,7 +1414,19 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 	m_UBOSkySets.resize(m_ResourceCount);
 	m_UBOSets.resize(m_ResourceCount);
 
-	for (uint32_t i = 0; i < m_ResourceCount; ++i)
+	for (uint32_t i = 0; i < m_ResourceCount; i++)
+	{
+		uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_UBOBuffers[i] = std::make_unique<Buffer>(m_Scope, uboInfo, uboAllocCreateInfo1);
+
+		uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_UBOSkyBuffers[i] = std::make_unique<Buffer>(m_Scope, uboInfo, uboAllocCreateInfo1);
+
+		uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		m_UBOTempBuffers[i] = std::make_unique<Buffer>(m_Scope, uboInfo, uboAllocCreateInfo2);
+	}
+	 
+	for (uint32_t i = 0; i < m_ResourceCount; i++)
 	{
 		uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_UBOBuffers[i] = std::make_unique<Buffer>(m_Scope, uboInfo, uboAllocCreateInfo1);
@@ -1446,6 +1439,7 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 
 		m_UBOSets[i] = DescriptorSetDescriptor()
 			.AddUniformBuffer(0, VK_SHADER_STAGE_ALL, *m_UBOBuffers[i])
+			.AddUniformBuffer(1, VK_SHADER_STAGE_ALL, *m_UBOBuffers[i == 0 ? m_ResourceCount - 1 : i - 1])
 			.Allocate(m_Scope);
 
 		m_UBOSkySets[i] = DescriptorSetDescriptor()
@@ -1762,13 +1756,11 @@ VkBool32 VulkanBase::brdf_precompute()
 		m_DiffuseIrradience[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_DiffuseIrradience[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_DiffuseIrradience[i].Image);
 
-		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		hdrInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(CubeR))) + 1;
 		m_SpecularLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_SpecularLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_SpecularLUT[i].Image));
 
-		hdrInfo.usage &= ~VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		hdrInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		m_CubemapLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_CubemapLUT[i].Views.emplace_back(std::make_unique<VulkanImageView>(m_Scope, *m_CubemapLUT[i].Image));
 
@@ -2355,7 +2347,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddImageSampler(6, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
 		.Allocate(m_Scope);
 
-	VkDescriptorSetLayoutBinding bindngs[2];
+	VkDescriptorSetLayoutBinding bindngs[3];
 	bindngs[0].binding = 0;
 	bindngs[0].descriptorCount = 1;
 	bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -2366,18 +2358,28 @@ VkBool32 VulkanBase::volumetric_precompute()
 	bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	bindngs[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 	bindngs[1].pImmutableSamplers = VK_NULL_HANDLE;
+	bindngs[2].binding = 2;
+	bindngs[2].descriptorCount = 1;
+	bindngs[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindngs[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	bindngs[2].pImmutableSamplers = VK_NULL_HANDLE;
 
 	VkDescriptorSetLayoutCreateInfo dummyInfo{};
 	dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	dummyInfo.bindingCount = 2;
+	dummyInfo.bindingCount = 3;
 	dummyInfo.pBindings = bindngs;
 	VkDescriptorSetLayout dummy;
 	vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
+
+	VkPushConstantRange ConstantOrder{};
+	ConstantOrder.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	ConstantOrder.size = sizeof(int);
 
 	ComputePipelineDescriptor VolumetricPSO{}; 
 	VolumetricPSO.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_VolumetricsDescriptor->GetLayout())
 		.AddDescriptorLayout(dummy)
+		.AddPushConstant(ConstantOrder)
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt);
 
@@ -2388,6 +2390,12 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.Construct(m_Scope);
 
 	m_VolumetricsUnderPipeline = VolumetricPSO.SetShaderName("volumetric_under_comp")
+		.Construct(m_Scope);
+
+	m_VolumetricsComposePipeline = ComputePipelineDescriptor()
+		.SetShaderName("volumetric_compose_comp")
+		.AddDescriptorLayout(dummy)
+		.AddPushConstant(ConstantOrder)
 		.Construct(m_Scope);
 
 	vkDestroyDescriptorSetLayout(m_Scope.GetDevice(), dummy, VK_NULL_HANDLE);
@@ -2595,7 +2603,6 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		.Construct(m_Scope);
 
 	m_WaterCompute = ComputePipelineDescriptor()
-		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
 		.AddSpecializationConstant(0, Rg)
 		.AddSpecializationConstant(1, Rt)

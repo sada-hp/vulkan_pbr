@@ -12,6 +12,7 @@ layout(binding = 4) uniform CloudLayer
     float Density;
     float WindSpeed;
 } Clouds;
+layout(binding = 5, rgba32f) uniform image2D HDRNextDepthLR;
 
 void main()
 {

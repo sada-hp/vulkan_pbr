@@ -6,7 +6,10 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 void main()
 {
     vec2 size = imageSize(outImage).xy;
-    vec2 ScreenUV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
+    ivec2 Texel = ivec2(2, 1) * ivec2(gl_GlobalInvocationID.xy);
+    Texel.x += gl_GlobalInvocationID.y % 2 == 0 ? int(In.Order % 2 == 1) : int(In.Order % 2 == 0);
+
+    vec2 ScreenUV = (0.5 + vec2(Texel)) / size;
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
     vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
     vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * ScreenView);
@@ -20,8 +23,11 @@ void main()
 
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
-    float inDepth = imageLoad(outDepth, ivec2(gl_GlobalInvocationID.xy)).r;
-    vec3 inWorld = GetWorldPosition(ScreenUV, inDepth);
+    
+    float inDepth = imageLoad(outDepth, Texel).r;
+    vec4 ClipSpace     = vec4(2.0 * ScreenUV - 1.0, inDepth, 1.0);
+    vec4 WorldPosition = vec4(uboOld.ViewMatrixInverse * (uboOld.ProjectionMatrixInverse * ClipSpace));
+    vec3 inWorld = WorldPosition.xyz / WorldPosition.w;
 
     Params.Coverage = Clouds.Coverage;
     Params.CoverageSq = Params.Coverage * Params.Coverage;
@@ -43,11 +49,16 @@ void main()
     if (horizon > 0)
     {
         Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
-        Ray.Start = RayOrigin + Ray.Direction * min(Hits.TopCloud, Hits.Ground);
+
+        float t = 0.0;
+        if (Hits.Ground == 0.0) t = Hits.TopCloud;
+        else t = min(Hits.TopCloud, Hits.Ground);
+
+        Ray.Start = RayOrigin + Ray.Direction * t;
 
         MarchToCloud(Ray, distance(Ray.Start, Ray.End));
     }
 
-    imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), outScattering);
-    imageStore(outDepth, ivec2(gl_GlobalInvocationID.xy), vec4(Depth));
+    imageStore(outImage, Texel, outScattering);
+    imageStore(outDepth, Texel, vec4(Depth));
 }

@@ -218,6 +218,7 @@ private:
 	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_VolumetricsBetweenPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_VolumetricsUnderPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsComposePipeline = VK_NULL_HANDLE;
 	std::unique_ptr<DescriptorSet> m_VolumetricsDescriptor = VK_NULL_HANDLE;
 
 	VulkanTexture m_VolumeShape = {};

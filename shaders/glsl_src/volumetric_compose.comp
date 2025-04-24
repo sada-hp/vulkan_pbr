@@ -1,0 +1,69 @@
+#version 460
+#include "common.glsl"
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+layout(binding = 0, rgba32f) uniform image2D outImage;
+layout(binding = 1, r32f) uniform image2D outDepth;
+layout(binding = 2) uniform sampler2D oldImage;
+
+layout(push_constant) uniform constants
+{
+    layout(offset = 0) int Order;
+} In;
+
+void main()
+{
+    ivec2 Size = ivec2(imageSize(outImage).xy);
+    ivec2 Texel = ivec2(ivec2(2, 1) * gl_GlobalInvocationID.xy);
+    Texel.x += gl_GlobalInvocationID.y % 2 == 0 ? int(In.Order % 2 == 0) : int(In.Order % 2 == 1);
+
+    if (Texel.x < Size.x && Texel.y < Size.y)
+    {
+        float norm = 0.0;
+        vec4 color_sample = vec4(0.0);
+        vec4 depth_sample = vec4(0.0);
+
+        vec4 temp = imageLoad(outImage, Texel + ivec2(1, 0));
+        if (temp.xyz != vec3(0.0))
+        {
+            color_sample += temp;
+            depth_sample += imageLoad(outDepth, Texel + ivec2(1, 0));
+            norm++;
+        }
+
+        temp = imageLoad(outImage, Texel + ivec2(-1, 0));
+        if (temp.xyz != vec3(0.0))
+        {
+            color_sample += temp;
+            depth_sample += imageLoad(outDepth, Texel + ivec2(-1, 0));
+            norm++;
+        }
+
+        temp = imageLoad(outImage, Texel + ivec2(0, 1));
+        if (temp.xyz != vec3(0.0))
+        {
+            color_sample += temp;
+            depth_sample += imageLoad(outDepth, Texel + ivec2(0, 1));
+            norm++;
+        }
+
+        temp = imageLoad(outImage, Texel + ivec2(0, -1));
+        if (temp.xyz != vec3(0.0))
+        {
+            color_sample += temp;
+            depth_sample += imageLoad(outDepth, Texel + ivec2(0, -1));
+            norm++;
+        }
+
+        if (norm > 0.0)
+        {
+            imageStore(outImage, Texel, mix(color_sample / norm, texelFetch(oldImage, Texel, 0), 0.65));
+            imageStore(outDepth, Texel, depth_sample / norm);
+        }
+        else
+        {
+            imageStore(outImage, Texel, vec4(0.0, 0.0, 0.0, 1.0));
+            imageStore(outDepth, Texel, vec4(0.0));
+        }
+    }
+}
