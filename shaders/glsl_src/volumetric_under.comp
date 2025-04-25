@@ -26,7 +26,7 @@ void main()
     Params.Coverage = Clouds.Coverage;
     Params.CoverageSq = Params.Coverage * Params.Coverage;
     Params.HeightFactor = pow(Params.Coverage, 1.5);
-    Params.BottomSmoothnessFactor = mix(0.05, 0.2, Params.Coverage);
+    Params.BottomSmoothnessFactor = mix(0.05, 0.5, Params.CoverageSq);
     Params.LightIntensity = mix(1.0, 0.05, Params.CoverageSq)  * MaxLightIntensity;
     Params.Ambient = mix(0.02, 0.005, Params.CoverageSq);
     Params.Wind = Clouds.WindSpeed * ubo.Time * 0.01;

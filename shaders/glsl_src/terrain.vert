@@ -33,7 +33,7 @@ void GetTBN()
 {
     dvec3 Camera = ubo.WorldUp.xyz;
     float sampleScale = Scale * exp2(vertPosition.y);
-    dmat3 Orientation = GetTerrainOrientation(Camera);
+    dmat3 Orientation = GetTerrainOrientation();
     vec4 dH = textureGather(NoiseMap, vec3(vertUV.xy, vertPosition.y), 0);
 
     vec3 Normal = normalize(vec3(dH.w - dH.z, sampleScale, dH.w - dH.x));
@@ -57,9 +57,12 @@ void main()
     Level = int(vertPosition.y);
 
     GetTBN();
-    Diameter = vertUV.w;
-    Diameter2 = vertUV.z;
-    VertPosition = vertPosition.xz;
+    float vertexScale = Level == 0 ? 2.0 * Scale : Scale;
+    // vertexScale = mix(vertexScale, 2.0 * vertexScale, smoothstep(0.0, 1.0, saturate(float(ubo.CameraRadius - Rg) / float(5.0 * Rdelta))));
+    VertPosition = vertexScale * vertPosition.xz;
+    Diameter = vertexScale * vertUV.w;
+    Diameter2 = vertexScale * vertUV.z;
+
     WorldPosition = vec4(worldPosition.xyz, 1.0);
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);

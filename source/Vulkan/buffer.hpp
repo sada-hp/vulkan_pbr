@@ -7,6 +7,7 @@
 
 struct Buffer
 {
+public:
 	Buffer(const RenderScope& Scope, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateInfo& allocCreateInfo);
 
 	Buffer(const Buffer& other) = delete;
@@ -51,12 +52,14 @@ struct Buffer
 
 	uint32_t GetSize() { return allocInfo.size; };
 
+public:
+	void* mappedMemory = VK_NULL_HANDLE;
+
 private:
 	VkBuffer buffer = VK_NULL_HANDLE;
 	VmaAllocation memory = VK_NULL_HANDLE;
 	VmaAllocationInfo allocInfo = {};
 	VkDescriptorBufferInfo descriptorInfo = {};
-	void* mappedMemory = VK_NULL_HANDLE;
 	VkBool32 gpuOnly = VK_FALSE;
 
 	const RenderScope* Scope = VK_NULL_HANDLE;

@@ -47,7 +47,7 @@ float SampleCloud(vec3 x0, float transmittance, float height)
     float base = textureLod(CloudLowFrequency, uv, 0).r;
 
     float h1 = pow(height, 0.65);
-    float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.2, Clouds.Coverage), 0.0, 1.0));
+    float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.5, Clouds.Coverage * Clouds.Coverage), 0.0, 1.0));
 
     vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
@@ -204,7 +204,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
 vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
 {
     vec3 SkyColor = SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, View, Sun);
-    float Hit = SphereMinDistance(Eye, View, vec3(0.0), Rct);
+    float Hit = SphereMinDistance(Eye, View, vec3(0.0), Rct - Rcdelta * 0.35);
 
     if (Hit > 0.0)
     {

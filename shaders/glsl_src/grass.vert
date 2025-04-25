@@ -131,9 +131,9 @@ void main()
 #if 1
         dvec3 Camera = ubo.WorldUp.xyz;
         float sampleScale = Scale * exp2(vert.Position.y);
-        dmat3 Orientation = GetTerrainOrientation(Camera);
+        dmat3 Orientation = GetTerrainOrientation();
         vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, vert.Position.y), 0);
-        vec3 Normal = normalize(vec3(dH.w - dH.z, sampleScale, dH.w - dH.x));
+        vec3 Normal = vec3(normalize(Orientation * vec3(dH.w - dH.z, sampleScale, dH.w - dH.x)));
 
         if (saturate(10.0 * (1.0 - saturate(abs(dot(Normal, normalize(WorldPosition.xyz)))))) > 0.5)
         {

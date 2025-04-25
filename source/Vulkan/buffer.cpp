@@ -23,6 +23,9 @@ Buffer::Buffer(const RenderScope& InScope, const VkBufferCreateInfo& createInfo,
 
 Buffer::~Buffer()
 {
+	if (mappedMemory && allocInfo.pMappedData == VK_NULL_HANDLE)
+		UnMap();
+
 	if (mappedMemory && !allocInfo.pMappedData)
 		vmaUnmapMemory(Scope->GetAllocator(), memory);
 	if (buffer != VK_NULL_HANDLE)

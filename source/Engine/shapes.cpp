@@ -329,7 +329,7 @@ namespace GR
 		const int32_t padding = 1u;
 		const int32_t g = m / 2;
 
-		float Diameter = m_Scale * (1 << m_Rings - 1) * (m + 2 * padding);
+		float Diameter = (1 << m_Rings - 1) * (m + 2 * padding);
 		for (uint32_t level = 0u; level < m_Rings; level++)
 		{
 			int32_t step = level == 0 ? 1u : (1u << level + 1);
@@ -338,8 +338,8 @@ namespace GR
 			int32_t radius = step * (g + padding);
 
 			float L = float(level);
-			float Scale = level == 0 ? m_Scale * 2.0 : m_Scale;
-			float DiameterLevel = Scale * step * (m + 2 * padding);
+			float Scale = m_Scale;
+			float DiameterLevel = step * (m + 2 * padding);
 
 			for (int32_t z = -radius; z < radius; z += step)
 			{
@@ -348,10 +348,10 @@ namespace GR
 				{
 					if (level == 0 || glm::max(glm::abs(x + half_step), glm::abs(z + half_step)) > g * prev_step)
 					{
-						glm::vec3 Ap = glm::vec3(Scale * float(x), L, Scale * float(z));
-						glm::vec3 Cp = glm::vec3(Scale * float(x + step), L, Scale * float(z));
-						glm::vec3 Gp = glm::vec3(Scale * float(x), L, Scale * float(z + step));
-						glm::vec3 Ip = glm::vec3(Scale * float(x + step), L, Scale * float(z + step));
+						glm::vec3 Ap = glm::vec3(float(x), L, float(z));
+						glm::vec3 Cp = glm::vec3(float(x + step), L, float(z));
+						glm::vec3 Gp = glm::vec3(float(x), L, float(z + step));
+						glm::vec3 Ip = glm::vec3(float(x + step), L, float(z + step));
 
 						glm::vec3 Bp = (Ap + Cp) * 0.5f;
 						glm::vec3 Dp = (Ap + Gp) * 0.5f;

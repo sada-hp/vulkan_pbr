@@ -26,7 +26,7 @@ void main()
         float Depth = texelFetch(HDRDepthHR, Texel, 0).r;
         float SkyDepth = imageLoad(HDRDepthLR, Texel / 2).r;
 
-        if (Depth < SkyDepth)
+        if (Depth <= SkyDepth)
         {
             SceneColor.rgb = SceneColor.rgb * CloudsColor.a + CloudsColor.rgb;
         }

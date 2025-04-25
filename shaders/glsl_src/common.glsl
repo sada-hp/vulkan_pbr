@@ -214,18 +214,7 @@ dmat3 GetTerrainOrientation()
 {
     dmat3 Orientation;
     Orientation[0] = vec3(1.0, 0.0, 0.0);
-    Orientation[1] = normalize(floor(ubo.CameraPositionFP64.xyz));
-    Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
-    Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
-
-    return Orientation;
-}
-
-dmat3 GetTerrainOrientation(dvec3 U)
-{
-    dmat3 Orientation;
-    Orientation[0] = vec3(1.0, 0.0, 0.0);
-    Orientation[1] = U;
+    Orientation[1] = ubo.WorldUp.xyz;
     Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
     Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
 

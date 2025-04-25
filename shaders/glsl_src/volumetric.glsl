@@ -87,7 +87,7 @@ void UpdateRay(inout RayMarch Ray, float Stepsize)
 
 void UpdateRaySmooth(inout RayMarch Ray, float Stepsize, float f)
 {
-    Ray.Stepsize = smoothstep(0.0, 2.0, f) * 4.0 * Stepsize;
+    Ray.Stepsize = smoothstep(0.0, 2.0, f) * Stepsize * 5.3262290811553903259871638305242;
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Radius = length(Ray.Position);
     Ray.Height = saturate((Ray.Radius - bottomBound) / (topBound - bottomBound));

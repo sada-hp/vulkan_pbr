@@ -52,14 +52,18 @@ layout (constant_id = 4) const float MinHeight = 0;
 layout (constant_id = 5) const float MaxHeight = 0;
 layout (constant_id = 6) const uint Seed = 0;
 layout (constant_id = 7) const float deltaS = 0;
+layout (constant_id = 8) const uint Rings = 0;
 
-vec2 terrain_fbm(vec3 n, vec2 uv, int l)
+vec2 terrain_fbm(vec3 n, vec2 uv, int layer, int level)
 {
+    TerrainLayer Setting = Layers.at[layer];
+
     float fbm = 0.0;
     float Ampltude = 1.0;
     float GainA = 0.54;
     float GainF = 2.0;
-    float freq = Layers.at[l].Frequency;
+    float freq = Setting.Frequency;
+    float oct = ceil(mix(Setting.Octaves, 1.0, saturate(float(level) / float(Rings))));
 
     float AltitudeF = Ampltude;
     float SlopeF = Ampltude;
@@ -67,19 +71,19 @@ vec2 terrain_fbm(vec3 n, vec2 uv, int l)
     float river_network = 0.0;
 
     vec2 Gp = vec2(0.0);
-    for (int i = 0; i < Layers.at[l].Octaves; i++)
+    for (int i = 0; i < oct; i++)
     {
         float Np = 0.0;
         vec2 DNp = vec2(0.0);
         vec2 DNp2 = vec2(0.0);
         perlind(uv, freq, Np, DNp, DNp2);
-        Np = saturateAngle((Layers.at[l].Offset + Np));
+        Np = saturateAngle((Setting.Offset + Np));
         river_network += Ampltude * (1.0 - abs(Np));
 
-        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), Layers.at[l].Ec );
-        Gp = Gp + DNp * Layers.at[l].Es;
+        float gi = mix( GainA, GainA * (1.0 / (1.0 + abs( min(0.0, 0.5 * (DNp2.x + DNp2.y)) ))), Setting.Ec );
+        Gp = Gp + DNp * Setting.Es;
         SlopeF = 1.0 / (1.0 + dot(Gp, Gp));
-        AltitudeF *= mix(gi, gi * max(0.0, Np), Layers.at[l].Ea);
+        AltitudeF *= mix(gi, gi * max(0.0, Np), Setting.Ea);
         Ampltude *= GainA;
         freq *= GainF;
 
@@ -89,8 +93,8 @@ vec2 terrain_fbm(vec3 n, vec2 uv, int l)
         NOISE_SEED++;
     }
 
-    fbm = Layers.at[l].Sharpness >= 0 ? mix(fbm, 1.0 - abs(fbm), Layers.at[l].Sharpness) : mix(fbm, abs(fbm), abs(Layers.at[l].Sharpness));
-    fbm = Layers.at[l].Op > 0 ? 1.0-fbm : fbm;
+    fbm = Setting.Sharpness >= 0 ? mix(fbm, 1.0 - abs(fbm), Setting.Sharpness) : mix(fbm, abs(fbm), abs(Setting.Sharpness));
+    fbm = Setting.Op > 0 ? 1.0-fbm : fbm;
 
     river_network = saturate(pow(river_network, 1.0 / 1.5));
     river_network = saturate(river_network - 0.5) * 2.0;
@@ -115,20 +119,23 @@ void main()
 
         int Level = int(vertex.Position.y);
         float adjustScale = Scale * exp2(max(Level, deltaS));
+        float vertexScale = Level == 0 ? 2.0 * Scale : Scale;
+        // vertexScale = vertexScale * mix(5.0, 1.0, smoothstep(0.0, 1.0, saturate(float(Rdelta) / float(ubo.CameraRadius - Rg))));
 
         dvec3 Camera1 = ubo.WorldUp.xyz;
         dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, adjustScale));
 
         vec4 Val = vec4(0.0);
         ivec3 Texel = ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level);
-        dmat3 Orientation1 = GetTerrainOrientation(Camera1);
-        vec3 ObjectPosition = round(vec3(Orientation1 * vec3(vertex.Position.x, 0.0, vertex.Position.z) + Center1));
+        dmat3 Orientation1 = GetTerrainOrientation();
+        vec3 ObjectPosition = round(vec3(Orientation1 * vec3(vertexScale * vertex.Position.x, 0.0, vertexScale * vertex.Position.z) + Center1));
         vec3 Normal = vec3(normalize(ObjectPosition));
-
         float halfSurfaceRadius = Rg + 0.5 * (MaxHeight - MinHeight);
         vec3 commonSurface = halfSurfaceRadius * RoundToIncrement(halfSurfaceRadius * Normal, adjustScale);
+
         if (RoundToIncrement(halfSurfaceRadius * normalize(vertex.World.xyz), adjustScale) != commonSurface)
         {
+            // move to transfer?
             if (RoundToIncrement(halfSurfaceRadius * normalize(oldVertex.World.xyz), adjustScale) == commonSurface)
             {
                 imageStore(terrainImage, Texel, texelFetch(terrainImageOld, Texel, 0));
@@ -149,36 +156,42 @@ void main()
                 vec2 T1 = vec2(0.0), T2 = vec2(0.0);
                 if (Layers.Count == 3)
                 {
-                    vec2 T1a = terrain_fbm(Normal, uv1, 0);
-                    vec2 T1b = terrain_fbm(Normal, uv1, 1);
-                    vec2 T1c = terrain_fbm(Normal, uv1, 2);
+                    vec2 T1a, T1b, T1c, T2a, T2b, T2c;
+                    if (pole_w != 0.0)
+                    {
+                        T1a = terrain_fbm(Normal, uv1, 0, Level);
+                        T1b = terrain_fbm(Normal, uv1, 1, Level);
+                        T1c = terrain_fbm(Normal, uv1, 2, Level);
 
-                    vec2 T2a = terrain_fbm(Normal, uv2, 0);
-                    vec2 T2b = terrain_fbm(Normal, uv2, 1);
-                    vec2 T2c = terrain_fbm(Normal, uv2, 2);
+                        vec3 Dw1 = vec3(dot(T1a.rrr, Lw), dot(T1b.rrr, Lw), dot(T1c.rrr, Lw));
+                        Dw1 = mix(vec3(1.0), Dw1, vec3(0.6));
 
-                    vec3 Dw1 = vec3(dot(T1a.rrr, Lw), dot(T1b.rrr, Lw), dot(T1c.rrr, Lw));
-                    Dw1 = mix(vec3(1.0), Dw1, vec3(0.6));
+                        vec3 W1 = Dw1 * pow(vec3(p1.w1, p1.w2, p1.w3), vec3(7));
+                        W1 /= (W1.x + W1.y + W1.z);
+                        W1 = ProduceHexWeights(W1, p1.v1, p1.v2, p1.v3);
+                        T1= W1.x * T1a + W1.y * T1b + W1.z * T1c;
+                    }
 
-                    vec3 Dw2 = vec3(dot(T2a.rrr, Lw), dot(T2b.rrr, Lw), dot(T2c.rrr, Lw));
-                    Dw2 = mix(vec3(1.0), Dw2, vec3(0.6));
+                    if (pole_w != 1.0)
+                    {
+                        T2a = terrain_fbm(Normal, uv2, 0, Level);
+                        T2b = terrain_fbm(Normal, uv2, 1, Level);
+                        T2c = terrain_fbm(Normal, uv2, 2, Level);
 
-                    vec3 W1 = Dw1 * pow(vec3(p1.w1, p1.w2, p1.w3), vec3(7));
-                    W1 /= (W1.x + W1.y + W1.z);
+                        vec3 Dw2 = vec3(dot(T2a.rrr, Lw), dot(T2b.rrr, Lw), dot(T2c.rrr, Lw));
+                        Dw2 = mix(vec3(1.0), Dw2, vec3(0.6));
 
-                    vec3 W2 = Dw2 * pow(vec3(p2.w1, p2.w2, p2.w3), vec3(7));
-                    W2 /= (W2.x + W2.y + W2.z);
+                        vec3 W2 = Dw2 * pow(vec3(p2.w1, p2.w2, p2.w3), vec3(7));
+                        W2 /= (W2.x + W2.y + W2.z);
 
-                    W1 = ProduceHexWeights(W1, p1.v1, p1.v2, p1.v3);
-                    W2 = ProduceHexWeights(W2, p2.v1, p2.v2, p2.v3);
-
-                    T1= W1.x * T1a + W1.y * T1b + W1.z * T1c;
-                    T2= W2.x * T2a + W2.y * T2b + W2.z * T2c;
+                        W2 = ProduceHexWeights(W2, p2.v1, p2.v2, p2.v3);
+                        T2= W2.x * T2a + W2.y * T2b + W2.z * T2c;
+                    }
                 }
                 else
                 {
-                    T1 = terrain_fbm(Normal, uv1, 0);
-                    T2 = terrain_fbm(Normal, uv2, 0);
+                    T1 = terrain_fbm(Normal, uv1, 0, Level);
+                    T2 = terrain_fbm(Normal, uv2, 0, Level);
                 }
 
                 T1.x = ridge_smoothstep(0.0, 0.8, T1.x);

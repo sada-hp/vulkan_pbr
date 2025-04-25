@@ -138,7 +138,7 @@ vec3 GetTransmittance(sampler2D LUT, float R, float Mu)
 {
     float uvR = sqrt((R - Rg) / (Rt - Rg));
     float uvMu = atan((Mu + 0.15) / (1.0 + 0.15) * tan(1.5)) / 1.5;
-    return texture(LUT, vec2(uvMu, uvR)).rgb;
+    return mix(vec3(1.0), texture(LUT, vec2(uvMu, uvR)).rgb, saturate((Rt - Rg) / (R - Rg)));
 }
 
 vec3 GetTransmittance(sampler2D LUT, float R, float Mu, float d)
