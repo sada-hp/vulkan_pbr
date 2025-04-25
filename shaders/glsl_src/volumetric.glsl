@@ -9,6 +9,11 @@ float bottomBound;
 vec4 outScattering;
 float Depth;
 
+layout(push_constant) uniform constants
+{
+    layout(offset = 0) int Order;
+} In;
+
 // used for shadow sampling
 vec3 light_kernel[] =
 {
