@@ -44,12 +44,12 @@ float SampleCloud(vec3 x0, float transmittance, float height)
 {
     vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed * 0.01);
 
-    float base = textureLod(CloudLowFrequency, uv, 0).r;
+    float base = textureLod(CloudLowFrequency, uv, 1).r;
 
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.5, Clouds.Coverage * Clouds.Coverage), 0.0, 1.0));
 
-    vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct).rgb;
+    vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct, 1).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(SampleOnSphere(x0, WeatherMap, 5.0 / Rct).r + 0.2);
 

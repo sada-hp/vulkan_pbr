@@ -206,13 +206,11 @@ private:
 	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
-	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {}; 
-	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {}; 
+	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
 	std::unique_ptr<Buffer> m_CloudLayer = {};
 	std::unique_ptr<Buffer> m_TerrainLayer = {};
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSkySets = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOTempSets = {};
 
 	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;

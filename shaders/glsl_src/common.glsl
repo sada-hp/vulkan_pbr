@@ -79,12 +79,12 @@ vec4 SampleOnSphere(vec3 Position, sampler2D Target, float Scale)
     return Out;
 }
 
-vec4 SampleProject(vec3 Position, sampler2D Target, float Scale)
+vec4 SampleProject(vec3 Position, sampler2D Target, float Scale, int mip)
 {
     Position *= Scale;
-    vec4 s1 = texture(Target, Position.xz);
-    vec4 s2 = texture(Target, Position.xy);
-    vec4 s3 = texture(Target, Position.yz);
+    vec4 s1 = textureLod(Target, Position.xz, mip);
+    vec4 s2 = textureLod(Target, Position.xy, mip);
+    vec4 s3 = textureLod(Target, Position.yz, mip);
 
     vec3 n = normalize(Position);
     float a1 = abs(dot(n, vec3(0, 1, 0)));

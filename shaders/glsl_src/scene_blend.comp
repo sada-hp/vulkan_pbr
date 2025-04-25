@@ -4,21 +4,15 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 layout(binding = 0, rgba32f) uniform image2D HDRColorHR;
 layout(binding = 1, rgba32f) uniform image2D HDRDepthLR;
-layout(binding = 2) uniform sampler2D HDRColorLR;
-layout(binding = 3) uniform sampler2D HDRDepthHR;
-layout(binding = 4) uniform CloudLayer
-{
-    float Coverage;
-    float Density;
-    float WindSpeed;
-} Clouds;
-layout(binding = 5, rgba32f) uniform image2D HDRNextDepthLR;
+layout(binding = 2, rgba32f) uniform image2D HDRNextDepth;
+layout(binding = 3) uniform sampler2D HDRColorLR;
+layout(binding = 4) uniform sampler2D HDRDepthHR;
 
 void main()
 {
     ivec2 Size = ivec2(imageSize(HDRColorHR).xy);
     ivec2 Texel = ivec2(gl_GlobalInvocationID.xy);
-
+    
     if (Texel.x < Size.x && Texel.y < Size.y)
     {
         vec2 UV = (vec2(Texel) + 0.5) / vec2(Size);
@@ -33,6 +27,6 @@ void main()
         }
 
         imageStore(HDRColorHR, Texel, SceneColor);
-        imageStore(HDRDepthLR, Texel / 2, vec4(Depth));
+        imageStore(HDRNextDepth, Texel / 2, vec4(Depth));
     }
 }

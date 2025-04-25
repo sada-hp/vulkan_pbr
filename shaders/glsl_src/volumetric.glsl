@@ -75,6 +75,25 @@ layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
 
 layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
 layout(set = 2, binding = 1, r32f) uniform image2D outDepth;
+layout(set = 2, binding = 2) uniform sampler2D oldImage;
+layout(set = 2, binding = 3) uniform UnfiormBuffer2
+{
+    dmat4 ViewProjectionMatrix;
+    dmat4 ViewMatrix;
+    dmat4 ViewMatrixInverse;
+    dvec4 CameraPositionFP64;
+    mat4 ProjectionMatrix;
+    mat4 ProjectionMatrixInverse;
+    vec4 CameraPosition;
+    vec4 SunDirection;
+    vec4 WorldUp;
+    vec4 CameraUp;
+    vec4 CameraRight;
+    vec4 CameraForward;
+    vec2 Resolution;
+    double CameraRadius;
+    float Time;
+} uboOld;
 
 void UpdateRay(inout RayMarch Ray)
 {
@@ -122,7 +141,7 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound).rgb;
+    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / topBound).r + 0.2);
     

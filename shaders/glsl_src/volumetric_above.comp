@@ -13,22 +13,28 @@ void main()
     vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
     vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
     vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * ScreenView);
+    ScreenWorld /= ScreenWorld.w;
+
     vec3 RayOrigin = vec3(ubo.CameraPositionFP64.xyz);
     vec3 SphereCenter = vec3(0.0, 0.0, 0.0);
     outScattering = vec4(0.0, 0.0, 0.0, 1.0);
     Depth = 0.0;
 
     RayMarch Ray;
-    Ray.Direction = normalize(ScreenWorld.xyz / ScreenWorld.w);
+    Ray.Direction = normalize(ScreenWorld.xyz);
 
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
 
     float inDepth = imageLoad(outDepth, Texel).r;
-    vec4 ClipSpace     = vec4(2.0 * ScreenUV - 1.0, inDepth, 1.0);
-    vec4 WorldPosition = vec4(uboOld.ViewMatrixInverse * (uboOld.ProjectionMatrixInverse * ClipSpace));
-    vec3 inWorld = WorldPosition.xyz / WorldPosition.w;
+    vec4 WorldPosition = vec4(uboOld.ViewMatrixInverse * (uboOld.ProjectionMatrixInverse * vec4(ScreenNDC.xy, inDepth, 1.0)));
+    WorldPosition /= WorldPosition.w;
+    vec4 NewNDC = vec4(ubo.ViewProjectionMatrix * WorldPosition);
+    NewNDC /= NewNDC.w;
 
+    vec3 inWorld = NewNDC.x > -1.0 && NewNDC.x < 1.0 && NewNDC.y > -1.0 && NewNDC.y < 1.0 && NewNDC.z > 0.0 ? WorldPosition.xyz : ScreenWorld.xyz;
+
+    // move to uniform
     Params.Coverage = Clouds.Coverage;
     Params.CoverageSq = Params.Coverage * Params.Coverage;
     Params.HeightFactor = pow(Params.Coverage, 1.5);
@@ -38,7 +44,8 @@ void main()
     Params.Wind = Clouds.WindSpeed * ubo.Time * 0.01;
     Params.Density = Clouds.Density;
 
-    Hits.Ground = mix(0.0, distance(inWorld, RayOrigin), saturate(float(Rt - Rg) / float(ubo.CameraRadius - Rg)));
+    Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
+    Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : min(distance(inWorld, RayOrigin), Hits.Ground);
     Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
     Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 
@@ -50,21 +57,13 @@ void main()
     {
         Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
 
-        float t = 0.0;
-        if (Hits.Ground == 0.0) t = SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
-        else t = min(SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound), Hits.Ground);
-
-        Ray.Start = RayOrigin + Ray.Direction * t;
+        float t = SphereMaxDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
+        Ray.Start = RayOrigin + Ray.Direction * mix(t, min(t, Hits.Ground), saturate(Rdelta / float(ubo.CameraRadius - Rg)));
     }
     else
     {
         Ray.End = RayOrigin + Ray.Direction * Hits.TopCloud;
-
-        float t = 0.0;
-        if (Hits.Ground == 0.0) t = Hits.BottomCloud;
-        else t = min(Hits.BottomCloud, Hits.Ground);
-
-        Ray.Start = RayOrigin + Ray.Direction * t;
+        Ray.Start = RayOrigin + Ray.Direction * mix(Hits.BottomCloud, min(Hits.BottomCloud, Hits.Ground), saturate(Rdelta / float(ubo.CameraRadius - Rg)));
     }
 
     MarchToCloud(Ray, distance(Ray.Start, Ray.End));
