@@ -141,9 +141,9 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound, lod).rgb;
+    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound, lod, vec2(Params.Wind)).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / topBound).r + 0.2);
+    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / topBound, vec2(Params.Wind)).r + 0.2);
     
     base *= weather1;
     float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;
