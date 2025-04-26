@@ -26,13 +26,12 @@ void main()
     topBound = Rct;
     bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
     
-    float inDepth = imageLoad(outDepth, Texel).r;
-    vec4 WorldPosition = vec4(uboOld.ViewMatrixInverse * (uboOld.ProjectionMatrixInverse * vec4(ScreenNDC.xy, inDepth, 1.0)));
-    WorldPosition /= WorldPosition.w;
-    vec4 NewNDC = vec4(ubo.ViewProjectionMatrix * WorldPosition);
-    NewNDC /= NewNDC.w;
-
-    vec3 inWorld = NewNDC.x > -1.0 && NewNDC.x < 1.0 && NewNDC.y > -1.0 && NewNDC.y < 1.0 && NewNDC.z > 0.0 ? WorldPosition.xyz : ScreenWorld.xyz;
+    vec4 OldPosition = vec4(uboOld.ViewProjectionMatrix * ScreenWorld);
+    OldPosition /= OldPosition.w;
+    OldPosition.xy = saturateAngle(OldPosition.xy) * 0.5 + 0.5;
+    float inDepth = imageLoad(outDepth, ivec2(OldPosition.xy * size)).r;
+    vec4 WorldPosition = vec4(ubo.ViewMatrixInverse * ubo.ProjectionMatrixInverse * vec4(ScreenNDC.xy, inDepth, 1.0));
+    vec3 inWorld = WorldPosition.xyz /= WorldPosition.w;
 
     // move to uniform
     Params.Coverage = Clouds.Coverage;
@@ -45,7 +44,7 @@ void main()
     Params.Density = Clouds.Density;
 
     Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-    Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : min(distance(inWorld, RayOrigin), Hits.Ground);
+    Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : mix(distance(inWorld, RayOrigin), Hits.Ground, 0.5);
     Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
     Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 

@@ -206,6 +206,7 @@ private:
 	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {};
 	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
 	std::unique_ptr<Buffer> m_CloudLayer = {};
 	std::unique_ptr<Buffer> m_TerrainLayer = {};

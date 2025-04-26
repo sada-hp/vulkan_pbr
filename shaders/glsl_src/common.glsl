@@ -55,7 +55,12 @@ vec4 saturate(vec4 x)
 
 float saturateAngle(float x)
 {
-    return clamp(-1.0, 1.0, x);
+    return clamp(x, -1.0, 1.0);
+}
+
+vec2 saturateAngle(vec2 x)
+{
+    return clamp(x, -1.0, 1.0);
 }
 
 vec4 SampleOnSphere(vec3 Position, sampler2D Target, float Scale)

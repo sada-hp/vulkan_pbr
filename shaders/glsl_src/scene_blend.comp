@@ -4,9 +4,8 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 layout(binding = 0, rgba32f) uniform image2D HDRColorHR;
 layout(binding = 1, rgba32f) uniform image2D HDRDepthLR;
-layout(binding = 2, rgba32f) uniform image2D HDRNextDepth;
-layout(binding = 3) uniform sampler2D HDRColorLR;
-layout(binding = 4) uniform sampler2D HDRDepthHR;
+layout(binding = 2) uniform sampler2D HDRColorLR;
+layout(binding = 3) uniform sampler2D HDRDepthHR;
 
 void main()
 {
@@ -15,11 +14,13 @@ void main()
     
     if (Texel.x < Size.x && Texel.y < Size.y)
     {
+        float Depth = texelFetch(HDRDepthHR, Texel, 0).r;
+        float SkyDepth = imageLoad(HDRDepthLR, Texel / 2).r;
+        imageStore(HDRDepthLR, Texel / 2, vec4(Depth));
+
         vec2 UV = (vec2(Texel) + 0.5) / vec2(Size);
         vec4 CloudsColor = texture(HDRColorLR, UV);
         vec4 SceneColor = imageLoad(HDRColorHR, Texel);
-        float Depth = texelFetch(HDRDepthHR, Texel, 0).r;
-        float SkyDepth = imageLoad(HDRDepthLR, Texel / 2).r;
 
         if (Depth <= SkyDepth)
         {
@@ -27,6 +28,5 @@ void main()
         }
 
         imageStore(HDRColorHR, Texel, SceneColor);
-        imageStore(HDRNextDepth, Texel / 2, vec4(Depth));
     }
 }
