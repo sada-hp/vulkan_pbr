@@ -4,10 +4,7 @@
 #include "lighting.glsl"
 #include "noise.glsl"
 
-float topBound;
-float bottomBound;
 vec4 outScattering;
-float Depth;
 
 layout(push_constant) uniform constants
 {
@@ -47,7 +44,7 @@ struct
     float Ground;
 } Hits;
 
-struct
+layout(set = 1, binding = 0) uniform CloudLayer
 {
     float Coverage;
     float CoverageSq;
@@ -57,14 +54,10 @@ struct
     float Ambient;
     float Wind;
     float Density;
+    float BottomBound;
+    float TopBound;
+    float BoundDelta;
 } Params;
-
-layout(set = 1, binding = 0) uniform CloudLayer
-{
-    float Coverage;
-    float Density;
-    float WindSpeed;
-} Clouds;
 
 layout(set = 1, binding = 1) uniform sampler3D CloudLowFrequency;
 layout(set = 1, binding = 2) uniform sampler3D CloudHighFrequency;
@@ -99,14 +92,14 @@ void UpdateRay(inout RayMarch Ray)
 {
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Radius = length(Ray.Position);
-    Ray.Height = saturate((Ray.Radius - bottomBound) / (topBound - bottomBound));
+    Ray.Height = saturate((Ray.Radius - Params.BottomBound) / Params.BoundDelta);
 }
 
 void UpdateRay(inout RayMarch Ray, float Stepsize)
 {
     Ray.Position += Ray.Direction * Stepsize;
     Ray.Radius = length(Ray.Position);
-    Ray.Height = saturate((Ray.Radius - bottomBound) / (topBound - bottomBound));
+    Ray.Height = saturate((Ray.Radius - Params.BottomBound) / Params.BoundDelta);
 }
 
 void UpdateRaySmooth(inout RayMarch Ray, float Stepsize, float f)
@@ -114,20 +107,20 @@ void UpdateRaySmooth(inout RayMarch Ray, float Stepsize, float f)
     Ray.Stepsize = smoothstep(0.0, 2.0, f) * Stepsize * 5.3262290811553903259871638305242;
     Ray.Position += Ray.Direction * Ray.Stepsize;
     Ray.Radius = length(Ray.Position);
-    Ray.Height = saturate((Ray.Radius - bottomBound) / (topBound - bottomBound));
+    Ray.Height = saturate((Ray.Radius - Params.BottomBound) / Params.BoundDelta);
 }
 
 void UpdateRayInverseSmooth(inout RayMarch Ray, float Stepsize, float f)
 {
     Ray.Stepsize = inverse_smoothstep(0.0, 1.0, f) * Stepsize;
     Ray.Position += Ray.Direction * Ray.Stepsize;
-    Ray.Height = saturate((length(Ray.Position) - bottomBound) / (topBound - bottomBound));
+    Ray.Height = saturate((length(Ray.Position) - Params.BottomBound) / Params.BoundDelta);
 }
 
 vec3 GetUV(vec3 p, float scale, float wind)
 {
-    vec3 uv = p / topBound;
-    return scale * uv + wind;
+    vec3 uv = p / Params.TopBound;
+    return scale * uv + wind * ubo.Time;
 }
 
 // Cheaper version of Sample-Density
@@ -141,9 +134,9 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / topBound, lod, vec2(Params.Wind)).rgb;
+    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / Params.TopBound, lod, vec2(Params.Wind)).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / topBound, vec2(Params.Wind)).r + 0.2);
+    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / Params.TopBound, vec2(Params.Wind)).r + 0.2);
     
     base *= weather1;
     float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;
@@ -199,7 +192,7 @@ float MultiScatter(float phi, float e, float ds)
 float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
 {
     RayMarch Ray;
-    float len = SphereMinDistance(pos, rd, vec3(0.0), topBound);
+    float len = SphereMinDistance(pos, rd, vec3(0.0), Params.TopBound);
     Ray.Stepsize = min(len, Rcdelta) / float(steps);
     Ray.Direction = rd;
     Ray.Position = pos;
@@ -232,7 +225,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     float phi = dot(Sun, Ray.Direction);
     float EdotV = dot(ubo.WorldUp.xyz, Ray.Direction);
     float EdotL = dot(ubo.WorldUp.xyz, Sun);
-    float step_mod = max(float(ray_length / (topBound - bottomBound)), 1.0);
+    float step_mod = max(float(ray_length / Params.BoundDelta), 1.0);
     float sample_density = 0.0;
 
     // skip empty space until cloud is found
@@ -292,10 +285,10 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);
 
-        if (Ray.Radius < bottomBound)
+        if (Ray.Radius < Params.BottomBound)
             continue;
 
-        if (Ray.Radius > topBound)
+        if (Ray.Radius > Params.TopBound)
             break;
         
         int mip = int(floor(mix(5.0, 0.0, saturate(20.0 * outScattering.a))));
@@ -311,7 +304,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
             vec3 E = vec3(light_scatter);
             E *= GetTransmittanceWithShadow(TransmittanceLUT, Ray.Radius, dot(Ray.Position, Sun) / Ray.Radius, Hits.Camera, EdotL);
             E += mix(AtmosphereStart.S, AtmosphereEnd.S, DistAEP) - mix(AtmosphereStart.S, AtmosphereEnd.S, PrevDist);
-            E *= extinction * Params.LightIntensity;
+            E *= extinction * Params.LightIntensity* MaxLightIntensity;
             E = vec3(E - transmittance * E) / extinction;
             Ray.LastHit = Ray.Position;
             outScattering.rgb += E * outScattering.a;
@@ -323,7 +316,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
         }
         DistAEP = Dist / ToAEP;
     }
-    outScattering.rgb += Params.LightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
+    outScattering.rgb += Params.LightIntensity * MaxLightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
 
 #if 0
     if (outScattering.a != 1.0)

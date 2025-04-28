@@ -610,7 +610,7 @@ bool VulkanBase::BeginFrame()
 		// m_DepthAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		double Re = glm::length(m_Camera.Transform.offset);
-		ComputePipeline* Pipeline = Re < Rcb ? m_VolumetricsUnderPipeline.get() : (Re > Rct ? m_VolumetricsAbovePipeline.get() : m_VolumetricsBetweenPipeline.get());
+		ComputePipeline* Pipeline = Re < cloudParams.BottomBound ? m_VolumetricsUnderPipeline.get() : (Re > cloudParams.TopBound ? m_VolumetricsAbovePipeline.get() : m_VolumetricsBetweenPipeline.get());
 
 		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
 		m_VolumetricsDescriptor->BindSet(1, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
@@ -1078,7 +1078,19 @@ void VulkanBase::Wait() const
 
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
-	m_CloudLayer->Update(&settings, sizeof(CloudLayerProfile));
+	cloudParams.Coverage = settings.Coverage;
+	cloudParams.CoverageSq = settings.Coverage * settings.Coverage;
+	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.5);
+	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, cloudParams.CoverageSq);
+	cloudParams.LightIntensity = glm::mix(1.0, 0.05, cloudParams.CoverageSq);
+	cloudParams.Ambient = glm::mix(0.02, 0.005, cloudParams.CoverageSq);
+	cloudParams.Wind = settings.WindSpeed * 0.01;
+	cloudParams.Density = settings.Density;
+	cloudParams.TopBound = Rct;
+	cloudParams.BottomBound = Rcb + (Rct - Rcb) * (0.5 - glm::min(cloudParams.Coverage, 0.5f));
+	cloudParams.BoundDelta = cloudParams.TopBound - cloudParams.BottomBound;
+
+	m_CloudLayer->Update(&cloudParams, sizeof(CloudParameters));
 }
 
 void VulkanBase::SetTerrainLayerSettings(float Scale, int Count, TerrainLayerProfile* settings)
@@ -2310,12 +2322,11 @@ VkBool32 VulkanBase::volumetric_precompute()
 	VkBufferCreateInfo cloudInfo{};
 	cloudInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	cloudInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	cloudInfo.size = sizeof(CloudLayerProfile);
+	cloudInfo.size = sizeof(CloudParameters);
 	cloudInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	m_CloudLayer = std::make_unique<Buffer>(m_Scope, cloudInfo, allocCreateInfo);
 	 
-	CloudLayerProfile defaultClouds{};
-	m_CloudLayer->Update(&defaultClouds, sizeof (CloudLayerProfile));
+	SetCloudLayerSettings(CloudLayerProfile());
 
 	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);

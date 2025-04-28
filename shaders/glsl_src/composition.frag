@@ -7,9 +7,6 @@ layout(binding = 1) uniform sampler2D HDRColor;
 layout(binding = 2) uniform sampler2D HDRNormals;
 layout(binding = 3) uniform sampler2D HDRDeferred;
 layout(binding = 4) uniform sampler2D SceneDepth;
-// layout(binding = 5) uniform sampler2D SceneBackground;
-// layout(binding = 6) uniform sampler2D BackgroundDepth;
-
 layout(binding = 5) uniform sampler2D TransmittanceLUT;
 layout(binding = 6) uniform sampler2D IrradianceLUT;
 layout(binding = 7) uniform sampler3D InscatteringLUT;
@@ -21,37 +18,44 @@ layout(binding = 12) uniform sampler2D WeatherMap;
 layout(binding = 13) uniform CloudLayer
 {
     float Coverage;
-    float Density;
+    float CoverageSq;
+    float HeightFactor;
+    float BottomSmoothnessFactor;
+    float LightIntensity;
+    float Ambient;
     float WindSpeed;
+    float Density;
+    float BottomBound;
+    float TopBound;
+    float BoundDelta;
 } Clouds;
 
 layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 outColor;
 
-vec3 GetUV(vec3 p, float scale, float speed_mod)
+vec3 GetUV(vec3 p, float scale, float wind)
 {
-    vec3 uv = p / Rct;
-    vec3 anim = vec3(ubo.Time * speed_mod);
-    return scale * uv + anim;
+    vec3 uv = p / Clouds.TopBound;
+    return scale * uv + wind * ubo.Time;
 }
 
-float GetHeightFraction(vec3 x0, float bottomBound, float topBound)
+float GetHeightFraction(vec3 x0)
 {
-    return saturate((length(x0) - bottomBound) / (topBound - bottomBound));
+    return saturate((length(x0) - Clouds.BottomBound) / Clouds.BoundDelta);
 }
 
 float SampleCloud(vec3 x0, float transmittance, float height)
 {
-    vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed * 0.01);
+    vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed);
 
     float base = textureLod(CloudLowFrequency, uv, 1).r;
 
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.5, Clouds.Coverage * Clouds.Coverage), 0.0, 1.0));
 
-    vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct, 1, vec2(Clouds.WindSpeed * ubo.Time * 0.01)).rgb;
+    vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct, 1, vec2(Clouds.WindSpeed * ubo.Time)).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(SampleOnSphere(x0, WeatherMap, 5.0 / Rct, vec2(Clouds.WindSpeed * ubo.Time * 0.01)).r + 0.2);
+    float weather2 = saturate(SampleOnSphere(x0, WeatherMap, 5.0 / Rct, vec2(Clouds.WindSpeed * ubo.Time)).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
@@ -63,10 +67,8 @@ float SampleCloud(vec3 x0, float transmittance, float height)
 float SampleCloudShadow(vec3 x1)
 {
     const int steps = 5;
-    float topBound = Rct;
-    float bottomBound = Rcb + Rcdelta * (0.5 - min(Clouds.Coverage, 0.5));
-    float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), bottomBound);
-    float topDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), topBound);
+    float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), Clouds.BottomBound);
+    float topDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), Clouds.TopBound);
     vec3 x0 = x1 + ubo.SunDirection.xyz * bottomDistance;
     float len = topDistance - bottomDistance;
 
@@ -77,7 +79,7 @@ float SampleCloudShadow(vec3 x1)
     for (int i = 0; i < steps; i++)
     {
         x0 += ubo.SunDirection.xyz * Stepsize;
-        float height = 1.0 - GetHeightFraction(x0, bottomBound, topBound);
+        float height = 1.0 - GetHeightFraction(x0);
         Density = SampleCloud(x0, transmittance, height);
         transmittance *= BeerLambert(Density, Stepsize);
     }

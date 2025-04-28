@@ -126,6 +126,21 @@ class VulkanBase final : public GR::Renderer
 {
 private:
 
+	struct CloudParameters
+	{
+		float Coverage;
+		float CoverageSq;
+		float HeightFactor;
+		float BottomSmoothnessFactor;
+		float LightIntensity;
+		float Ambient;
+		float Wind;
+		float Density;
+		float BottomBound;
+		float TopBound;
+		float BoundDelta;
+	} cloudParams;
+
 	const uint32_t LRr = 2;
 	const uint32_t CubeR = 128;
 
