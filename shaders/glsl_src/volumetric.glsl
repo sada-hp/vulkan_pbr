@@ -74,7 +74,7 @@ layout(set = 1, binding = 5) uniform sampler2D IrradianceLUT;
 layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
 
 layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
-layout(set = 2, binding = 1, r32f) uniform image2D outDepth;
+layout(set = 2, binding = 1) uniform sampler2D depthImage;
 layout(set = 2, binding = 2) uniform sampler2D oldImage;
 layout(set = 2, binding = 3) uniform UnfiormBuffer2
 {
@@ -325,10 +325,12 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     }
     outScattering.rgb += Params.LightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
 
+#if 0
     if (outScattering.a != 1.0)
     {
         vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
         vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
         Depth = max(clip1.z / clip1.w, clip2.z / clip2.w);
     }
+#endif
 }

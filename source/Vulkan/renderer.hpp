@@ -188,6 +188,7 @@ private:
 	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
 
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
+	std::vector<VkSemaphore> m_ApplyStatusSemaphores = {};
 	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
 
 	std::vector<VulkanSynchronization> m_ApplySync = {};

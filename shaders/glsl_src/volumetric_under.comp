@@ -29,7 +29,7 @@ void main()
     vec4 OldPosition = vec4(uboOld.ViewProjectionMatrix * ScreenWorld);
     OldPosition /= OldPosition.w;
     OldPosition.xy = saturateAngle(OldPosition.xy) * 0.5 + 0.5;
-    float inDepth = imageLoad(outDepth, ivec2(OldPosition.xy * size)).r;
+    float inDepth = texture(depthImage, OldPosition.xy).r;
     vec4 WorldPosition = vec4(ubo.ViewMatrixInverse * ubo.ProjectionMatrixInverse * vec4(ScreenNDC.xy, inDepth, 1.0));
     vec3 inWorld = WorldPosition.xyz /= WorldPosition.w;
 
@@ -44,7 +44,7 @@ void main()
     Params.Density = Clouds.Density;
 
     Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-    Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : mix(distance(inWorld, RayOrigin), Hits.Ground, 0.5);
+    Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : min(distance(inWorld, RayOrigin), Hits.Ground);
     Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, topBound);
     Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, bottomBound);
 
@@ -52,14 +52,15 @@ void main()
     float muHoriz = sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
     float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera + muHoriz;
 
-    if (horizon > 0)
+    if (horizon > 0 && (Hits.Ground == 0 || Hits.Ground > Hits.BottomCloud))
     {
         Ray.End = RayOrigin + Ray.Direction * Hits.BottomCloud;
-        Ray.Start = RayOrigin + Ray.Direction * min(Hits.TopCloud, Hits.Ground);
+
+        float t = Hits.Ground == 0 ? Hits.TopCloud : min(Hits.TopCloud, Hits.Ground);
+        Ray.Start = RayOrigin + Ray.Direction * t;
 
         MarchToCloud(Ray, distance(Ray.Start, Ray.End));
     }
 
     imageStore(outImage, Texel, outScattering);
-    imageStore(outDepth, Texel, vec4(Depth));
 }

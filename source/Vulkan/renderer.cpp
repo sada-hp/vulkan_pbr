@@ -161,6 +161,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 
 	m_ImageIndex.resize(m_ResourceCount);
 	m_SwapchainSemaphores.resize(m_ResourceCount);
+	m_ApplyStatusSemaphores.resize(m_ResourceCount);
 	m_FrameStatusSemaphores.resize(m_ResourceCount);
 
 	m_ApplySync.resize(m_ResourceCount);
@@ -186,6 +187,11 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	});
 
 	std::for_each(m_FrameStatusSemaphores.begin(), m_FrameStatusSemaphores.end(), [&, this](VkSemaphore& it) {
+		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
+	});
+
+
+	std::for_each(m_ApplyStatusSemaphores.begin(), m_ApplyStatusSemaphores.end(), [&, this](VkSemaphore& it) {
 		res = CreateSemaphore(m_Scope.GetDevice(), &it) & res;
 	});
 
@@ -314,6 +320,11 @@ VulkanBase::~VulkanBase() noexcept
 	});
 
 	std::erase_if(m_FrameStatusSemaphores, [&, this](VkSemaphore& it) {
+		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
+		return true;
+	});
+
+	std::erase_if(m_ApplyStatusSemaphores, [&, this](VkSemaphore& it) {
 		vkDestroySemaphore(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 		return true;
 	});
@@ -585,8 +596,8 @@ bool VulkanBase::BeginFrame()
 
 	// Draw Low Resolution Background
 	{
-		vkWaitForFences(m_Scope.GetDevice(), 1, &m_ApplySync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
-		vkResetFences(m_Scope.GetDevice(), 1, &m_ApplySync[m_ResourceIndex].Fence);
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_BackgroundAsync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_BackgroundAsync[m_ResourceIndex].Fence);
 
 		vkBeginCommandBuffer(m_BackgroundAsync[m_ResourceIndex].Commands, &beginInfo);
 
@@ -596,7 +607,7 @@ bool VulkanBase::BeginFrame()
 			m_DepthAttachmentsLR[m_ResourceIndex]->TransferOwnership(m_BackgroundAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 		}
 		m_HdrAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-			// m_DepthAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		// m_DepthAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		double Re = glm::length(m_Camera.Transform.offset);
 		ComputePipeline* Pipeline = Re < Rcb ? m_VolumetricsUnderPipeline.get() : (Re > Rct ? m_VolumetricsAbovePipeline.get() : m_VolumetricsBetweenPipeline.get());
@@ -622,13 +633,17 @@ bool VulkanBase::BeginFrame()
 
 		vkEndCommandBuffer(m_BackgroundAsync[m_ResourceIndex].Commands);
 
+		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;;
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &m_BackgroundAsync[m_ResourceIndex].Commands;
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &m_BackgroundAsync[m_ResourceIndex].Semaphore;
-		vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+		submitInfo.waitSemaphoreCount = m_FrameCount >= m_ResourceCount ? 1 : 0;
+		submitInfo.pWaitSemaphores = &m_ApplyStatusSemaphores[m_ResourceIndex];
+		submitInfo.pWaitDstStageMask = &waitStage;
+		vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, m_BackgroundAsync[m_ResourceIndex].Fence);
 	}
 
 	// Start deferred
@@ -802,25 +817,32 @@ void VulkanBase::EndFrame()
 
 	// Bloom pass
 	{
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_ApplySync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_ApplySync[m_ResourceIndex].Fence);
+
 		vkBeginCommandBuffer(m_ApplySync[m_ResourceIndex].Commands, &beginInfo);
 
 		m_HdrAttachmentsLR[m_ResourceIndex]->TransferOwnership(VK_NULL_HANDLE, m_ApplySync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
 		m_DepthAttachmentsLR[m_ResourceIndex]->TransferOwnership(VK_NULL_HANDLE, m_ApplySync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
 
+		VkBufferCopy region{};
+		region.size = sizeof(UniformBuffer);
+		vkCmdCopyBuffer(m_ApplySync[m_ResourceIndex].Commands, m_UBOTempBuffers[WRAPL(m_ResourceIndex)]->GetBuffer(), m_UBOSkyBuffers[m_ResourceIndex]->GetBuffer(), 1, &region);
+
 		uint32_t X = ceil(float(m_Scope.GetSwapchainExtent().width) / 8.f);
 		uint32_t Y = ceil(float(m_Scope.GetSwapchainExtent().height) / 4.f);
+
+		m_DepthAttachmentsLR[WRAPR(m_ResourceIndex)]->TransitionLayout(m_ApplySync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
 
 		m_BlendingPipeline->BindPipeline(m_ApplySync[m_ResourceIndex].Commands);
 		m_BlendingDescriptors[m_ResourceIndex]->BindSet(0, m_ApplySync[m_ResourceIndex].Commands, *m_BlendingPipeline);
 		vkCmdDispatch(m_ApplySync[m_ResourceIndex].Commands, X, Y, 1);
 
 		m_HdrAttachmentsHR[m_ResourceIndex]->TransitionLayout(m_ApplySync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		m_DepthAttachmentsLR[WRAPR(m_ResourceIndex)]->TransitionLayout(m_ApplySync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+
 		m_HdrAttachmentsLR[WRAPR(m_ResourceIndex)]->TransferOwnership(m_ApplySync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 		m_DepthAttachmentsLR[WRAPR(m_ResourceIndex)]->TransferOwnership(m_ApplySync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-
-		VkBufferCopy region{};
-		region.size = sizeof(UniformBuffer);
-		vkCmdCopyBuffer(m_ApplySync[m_ResourceIndex].Commands, m_UBOTempBuffers[m_ResourceIndex]->GetBuffer(), m_UBOSkyBuffers[m_ResourceIndex]->GetBuffer(), 1, &region);
 
 		std::array<VkImageMemoryBarrier, 2> barrier{};
 		barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -877,12 +899,13 @@ void VulkanBase::EndFrame()
 		VkSubmitInfo submitInfo{};
 		std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
 		std::vector<VkSemaphore> waitSemaphores = { m_ComposeSync[m_ResourceIndex].Semaphore, m_BackgroundAsync[m_ResourceIndex].Semaphore };
+		std::vector<VkSemaphore> signalSemaphores = { m_ApplySync[m_ResourceIndex].Semaphore, m_ApplyStatusSemaphores[m_ResourceIndex] };
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.waitSemaphoreCount = waitSemaphores.size();
 		submitInfo.pWaitSemaphores = waitSemaphores.data();
 		submitInfo.pWaitDstStageMask = waitStages.data();
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &m_ApplySync[m_ResourceIndex].Semaphore;
+		submitInfo.signalSemaphoreCount = signalSemaphores.size();
+		submitInfo.pSignalSemaphores = signalSemaphores.data();
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &m_ApplySync[m_ResourceIndex].Commands;
 		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), 1, &submitInfo, m_ApplySync[m_ResourceIndex].Fence);
@@ -1240,7 +1263,6 @@ VkBool32 VulkanBase::create_swapchain_images()
 		depthInfo.extent.height /= LRr;
 		depthInfo.format = VK_FORMAT_R32_SFLOAT;
 		depthInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-		depthInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 		m_DepthAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
 		m_DepthViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsLR[i]);
 	}
@@ -1321,17 +1343,16 @@ VkBool32 VulkanBase::create_frame_pipelines()
 
 		m_TemporalVolumetrics[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i]->GetImageView())
-			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i]->GetImageView())
+			.AddImageSampler(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i]->GetImageView(), SamplerPoint)
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[WRAPL(i)]->GetImageView(), SamplerPoint)
 			.AddUniformBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *m_UBOSkyBuffers[i])
 			.Allocate(m_Scope);
 
 		m_BlendingDescriptors[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsHR[i]->GetImageView())
-			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i]->GetImageView())
+			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[WRAPR(i)]->GetImageView())
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i]->GetImageView(), SamplerLinear)
 			.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsHR[i]->GetImageView(), SamplerLinear)
-			.AddUniformBuffer(4, VK_SHADER_STAGE_COMPUTE_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 	}
 
@@ -2324,16 +2345,19 @@ VkBool32 VulkanBase::volumetric_precompute()
 	bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	bindngs[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 	bindngs[0].pImmutableSamplers = VK_NULL_HANDLE;
+
 	bindngs[1].binding = 1;
 	bindngs[1].descriptorCount = 1;
-	bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindngs[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 	bindngs[1].pImmutableSamplers = VK_NULL_HANDLE;
+
 	bindngs[2].binding = 2;
 	bindngs[2].descriptorCount = 1;
 	bindngs[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindngs[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 	bindngs[2].pImmutableSamplers = VK_NULL_HANDLE;
+
 	bindngs[3].binding = 3;
 	bindngs[3].descriptorCount = 1;
 	bindngs[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -2344,6 +2368,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 	dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dummyInfo.bindingCount = 4;
 	dummyInfo.pBindings = bindngs;
+
 	VkDescriptorSetLayout dummy;
 	vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
 
@@ -2547,69 +2572,129 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.Allocate(m_Scope);
 	}
 
-	m_TerrainCompute = ComputePipelineDescriptor()
-		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
-		.AddSpecializationConstant(0, Rg)
-		.AddSpecializationConstant(1, Rt)
-		.AddSpecializationConstant(2, VertexCount)
-		.AddSpecializationConstant(3, shape.m_Scale)
-		.AddSpecializationConstant(4, shape.m_MinHeight)
-		.AddSpecializationConstant(5, shape.m_MaxHeight)
-		.AddSpecializationConstant(6, shape.m_NoiseSeed)
-		.AddSpecializationConstant(7, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f))
-		.AddSpecializationConstant(8, shape.m_Rings)
-		.SetShaderName("terrain_noise_comp")
-		.Construct(m_Scope);
+	{
+		m_TerrainCompute = ComputePipelineDescriptor()
+			.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+			.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
+			.AddSpecializationConstant(0, Rg)
+			.AddSpecializationConstant(1, Rt)
+			.AddSpecializationConstant(2, VertexCount)
+			.AddSpecializationConstant(3, shape.m_Scale)
+			.AddSpecializationConstant(4, shape.m_MinHeight)
+			.AddSpecializationConstant(5, shape.m_MaxHeight)
+			.AddSpecializationConstant(6, shape.m_NoiseSeed)
+			.AddSpecializationConstant(7, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f))
+			.AddSpecializationConstant(8, shape.m_Rings)
+			.SetShaderName("terrain_noise_comp")
+			.Construct(m_Scope);
 
-	VkPushConstantRange ConstantCompose{};
-	ConstantCompose.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	ConstantCompose.size = sizeof(int);
+		VkPushConstantRange ConstantCompose{};
+		ConstantCompose.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		ConstantCompose.size = sizeof(int);
 
-	m_TerrainCompose = ComputePipelineDescriptor()
-		.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
-		.AddSpecializationConstant(0, Rg)
-		.AddSpecializationConstant(1, Rt)
-		.AddSpecializationConstant(2, VertexCount)
-		.AddSpecializationConstant(3, shape.m_Scale)
-		.AddSpecializationConstant(4, shape.m_MinHeight)
-		.AddSpecializationConstant(5, shape.m_MaxHeight)
-		.AddSpecializationConstant(6, shape.m_NoiseSeed)
-		.AddPushConstant(ConstantCompose)
-		.SetShaderName("terrain_compose_comp")
-		.Construct(m_Scope);
+		m_TerrainCompose = ComputePipelineDescriptor()
+			.AddDescriptorLayout(m_TerrainSet[0]->GetLayout())
+			.AddSpecializationConstant(0, Rg)
+			.AddSpecializationConstant(1, Rt)
+			.AddSpecializationConstant(2, VertexCount)
+			.AddSpecializationConstant(3, shape.m_Scale)
+			.AddSpecializationConstant(4, shape.m_MinHeight)
+			.AddSpecializationConstant(5, shape.m_MaxHeight)
+			.AddSpecializationConstant(6, shape.m_NoiseSeed)
+			.AddPushConstant(ConstantCompose)
+			.SetShaderName("terrain_compose_comp")
+			.Construct(m_Scope);
 
-	m_WaterCompute = ComputePipelineDescriptor()
-		.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
-		.AddSpecializationConstant(0, Rg)
-		.AddSpecializationConstant(1, Rt)
-		.AddSpecializationConstant(2, shape.m_Scale)
-		.AddSpecializationConstant(3, shape.m_MinHeight)
-		.AddSpecializationConstant(4, shape.m_MaxHeight)
-		.AddSpecializationConstant(5, shape.m_NoiseSeed)
-		.SetShaderName("erosion_comp")
-		.Construct(m_Scope);
+		m_WaterCompute = ComputePipelineDescriptor()
+			.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
+			.AddSpecializationConstant(0, Rg)
+			.AddSpecializationConstant(1, Rt)
+			.AddSpecializationConstant(2, shape.m_Scale)
+			.AddSpecializationConstant(3, shape.m_MinHeight)
+			.AddSpecializationConstant(4, shape.m_MaxHeight)
+			.AddSpecializationConstant(5, shape.m_NoiseSeed)
+			.SetShaderName("erosion_comp")
+			.Construct(m_Scope);
 
-	std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+		std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 
-	ConstantCompose.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	m_GrassPipeline = GraphicsPipelineDescriptor()
-		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-		.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
-		.AddDescriptorLayout(dummy->GetLayout())
-		.AddPushConstant(ConstantCompose)
-		.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
-		.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
-		.SetCullMode(VK_CULL_MODE_NONE)
-		.SetRenderPass(m_Scope.GetRenderPass(), 0)
-		.SetBlendAttachments(3, nullptr)
-		.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
-		.Construct(m_Scope);
+		ConstantCompose.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		m_GrassPipeline = GraphicsPipelineDescriptor()
+			.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+			.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
+			.AddDescriptorLayout(dummy->GetLayout())
+			.AddPushConstant(ConstantCompose)
+			.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
+			.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+			.SetCullMode(VK_CULL_MODE_NONE)
+			.SetRenderPass(m_Scope.GetRenderPass(), 0)
+			.SetBlendAttachments(3, nullptr)
+			.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
+			.Construct(m_Scope);
+	}
+
+	{
+		VkDescriptorSetLayoutBinding bindngs[4];
+		bindngs[0].binding = 0;
+		bindngs[0].descriptorCount = 1;
+		bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		bindngs[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		bindngs[0].pImmutableSamplers = VK_NULL_HANDLE;
+
+		bindngs[1].binding = 1;
+		bindngs[1].descriptorCount = 1;
+		bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bindngs[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		bindngs[1].pImmutableSamplers = VK_NULL_HANDLE;
+
+		bindngs[2].binding = 2;
+		bindngs[2].descriptorCount = 1;
+		bindngs[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bindngs[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		bindngs[2].pImmutableSamplers = VK_NULL_HANDLE;
+
+		bindngs[3].binding = 3;
+		bindngs[3].descriptorCount = 1;
+		bindngs[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bindngs[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		bindngs[3].pImmutableSamplers = VK_NULL_HANDLE;
+
+		VkDescriptorSetLayoutCreateInfo dummyInfo{};
+		dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		dummyInfo.bindingCount = 4;
+		dummyInfo.pBindings = bindngs;
+
+		VkDescriptorSetLayout dummy;
+		vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
+
+		VkPushConstantRange ConstantOrder{};
+		ConstantOrder.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		ConstantOrder.size = sizeof(int);
+
+		ComputePipelineDescriptor VolumetricPSO{};
+		VolumetricPSO.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+			.AddDescriptorLayout(m_VolumetricsDescriptor->GetLayout())
+			.AddDescriptorLayout(dummy)
+			.AddPushConstant(ConstantOrder)
+			.AddSpecializationConstant(0, float(Rg + shape.m_MinHeight))
+			.AddSpecializationConstant(1, Rt);
+
+		m_VolumetricsAbovePipeline = VolumetricPSO.SetShaderName("volumetric_above_comp")
+			.Construct(m_Scope);
+
+		m_VolumetricsBetweenPipeline = VolumetricPSO.SetShaderName("volumetric_between_comp")
+			.Construct(m_Scope);
+
+		m_VolumetricsUnderPipeline = VolumetricPSO.SetShaderName("volumetric_under_comp")
+			.Construct(m_Scope);
+
+		vkDestroyDescriptorSetLayout(m_Scope.GetDevice(), dummy, VK_NULL_HANDLE);
+	}
 
 	return 1;
 }

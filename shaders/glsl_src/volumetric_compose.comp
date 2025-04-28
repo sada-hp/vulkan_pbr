@@ -3,7 +3,7 @@
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 layout(binding = 0, rgba32f) uniform image2D outImage;
-layout(binding = 1, r32f) uniform image2D outDepth;
+layout(binding = 1) uniform sampler2D depthImage;
 layout(binding = 2) uniform sampler2D oldImage;
 
 layout(push_constant) uniform constants
@@ -21,13 +21,11 @@ void main()
     {
         float norm = 0.0;
         vec4 color_sample = vec4(0.0);
-        vec4 depth_sample = vec4(0.0);
 
         vec4 temp = imageLoad(outImage, Texel + ivec2(1, 0));
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
-            depth_sample += imageLoad(outDepth, Texel + ivec2(1, 0));
             norm++;
         }
 
@@ -35,7 +33,6 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
-            depth_sample += imageLoad(outDepth, Texel + ivec2(-1, 0));
             norm++;
         }
 
@@ -43,7 +40,6 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
-            depth_sample += imageLoad(outDepth, Texel + ivec2(0, 1));
             norm++;
         }
 
@@ -51,19 +47,16 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
-            depth_sample += imageLoad(outDepth, Texel + ivec2(0, -1));
             norm++;
         }
 
         if (norm > 0.0)
         {
-            imageStore(outImage, Texel, mix(vec4(color_sample.xyz / 4.0, color_sample.a / norm), texelFetch(oldImage, Texel, 0), 0.0));
-            imageStore(outDepth, Texel, depth_sample / norm);
+            imageStore(outImage, Texel, mix(vec4(color_sample.xyz / 4.0, color_sample.a / norm), texelFetch(oldImage, Texel, 0), 0.35));
         }
         else
         {
             imageStore(outImage, Texel, vec4(0.0, 0.0, 0.0, 1.0));
-            imageStore(outDepth, Texel, vec4(0.0));
         }
     }
 }
