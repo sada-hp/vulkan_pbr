@@ -1,0 +1,32 @@
+#version 460
+#include "noise.glsl"
+#include "common.glsl"
+#include "cubemap_matrix.glsl"
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, rgba32f) uniform writeonly imageCube outImage;
+
+layout (constant_id = 0) const uint frequency = 4;
+layout (constant_id = 1) const uint worley_octaves = 4;
+layout (constant_id = 2) const uint perlin_octaves = 4;
+
+void main()
+{
+    vec2 size = imageSize(outImage).xy;
+    if (gl_GlobalInvocationID.x < size.x && gl_GlobalInvocationID.y < size.y)
+    {
+        int ViewIndex = int(gl_GlobalInvocationID.z);
+        vec2 UV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
+        vec4 ndcSpace = vec4(2.0 * UV - 1.0, 1.0, 1.0);
+        vec4 viewSpace = inverse(Projection) * ndcSpace;
+        vec4 worldSpace = inverse(View[ViewIndex]) * vec4(viewSpace.xyz, 0.0);
+        vec3 direction = normalize(worldSpace.xyz);
+
+        float w = 1.0 - fbm_worley(direction, frequency, worley_octaves);
+        float p = fbm_perlin(direction, frequency, perlin_octaves) * 0.5 + 0.5;
+        float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
+
+        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(p, w, perlin_worley, 0.0));
+    }
+}

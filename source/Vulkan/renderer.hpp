@@ -239,6 +239,7 @@ private:
 	VulkanTexture m_VolumeShape = {};
 	VulkanTexture m_VolumeDetail = {};
 	VulkanTexture m_VolumeWeather = {};
+	VulkanTexture m_VolumeWeatherCube = {};
 
 	VulkanTexture m_ScatteringLUT = {};
 	VulkanTexture m_IrradianceLUT = {};

@@ -12,6 +12,8 @@ namespace GRNoise
 	std::unique_ptr<VulkanImage> GenerateCloudShapeNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t worley_frequency, uint32_t perlin_frequency);
 
 	std::unique_ptr<VulkanImage> GenerateCloudDetailNoise(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t octaves);
+	
+	std::unique_ptr<VulkanImage> GenerateWeatherCube(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves);
 
 	std::unique_ptr<VulkanImage> GenerateCheckerBoard(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency);
 

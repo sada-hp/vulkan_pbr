@@ -5,7 +5,7 @@
 
 extern std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels, int count, int w, int h, int c, const VkFormat& format, const VkImageCreateFlags& flags);
 
-std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<std::any> constants)
+std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Scope, VkFormat format, VkExtent3D imageSize, std::vector<std::any> constants, bool cube = false)
 {
 	std::vector<uint32_t> queueFamilies = FindDeviceQueues(Scope.GetPhysicalDevice(), {VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_TRANSFER_BIT});
 	std::sort(queueFamilies.begin(), queueFamilies.end());
@@ -13,13 +13,13 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 
 	VkImageCreateInfo noiseInfo{};
 	noiseInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	noiseInfo.arrayLayers = 1u;
+	noiseInfo.arrayLayers = cube ? 6u : 1u;
 	noiseInfo.extent = imageSize;
 	noiseInfo.format = format;
 	noiseInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	noiseInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(imageSize.width, imageSize.height)))) + 1;
 	// noiseInfo.mipLevels = 1u;
-	noiseInfo.flags = 0u;
+	noiseInfo.flags = cube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u;
 	noiseInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	noiseInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	noiseInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -29,7 +29,7 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 	noiseInfo.imageType = imageSize.depth == 1u ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
 
 	VmaAllocationCreateInfo noiseAllocCreateInfo{};
-	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	std::unique_ptr<VulkanImage> noise = std::make_unique<VulkanImage>(Scope, noiseInfo, noiseAllocCreateInfo);
 	std::unique_ptr<VulkanImageView> noise_view = std::make_unique<VulkanImageView>(Scope, *noise);
@@ -52,7 +52,7 @@ std::unique_ptr<VulkanImage> generate(const char* shader, const RenderScope& Sco
 	::BeginOneTimeSubmitCmd(cmd);
 	pipeline->BindPipeline(cmd);
 	noise_set->BindSet(0, cmd, *pipeline);
-	vkCmdDispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, noise->GetExtent().depth);
+	vkCmdDispatch(cmd, noise->GetExtent().width, noise->GetExtent().height, cube ? 6u : noise->GetExtent().depth);
 	::EndCommandBuffer(cmd);
 	Scope.GetQueue(VK_QUEUE_COMPUTE_BIT)
 		.Submit(cmd)
@@ -116,6 +116,12 @@ std::unique_ptr<VulkanImage> GRNoise::GenerateCloudDetailNoise(const RenderScope
 	uint32_t seed = 0;
 	seed = (uint32_t)&seed;
 	return generate("cloud_detail_comp", Scope, VK_FORMAT_B10G11R11_UFLOAT_PACK32, imageSize, { frequency, octaves, seed });
+}
+
+std::unique_ptr<VulkanImage> GRNoise::GenerateWeatherCube(const RenderScope& Scope, VkExtent3D imageSize, uint32_t frequency, uint32_t worley_octaves, uint32_t perlin_octaves)
+{
+	imageSize.depth = 1;
+	return generate("weather_cubemap_comp", Scope, VK_FORMAT_R32G32B32A32_SFLOAT, imageSize, { frequency, worley_octaves, perlin_octaves }, true);
 }
 
 std::unique_ptr<VulkanImage> GRNoise::GenerateCheckerBoard(const RenderScope& Scope, VkExtent2D imageSize, uint32_t frequency)

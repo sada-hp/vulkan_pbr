@@ -258,6 +258,8 @@ VulkanBase::~VulkanBase() noexcept
 	m_GrassSet.resize(0);
 	m_GrassPipeline.reset();
 
+	m_VolumeWeatherCube.reset();
+
 	m_DiffusePrecompute.reset();
 	m_SpecularPrecompute.reset();
 
@@ -427,6 +429,7 @@ bool VulkanBase::BeginFrame()
 		glm::mat4 projection_matrix = m_Camera.get_projection_matrix();
 		glm::mat4 projection_matrix_inverse = glm::inverse(projection_matrix);
 		glm::dmat4 view_proj_matrix = static_cast<glm::dmat4>(projection_matrix) * view_matrix;
+		glm::dmat4 view_proj_matrix_inverse = view_matrix_inverse * static_cast<glm::dmat4>(projection_matrix_inverse);
 		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.Transform.GetOffset(), 1.0);
 		glm::vec4 CameraPosition = glm::vec4(m_Camera.Transform.GetOffset(), 1.0);
 		glm::vec4 Sun = glm::vec4(glm::normalize(m_SunDirection), 0.0);
@@ -443,6 +446,7 @@ bool VulkanBase::BeginFrame()
 			view_proj_matrix,
 			view_matrix,
 			view_matrix_inverse,
+			view_proj_matrix_inverse,
 			CameraPositionFP64,
 			projection_matrix,
 			projection_matrix_inverse,
@@ -469,7 +473,7 @@ bool VulkanBase::BeginFrame()
 		vkBeginCommandBuffer(m_TerrainAsync[m_ResourceIndex].Commands, &beginInfo);
 
 		// Transfer to async queue
-		if (m_FrameCount >= m_ResourceCount)
+		if (m_FrameCount > 1)
 		{
 			m_TerrainLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 			m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
@@ -601,7 +605,7 @@ bool VulkanBase::BeginFrame()
 
 		vkBeginCommandBuffer(m_BackgroundAsync[m_ResourceIndex].Commands, &beginInfo);
 
-		if (m_FrameCount >= m_ResourceCount)
+		if (m_FrameCount > 1)
 		{
 			m_HdrAttachmentsLR[m_ResourceIndex]->TransferOwnership(m_BackgroundAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 			m_DepthAttachmentsLR[m_ResourceIndex]->TransferOwnership(m_BackgroundAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
@@ -844,56 +848,6 @@ void VulkanBase::EndFrame()
 		m_HdrAttachmentsLR[WRAPR(m_ResourceIndex)]->TransferOwnership(m_ApplySync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 		m_DepthAttachmentsLR[WRAPR(m_ResourceIndex)]->TransferOwnership(m_ApplySync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 
-		std::array<VkImageMemoryBarrier, 2> barrier{};
-		barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier[0].image = m_BlurAttachments[2 * m_ResourceIndex]->GetImage();
-		barrier[0].subresourceRange = m_BlurAttachments[2 * m_ResourceIndex]->GetSubResourceRange();
-		barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		barrier[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier[1].image = m_BlurAttachments[2 * m_ResourceIndex + 1]->GetImage();
-		barrier[1].subresourceRange = m_BlurAttachments[2 * m_ResourceIndex + 1]->GetSubResourceRange();
-		barrier[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		barrier[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		const int Radius = 5;
-		m_BlurSetupPipeline->BindPipeline(m_ApplySync[m_ResourceIndex].Commands);
-		m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_ApplySync[m_ResourceIndex].Commands, *m_BlurSetupPipeline);
-		vkCmdDispatch(m_ApplySync[m_ResourceIndex].Commands, X, Y, 1);
-		
-		for (int i = 0; i <= Radius; i++)
-		{
-			if (i % 2 == 0)
-			{
-				m_BlurHorizontalPipeline->BindPipeline(m_ApplySync[m_ResourceIndex].Commands);
-				m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_ApplySync[m_ResourceIndex].Commands, *m_BlurHorizontalPipeline);
-			}
-			else
-			{
-				m_BlurVerticalPipeline->BindPipeline(m_ApplySync[m_ResourceIndex].Commands);
-				m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_ApplySync[m_ResourceIndex].Commands, *m_BlurVerticalPipeline);
-			}
-			vkCmdDispatch(m_ApplySync[m_ResourceIndex].Commands, X, Y, 1);
-
-			if (i == Radius)
-			{
-				barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				barrier[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			}
-
-			vkCmdPipelineBarrier(m_ApplySync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
-		}
-
 		vkEndCommandBuffer(m_ApplySync[m_ResourceIndex].Commands);
 
 		VkSubmitInfo submitInfo{};
@@ -918,6 +872,59 @@ void VulkanBase::EndFrame()
 
 		vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), 0, m_SwapchainSemaphores[m_ResourceIndex], VK_NULL_HANDLE, &m_ImageIndex[m_ResourceIndex]);
 		vkBeginCommandBuffer(m_PresentSync[m_ResourceIndex].Commands, &beginInfo);
+
+		uint32_t X = ceil(float(m_Scope.GetSwapchainExtent().width) / 8.f);
+		uint32_t Y = ceil(float(m_Scope.GetSwapchainExtent().height) / 4.f);
+
+		std::array<VkImageMemoryBarrier, 2> barrier{};
+		barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[0].image = m_BlurAttachments[2 * m_ResourceIndex]->GetImage();
+		barrier[0].subresourceRange = m_BlurAttachments[2 * m_ResourceIndex]->GetSubResourceRange();
+		barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		barrier[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier[1].image = m_BlurAttachments[2 * m_ResourceIndex + 1]->GetImage();
+		barrier[1].subresourceRange = m_BlurAttachments[2 * m_ResourceIndex + 1]->GetSubResourceRange();
+		barrier[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		const int Radius = 5;
+		m_BlurSetupPipeline->BindPipeline(m_PresentSync[m_ResourceIndex].Commands);
+		m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_BlurSetupPipeline);
+		vkCmdDispatch(m_PresentSync[m_ResourceIndex].Commands, X, Y, 1);
+
+		for (int i = 0; i <= Radius; i++)
+		{
+			if (i % 2 == 0)
+			{
+				m_BlurHorizontalPipeline->BindPipeline(m_PresentSync[m_ResourceIndex].Commands);
+				m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_BlurHorizontalPipeline);
+			}
+			else
+			{
+				m_BlurVerticalPipeline->BindPipeline(m_PresentSync[m_ResourceIndex].Commands);
+				m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_BlurVerticalPipeline);
+			}
+			vkCmdDispatch(m_PresentSync[m_ResourceIndex].Commands, X, Y, 1);
+
+			if (i == Radius)
+			{
+				barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				barrier[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			}
+
+			vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
+		}
 
 		std::array<VkClearValue, 1> clearValues;
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
@@ -1333,8 +1340,9 @@ VkBool32 VulkanBase::create_frame_pipelines()
 			.AddImageSampler(9, VK_SHADER_STAGE_FRAGMENT_BIT, m_SpecularLUT[i].Views[0]->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp, m_SpecularLUT[i].Views[0]->GetSubresourceRange().levelCount))
 			.AddImageSampler(10, VK_SHADER_STAGE_FRAGMENT_BIT, m_BRDFLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(11, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeShape.View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearClamp, m_VolumeShape.View->GetSubresourceRange().levelCount))
-			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), m_Scope.GetSampler(ESamplerType::LinearRepeat, m_VolumeWeather.View->GetSubresourceRange().levelCount))
-			.AddUniformBuffer(13, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
+			.AddImageSampler(12, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeather.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeWeather.View->GetSubresourceRange().levelCount))
+			.AddImageSampler(13, VK_SHADER_STAGE_FRAGMENT_BIT, m_VolumeWeatherCube.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeWeatherCube.View->GetSubresourceRange().levelCount))
+			.AddUniformBuffer(14, VK_SHADER_STAGE_FRAGMENT_BIT, *m_CloudLayer)
 			.Allocate(m_Scope);
 
 		m_PostProcessDescriptors[i] = DescriptorSetDescriptor()
@@ -2337,6 +2345,9 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
+	m_VolumeWeatherCube.Image = GRNoise::GenerateWeatherCube(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
+	m_VolumeWeatherCube.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeatherCube.Image);
+
 	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp, 1);
 
 	// m_Volumetrics = std::make_unique<GraphicsObject>();
@@ -2348,6 +2359,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerClamp)
 		.AddImageSampler(5, VK_SHADER_STAGE_COMPUTE_BIT, m_IrradianceLUT.View->GetImageView(), SamplerClamp)
 		.AddImageSampler(6, VK_SHADER_STAGE_COMPUTE_BIT, m_ScatteringLUT.View->GetImageView(), SamplerClamp)
+		.AddImageSampler(7, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeWeatherCube.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeWeatherCube.View->GetSubresourceRange().levelCount))
 		.Allocate(m_Scope);
 
 	VkDescriptorSetLayoutBinding bindngs[4];

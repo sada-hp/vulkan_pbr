@@ -6,6 +6,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     dmat4 ViewProjectionMatrix;
     dmat4 ViewMatrix;
     dmat4 ViewMatrixInverse;
+    dmat4 ViewProjectionMatrixInverse;
     dvec4 CameraPositionFP64;
     mat4 ProjectionMatrix;
     mat4 ProjectionMatrixInverse;

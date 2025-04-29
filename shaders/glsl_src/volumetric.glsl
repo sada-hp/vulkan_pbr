@@ -65,6 +65,7 @@ layout(set = 1, binding = 3) uniform sampler2D WeatherMap;
 layout(set = 1, binding = 4) uniform sampler2D TransmittanceLUT;
 layout(set = 1, binding = 5) uniform sampler2D IrradianceLUT;
 layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
+layout(set = 1, binding = 7) uniform samplerCube WeatherMapCube;
 
 layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
 layout(set = 2, binding = 1) uniform sampler2D depthImage;
@@ -74,6 +75,7 @@ layout(set = 2, binding = 3) uniform UnfiormBuffer2
     dmat4 ViewProjectionMatrix;
     dmat4 ViewMatrix;
     dmat4 ViewMatrixInverse;
+    dmat4 ViewProjectionMatrixInverse;
     dvec4 CameraPositionFP64;
     mat4 ProjectionMatrix;
     mat4 ProjectionMatrixInverse;
@@ -134,15 +136,15 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h1 = pow(height, 0.65);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / Params.TopBound, lod, vec2(Params.Wind)).rgb;
+    vec3 temp = SampleProject(Ray.Position, WeatherMap, 10.0 / Params.TopBound, lod, vec2(Params.Wind * ubo.Time)).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(SampleOnSphere(Ray.Position, WeatherMap, 5.0 / Params.TopBound, vec2(Params.Wind)).r + 0.2);
-    
+    float weather2 = saturate(textureLod(WeatherMapCube, Ray.Position, lod).r + 0.2);
+    // float weather2 = saturate(SampleOnSphere(x0, WeatherMap, 5.0 / Rct, 0, vec2(Clouds.WindSpeed * ubo.Time)).r + 0.2);
+
     base *= weather1;
     float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, Params.HeightFactor, 1.0));
 
-    return base;
+    return height * saturate(remap(base, shape, 1.0, Params.HeightFactor, 1.0));
 }
 
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
@@ -154,8 +156,7 @@ float SampleCloudDetail(in RayMarch Ray, float base, int lod)
     float high_frequency_fbm = (high_frequency_noise.r * 1.0 + high_frequency_noise.g * 0.5 + high_frequency_noise.b * 0.25) / 1.75;
     float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
 
-    base = mix(2.0 * Params.Density, Params.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0));
-    return saturate(base);
+    return saturate(mix(2.0 * Params.Density, Params.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0)));
 }
 
 // volumetric-cloudscapes-of-horizon-zero-dawn
@@ -168,7 +169,7 @@ float SampleCone(RayMarch Ray, int mip)
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
         cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
 
-        Ray.Stepsize *= i >= 5 ? 2.0 : 1.0;
+        Ray.Stepsize *= i >= 5 ? 2.0 : 1.5;
     }
 
     return cone_density;
@@ -204,7 +205,7 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
 
         if (outScattering.a > 0.1)
         {
-            cone_density += SampleCone(Ray, mip);
+            cone_density += SampleCone(Ray, mip + 1);
         }
         else
         {
@@ -281,6 +282,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
 
     float Dist = 0.0;
     float PrevDist = 0.0, DistAEP = 0.0;
+    float LightIntensity = Params.LightIntensity * MaxLightIntensity;
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);
@@ -300,11 +302,9 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
         {
             float extinction = sample_density + 1e-7;
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
-            float light_scatter = MarchToLight(Ray.Position, Sun, phi, 6, mip);
-            vec3 E = vec3(light_scatter);
-            E *= GetTransmittanceWithShadow(TransmittanceLUT, Ray.Radius, dot(Ray.Position, Sun) / Ray.Radius, Hits.Camera, EdotL);
+            vec3 E = MarchToLight(Ray.Position, Sun, phi, 6, mip) * GetTransmittanceWithShadow(TransmittanceLUT, Ray.Radius, dot(Ray.Position, Sun) / Ray.Radius, Hits.Camera, EdotL);
             E += mix(AtmosphereStart.S, AtmosphereEnd.S, DistAEP) - mix(AtmosphereStart.S, AtmosphereEnd.S, PrevDist);
-            E *= extinction * Params.LightIntensity* MaxLightIntensity;
+            E *= extinction * LightIntensity;
             E = vec3(E - transmittance * E) / extinction;
             Ray.LastHit = Ray.Position;
             outScattering.rgb += E * outScattering.a;
@@ -316,14 +316,6 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
         }
         DistAEP = Dist / ToAEP;
     }
-    outScattering.rgb += Params.LightIntensity * MaxLightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
 
-#if 0
-    if (outScattering.a != 1.0)
-    {
-        vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
-        vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
-        Depth = max(clip1.z / clip1.w, clip2.z / clip2.w);
-    }
-#endif
+    outScattering.rgb += Params.LightIntensity * MaxLightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
 }
