@@ -99,6 +99,29 @@ vec4 SampleProject(vec3 Position, sampler2D Target, float Scale, int mip, vec2 O
     return (s1 * a1 + s2 * a2 + s3 * a3) / (a1 + a2 + a3);
 }
 
+vec4 SampleArrayAsCube(sampler2DArray Target, vec3 Position, float Scale, vec2 Offset, int mip)
+{
+    vec3 AbsPosition = abs(Position);
+    if (AbsPosition.y > AbsPosition.x && AbsPosition.y > AbsPosition.z)
+    {
+        vec2 UV = (Position.xz / AbsPosition.y) * 0.5 + 0.5;
+        int Layer = Position.y > 0 ? 2 : 3;
+        return textureLod(Target, vec3(Scale * UV + Offset, Layer), mip);
+    }
+    else if (AbsPosition.z > AbsPosition.x && AbsPosition.z > AbsPosition.y)
+    {
+        vec2 UV = (Position.xy / AbsPosition.z) * 0.5 + 0.5;
+        int Layer = Position.z > 0 ? 4 : 5;
+        return textureLod(Target, vec3(Scale * UV + Offset, Layer), mip);
+    }
+    else
+    {
+        vec2 UV = (Position.yz / AbsPosition.x) * 0.5 + 0.5;
+        int Layer = Position.x > 0 ? 0 : 1;
+        return textureLod(Target, vec3(Scale * UV + Offset, Layer), mip);
+    }
+}
+
 vec2 SphereDistances(vec3 ro, vec3 rd, vec3 so, float radius)
 {
     vec2 t = vec2(0.0);

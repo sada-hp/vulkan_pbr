@@ -15,7 +15,7 @@ layout(binding = 9) uniform samplerCube SpecularLUT;
 layout(binding = 10) uniform sampler2D BRDFLUT;
 layout(binding = 11) uniform sampler3D CloudLowFrequency;
 layout(binding = 12) uniform sampler2D WeatherMap;
-layout(binding = 13) uniform samplerCube WeatherMapCube;
+layout(binding = 13) uniform sampler2DArray WeatherMapCube;
 layout(binding = 14) uniform CloudLayer
 {
     float Coverage;
@@ -47,22 +47,25 @@ float GetHeightFraction(vec3 x0)
 
 float SampleCloud(vec3 x0, float transmittance, float height)
 {
+    const int lod = 1;
+
     vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed);
 
-    float base = textureLod(CloudLowFrequency, uv, 1).r;
+    float base = textureLod(CloudLowFrequency, uv, lod).r;
 
     float h1 = pow(height, 0.65);
-    float h2 = saturate(remap(1.0 - height, 0.0, mix(0.05, 0.5, Clouds.Coverage * Clouds.Coverage), 0.0, 1.0));
+    float h2 = saturate(remap(1.0 - height, 0.0, Clouds.BottomSmoothnessFactor, 0.0, 1.0));
 
-    vec3 temp = SampleProject(x0, WeatherMap, 10.0 / Rct, 0, vec2(Clouds.WindSpeed * ubo.Time)).rgb;
+    vec3 sx = x0 / Clouds.TopBound;
+    vec2 anim = vec2(Clouds.WindSpeed * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
+    vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(textureLod(WeatherMapCube, x0, 0).b + 0.2);
+    float weather2 = saturate(SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-    base = height * saturate(remap(base, shape, 1.0, pow(Clouds.Coverage, 1.5), 1.0));
 
-    return saturate(mix(2.0 * Clouds.Density, Clouds.Density / 2.0, transmittance) * base);
+    return mix(Clouds.Density, Clouds.Density / 6.0, transmittance) * height * saturate(remap(base, shape, 1.0, Clouds.HeightFactor, 1.0));
 }
 
 float SampleCloudShadow(vec3 x1)

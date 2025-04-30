@@ -1087,10 +1087,10 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
 	cloudParams.Coverage = settings.Coverage;
 	cloudParams.CoverageSq = settings.Coverage * settings.Coverage;
-	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.5);
+	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.125);
 	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, cloudParams.CoverageSq);
 	cloudParams.LightIntensity = glm::mix(1.0, 0.05, cloudParams.CoverageSq);
-	cloudParams.Ambient = glm::mix(0.02, 0.005, cloudParams.CoverageSq);
+	cloudParams.Ambient = glm::mix(0.01, 0.005, cloudParams.CoverageSq);
 	cloudParams.Wind = settings.WindSpeed * 0.01;
 	cloudParams.Density = settings.Density;
 	cloudParams.TopBound = Rct;
@@ -2346,6 +2346,8 @@ VkBool32 VulkanBase::volumetric_precompute()
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
 	m_VolumeWeatherCube.Image = GRNoise::GenerateWeatherCube(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
+
+	m_VolumeWeatherCube.Image->flags &= ~VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	m_VolumeWeatherCube.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeatherCube.Image);
 
 	VkSampler SamplerClamp = m_Scope.GetSampler(ESamplerType::BillinearClamp, 1);
