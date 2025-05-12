@@ -86,7 +86,7 @@ vec3 Gain3(vec3 W, float r)
 }
 
 #ifndef HEX_COMPUTE
-void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material, out vec3 Weights)
+void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int Layer, in HexParams Params, out SMaterial Material)
 {
     vec4 c1 = textureGrad(col, vec3(Params.st1, Layer), Params.dSTdx, Params.dSTdy);
     vec4 c2 = textureGrad(col, vec3(Params.st2, Layer), Params.dSTdx, Params.dSTdy);
@@ -115,7 +115,5 @@ void hex2colTex(sampler2DArray col, sampler2DArray nor, sampler2DArray arm, int 
     Material.Metallic = W.x * a1.b + W.y * a2.b + W.z * a3.b;
     Material.Specular = W.x * a1.a + W.y * a2.a + W.z * a3.a;
     Material.Normal = 2.0 * (W.x * n1.rgb + W.y * n2.rgb + W.z * n3.rgb) - 1.0;
-
-    Weights = ProduceHexWeights(W, Params.v1, Params.v2, Params.v3);
 }
 #endif

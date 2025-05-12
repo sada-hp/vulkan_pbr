@@ -47,5 +47,14 @@ void main()
 
     MarchToCloud(Ray, distance(Ray.Start, Ray.End));
 
+    if (outScattering.a != 1.0)
+    {
+        vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
+        vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
+        float outDepth = max(clip1.z / clip1.w, clip2.z / clip2.w);
+
+        outScattering = outDepth > inDepth ? mix(outScattering, texelFetch(oldImage, Texel, 0), 0.15) : vec4(0.0, 0.0, 0.0, 1.0);
+    }
+
     imageStore(outImage, Texel, outScattering);
 }

@@ -2,6 +2,7 @@
 #define _COMMON_SHADER
 
 #define PI 3.1415926535897932384626433832795
+#define HALF_PI PI / 2.0
 #define TWO_PI 2 * PI
 #define ONE_OVER_PI 1.0 / PI
 #define ONE_OVER_2PI 1.0 / (2.0 * PI)
@@ -51,6 +52,14 @@ vec3 saturate(vec3 x)
 vec4 saturate(vec4 x)
 {
     return clamp(x, 0.0, 1.0);
+}
+
+float dampen(float Value, float Factor)
+{
+    Value = saturate(Value / Factor);
+    Value = saturate(Value - 0.1) / 0.9;
+
+    return Value;
 }
 
 float saturateAngle(float x)

@@ -25,22 +25,7 @@ void main()
     // fake transcluency
     N = normalize(N + mix(0.85, 1.0, AO) * ubo.SunDirection.xyz);
 
-    HexParams Tiling;
-    GetHexParams(1.0, (ubo.CameraPosition + CenterPosition).xz * 5e-4, Tiling);
-
-    vec4 c1 = textureGrad(AlbedoMap, vec3(Tiling.st1, 0), Tiling.dSTdx, Tiling.dSTdy);
-    vec4 c2 = textureGrad(AlbedoMap, vec3(Tiling.st2, 0), Tiling.dSTdx, Tiling.dSTdy);
-    vec4 c3 = textureGrad(AlbedoMap, vec3(Tiling.st3, 0), Tiling.dSTdx, Tiling.dSTdy);
-
-    vec3 Lw = vec3(0.299, 0.587, 0.114);
-    vec3 Dw = vec3(dot(c1.xyz, Lw), dot(c2.xyz, Lw), dot(c3.xyz, Lw));
-
-    Dw = mix(vec3(1.0), Dw, vec3(0.6));
-    vec3 W = Dw * pow(vec3(Tiling.w1, Tiling.w2, Tiling.w3), vec3(7));
-
-    W /= (W.x + W.y + W.z);
-
-    vec3 avgAlbedo = W.x * c1.xyz + W.y * c2.xyz + W.z * c3.xyz;
+    vec3 avgAlbedo = texture(AlbedoMap, vec3((ubo.CameraPosition + CenterPosition).xz * 5e-4, 0)).rgb;
 
     outColor = vec4(mix(avgAlbedo, vec3(0.0, 0.25, 0.0), 0.15), 1.0);
     outNormal = vec4(N, 1.0);

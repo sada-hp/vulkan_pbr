@@ -128,7 +128,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
     {
         Ray += View * Stepsize;
 
-        float w1 = 2.0 * smootherstep(0.0, 2.0, i * incr);
+        float w1 = i * incr;
         Atmosphere.Shadow = mix(AtmosphereStart.Shadow, AtmosphereEnd.Shadow, w1);
 
         vec4 ScreenUV = GetScreenPosition(vec4(Ray, 1.0));

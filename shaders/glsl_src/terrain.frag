@@ -44,107 +44,68 @@ float SampleWater(vec3 UVW)
     return r;
 }
 
-float DampenValue(float Value, float Factor)
-{
-    Value = saturate(Value / Factor);
-    Value = saturate(Value - 0.1) / 0.9;
-
-    return Value;
-}
-
 void main()
 {
     HexParams Tiling;
 
     vec2 WorldUV = vec2(0.0);
+    vec3 WaterUV = vec3(0.5 + VertPosition / Diameter, Level);
+
     if (abs(WorldPosition.y) > abs(WorldPosition.x) && abs(WorldPosition.y) > abs(WorldPosition.z))
-    {
         WorldUV = WorldPosition.xz;
-    }
     else if (abs(WorldPosition.z) > abs(WorldPosition.x) && abs(WorldPosition.z) > abs(WorldPosition.y))
-    {
         WorldUV = WorldPosition.xy;
-    }
     else
-    {
         WorldUV = WorldPosition.yz;
-    }
 
     GetHexParams(1.0, WorldUV * 5e-4, Tiling);
 
-    vec3 W;
     SMaterial Material;
     SMaterial GrassMaterial, RockMaterial, SandMaterial, SnowMaterial;
-    hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 0, Tiling, GrassMaterial, W);
-    hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 1, Tiling, RockMaterial, W);
-    hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 2, Tiling, SandMaterial, W);
-    hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 3, Tiling, SnowMaterial, W);
 
-    vec3 WaterUV = vec3(0.5 + VertPosition / Diameter, Level);
     float WaterAmount = SampleWater(WaterUV);
     vec3 WaterColor = vec3(0.03, 0.03, 0.05);
 
     vec3 U = normalize(WorldPosition.xyz);
-    // material descriptor
-#if 1
-    float w = saturate(10.0 * (1.0 - saturate(abs(dot(TBN[2], U)))));
 
-    // Grass-to-rock
-    Material = mixmat(GrassMaterial, RockMaterial, w);
+    float w_rock = saturate(10.0 * (1.0 - saturate(abs(dot(normalize(TBN[2]), U)))));
+    float w_sand = saturate((Height <= 0.02 ? smootherstep(0.0, 1.0, 1.0 - Height / 0.02) : 0.0) + dampen(WaterAmount, 85.0));
+    float w_snow = saturate(2.0 * saturate(Height - 0.4) / 0.6);
+    float w_water = saturate((Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0) + dampen(WaterAmount, 175.0));
 
-    // -to-sand
-    w = Height <= 0.02 ? smootherstep(0.0, 1.0, 1.0 - Height / 0.02) : 0.0;
-    w = saturate(w + DampenValue(WaterAmount, 85.0));
-    Material = mixmat(Material, SandMaterial, w);
+    w_sand *= 1.0 - w_snow;
+    w_sand *= 1.0 - w_water;
 
-    // -to-snow
-    w = saturate(2.0 * saturate(Height - 0.4) / 0.6);
-    Material = mixmat(Material, SnowMaterial, w);
+    w_rock *= 1.0 - w_snow;
+    w_rock *= 1.0 - w_sand;
+    w_rock *= 1.0 - w_water;
 
-    // -water
-    w = Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0;
-    w = saturate(w + DampenValue(WaterAmount, 175.0));
-    Material.Albedo.rgb = mix(Material.Albedo.rgb, WaterColor, w);
-    Material.Roughness = mix(Material.Roughness, 0.0, w * w * w);
-    Material.AO = mix(Material.AO, 1.0, w);
-    Material.Normal = normalize(mix(normalize(TBN * Material.Normal), TBN[2], w));
-    Material.Specular = mix(0.1, 1.0, w);
-#else
-    if (Level == 0)
-        Material.Albedo = vec4(1.0, 0.0, 0.0, 1.0);
-    else if (Level == 1)
-        Material.Albedo = vec4(0.0, 1.0, 0.0, 1.0);
-    else if (Level == 2)
-        Material.Albedo = vec4(0.0, 0.0, 1.0, 1.0);
-    else if (Level == 3)
-        Material.Albedo = vec4(1.0, 0.0, 1.0, 1.0);
-    else if (Level == 4)
-        Material.Albedo = vec4(0.0, 1.0, 1.0, 1.0);
-    else if (Level == 5)
-        Material.Albedo = vec4(1.0, 1.0, 0.0, 1.0);
-    else if (Level == 6)
-        Material.Albedo = vec4(1.0, 1.0, 1.0, 1.0);
-    else if (Level == 7)
-        Material.Albedo = vec4(0.863, 0.214, 0.6, 1.0);
-    else if (Level == 8)
-        Material.Albedo = vec4(0.654, 0.98, 0.213, 1.0);
-    else if (Level == 9)
-        Material.Albedo = vec4(0.323, 0.75, 0.75, 1.0);
-    else if (Level == 10)
-        Material.Albedo = vec4(0.12, 0.876, 0.1, 1.0);
-    else
-        Material.Albedo = vec4(0.5215, 0.876, 0.56, 1.0);
+    if (w_rock != 1.0 && w_sand != 1.0 && w_snow != 1.0)
+        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 0, Tiling, Material);
 
-    Material.Normal = vec3(0.0, 1.0, 0.0);
-    Material.AO = 1.0;
-    Material.Roughness = 1.0;
-    Material.Metallic = 0.0;
-    Material.Specular = 0.1;
-#endif
+    if (w_rock > 0.0 && w_sand != 1.0 && w_snow != 1.0)
+    {
+        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 1, Tiling, RockMaterial);
+        Material = mixmat(Material, RockMaterial, w_rock);
+    }
 
-    // Material.Albedo.rgb = W;
+    if (w_sand > 0.0 && w_rock != 1.0 && w_snow != 1.0)
+    {
+        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 2, Tiling, SandMaterial);
+        Material = mixmat(Material, SandMaterial, w_sand);
+    }
 
-    Material.Roughness = max(PushConstants.RoughnessMultiplier * Material.Roughness, 0.01);
+    if (w_snow > 0.0 && w_rock != 1.0 && w_sand != 1.0)
+    {
+        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 3, Tiling, SnowMaterial);
+        Material = mixmat(Material, SnowMaterial, w_snow);
+    }
+
+    Material.Albedo.rgb = mix(Material.Albedo.rgb, WaterColor, w_water);
+    Material.Roughness = max(PushConstants.RoughnessMultiplier * mix(Material.Roughness, 0.0, w_water * w_water * w_water), 0.01);
+    Material.AO = mix(Material.AO, 1.0, w_water);
+    Material.Normal = normalize(mix(normalize(TBN * Material.Normal), TBN[2], w_water));
+    Material.Specular = mix(0.1, 1.0, w_water);
 
     outColor = vec4(Material.Albedo.rgb, 1.0);
     outNormal = vec4(Material.Normal, 0.0);

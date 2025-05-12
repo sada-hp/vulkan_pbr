@@ -14,8 +14,8 @@ void main()
     vec4 ScreenWorld = vec4(ubo.ViewProjectionMatrixInverse * ScreenNDC);
 
     vec4 OldPosition = vec4(uboOld.ViewProjectionMatrix * ScreenWorld);
-    OldPosition.xy = saturateAngle(OldPosition.xy / OldPosition.w) * 0.5 + 0.5;
-    float inDepth = texture(depthImage, OldPosition.xy).r;
+    OldPosition /= OldPosition.w;
+    float inDepth = texture(depthImage, saturate(OldPosition.xy * 0.5 + 0.5)).r;
     vec4 WorldPosition = vec4(ubo.ViewProjectionMatrixInverse * vec4(ScreenNDC.xy, inDepth, 1.0));
     vec3 inWorld = WorldPosition.xyz / WorldPosition.w;
 
@@ -42,6 +42,14 @@ void main()
         Ray.Start = RayOrigin + Ray.Direction * t;
 
         MarchToCloud(Ray, distance(Ray.Start, Ray.End));
+
+        if (outScattering.a != 1.0)
+        {
+            vec4 clip = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
+            float outDepth = clip.z / clip.w;
+
+            outScattering = outDepth > inDepth ? mix(outScattering, texelFetch(oldImage, Texel, 0), 0.15) : vec4(0.0, 0.0, 0.0, 1.0);
+        }
     }
 
     imageStore(outImage, Texel, outScattering);

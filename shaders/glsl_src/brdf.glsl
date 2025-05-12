@@ -12,9 +12,9 @@ struct SMaterial
 
 SMaterial mixmat(in SMaterial A, in SMaterial B, float w)
 {
-    if (w == 1.0)
+    if (w >= 1.0)
         return B;
-    else if (w == 0.0)
+    else if (w <= 0.0)
         return A;
     else
     {
@@ -28,6 +28,19 @@ SMaterial mixmat(in SMaterial A, in SMaterial B, float w)
 
         return C;
     }
+}
+
+SMaterial mixmat(in SMaterial A, in SMaterial B, float wA, float wB)
+{
+    SMaterial C;
+    C.Albedo = wA * A.Albedo + wB * B.Albedo;
+    C.Normal = normalize(wA * A.Normal + wB * B.Normal);
+    C.Roughness = saturate(wA * A.Roughness + B.Roughness);
+    C.Specular = saturate(wA * A.Specular + wB * B.Specular);
+    C.Metallic = saturate(wA * A.Metallic + wB * B.Metallic);
+    C.AO = saturate(wA * A.AO + wB * B.AO);
+
+    return C;
 }
 
 vec3 F_FresnelSchlick(float Mu, vec3 f0)

@@ -19,17 +19,14 @@ void main()
         int ViewIndex = int(gl_GlobalInvocationID.z);
         vec2 UV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
 
-        vec2 s1 = 0.5 + 0.5 * vec2(cos(asin(UV.y * 2.0 - 1.0)), sin(acos(UV.x * 2.0 - 1.0)));
-        float mask = perlin(UV, 0.25 * frequency) * 0.5 + 0.5;
+        vec2 s1 = saturate(0.5 + 0.5 * vec2(cos(asin(UV.y * 2.0 - 1.0)), sin(acos(UV.x * 2.0 - 1.0))));
+        float mask = perlin(UV, 0.15 * frequency);
 
-        float w = 1.0 - fbm_worley(UV, frequency, worley_octaves);
+        float w = 1.0 - sqrt(fbm_worley(UV, 0.5 * frequency, worley_octaves));
 
-        float p1 = fbm_perlin(0.5 * (UV + s1.xy), frequency, perlin_octaves) * 0.5 + 0.5;
-        float p2 = fbm_perlin(UV, frequency, perlin_octaves) * 0.5 + 0.5;
-        float p = p1;
-        
-        float perlin_worley = remap(p2, 0.0, 1.0, w, 1.0);
+        float p = fbm_perlin(0.5 * (UV + s1.xy * mask), frequency, perlin_octaves) * 0.5 + 0.5;
+        float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
 
-        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(mix(p1, p2, mask), w, perlin_worley, 0.0));
+        imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(p, w, perlin_worley, 0.0));
     }
 }

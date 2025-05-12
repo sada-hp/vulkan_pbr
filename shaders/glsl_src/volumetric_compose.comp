@@ -52,11 +52,11 @@ void main()
 
         if (norm > 0.0)
         {
-            imageStore(outImage, Texel, mix(vec4(color_sample.xyz / 4.0, color_sample.a / norm), texelFetch(oldImage, Texel, 0), 0.35));
+            imageStore(outImage, Texel, mix(vec4(color_sample.xyz / 4.0, color_sample.a / norm), texelFetch(oldImage, Texel, 0), 0.15));
         }
         else
         {
-            imageStore(outImage, Texel, vec4(0.0, 0.0, 0.0, 1.0));
+            imageStore(outImage, Texel, mix(vec4(0.0, 0.0, 0.0, 1.0), texelFetch(oldImage, Texel, 0), 0.15));
         }
     }
 }

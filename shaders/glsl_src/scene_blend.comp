@@ -14,10 +14,10 @@ void main()
     
     if (Texel.x < Size.x && Texel.y < Size.y)
     {
-        float Depth = texelFetch(HDRDepthHR, Texel, 0).r;
+        vec2 UV = (vec2(Texel) + 0.5) / vec2(Size);
+        float Depth = texture(HDRDepthHR, UV).r;
         imageStore(HDRNextDepthLR, Texel / 2, vec4(Depth));
 
-        vec2 UV = (vec2(Texel) + 0.5) / vec2(Size);
         vec4 CloudsColor = texture(HDRColorLR, UV);
         vec4 SceneColor = imageLoad(HDRColorHR, Texel);
         imageStore(HDRColorHR, Texel, vec4(SceneColor.rgb * CloudsColor.a + CloudsColor.rgb, 1.0));

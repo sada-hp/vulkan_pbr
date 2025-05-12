@@ -118,9 +118,9 @@ void main()
         Vertex oldVertex = verticesOld.at[gl_GlobalInvocationID.x];
 
         int Level = int(vertex.Position.y);
-        float adjustScale = Scale * exp2(max(Level, deltaS));
         float vertexScale = Level == 0 ? 2.0 * Scale : Scale;
-        // vertexScale = vertexScale * mix(5.0, 1.0, smoothstep(0.0, 1.0, saturate(float(Rdelta) / float(ubo.CameraRadius - Rg))));
+        vertexScale = vertexScale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
+        float adjustScale = Scale * exp2(max(Level, deltaS));
 
         dvec3 Camera1 = ubo.WorldUp.xyz;
         dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, adjustScale));
@@ -200,10 +200,10 @@ void main()
                 Val.xy = mix(T2, T1, pole_w);
 
                 float h = Val.x;
+                vertices.at[gl_GlobalInvocationID.x].World = vec4(Normal, Val.x);
+                
                 Val.xy = vec2(MinHeight + Val.x * (MaxHeight - MinHeight), Val.y);
-
                 imageStore(terrainImage, Texel, Val);
-                vertices.at[gl_GlobalInvocationID.x].World = vec4(Normal * (Rg + Val.x), h);
             }
         }
     }

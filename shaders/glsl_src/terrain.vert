@@ -29,10 +29,10 @@ layout(location = 6) out mat3 TBN;
 
 layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
 
-void GetTBN()
+void GetTBN(float vertexScale)
 {
     dvec3 Camera = ubo.WorldUp.xyz;
-    float sampleScale = Scale * exp2(vertPosition.y);
+    float sampleScale = vertexScale * exp2(vertPosition.y);
     dmat3 Orientation = GetTerrainOrientation();
     vec4 dH = textureGather(NoiseMap, vec3(vertUV.xy, vertPosition.y), 0);
 
@@ -56,14 +56,15 @@ void main()
     NOISE_SEED = Seed;
     Level = int(vertPosition.y);
 
-    GetTBN();
     float vertexScale = Level == 0 ? 2.0 * Scale : Scale;
-    // vertexScale = mix(vertexScale, 2.0 * vertexScale, smoothstep(0.0, 1.0, saturate(float(ubo.CameraRadius - Rg) / float(5.0 * Rdelta))));
+    vertexScale = vertexScale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
+    
+    GetTBN(vertexScale);
     VertPosition = vertexScale * vertPosition.xz;
     Diameter = vertexScale * vertUV.w;
     Diameter2 = vertexScale * vertUV.z;
 
-    WorldPosition = vec4(worldPosition.xyz, 1.0);
+    WorldPosition = vec4(worldPosition.xyz * (Rg + MinHeight + worldPosition.w * (MaxHeight - MinHeight)), 1.0);
 
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
     Height = Seed == 0 ? 1.0 : worldPosition.w;

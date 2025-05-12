@@ -169,8 +169,6 @@ float SampleCone(RayMarch Ray, int mip)
     {
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
         cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
-
-        Ray.Stepsize *= i >= 5 ? 2.0 : 1.5;
     }
 
     return cone_density;
@@ -180,12 +178,12 @@ float MultiScatter(float phi, float e, float ds)
 {
     float luminance = 0.0;
     float a = 1.0, b = 1.0, c = 1.0;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 15; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
-        a *= 0.5;
-        b *= 0.45;
-        c *= 0.75;
+        a *= 0.6;
+        b *= 0.75;
+        c *= 0.95;
     }
 
     return saturate(luminance + Params.Ambient);
@@ -203,15 +201,7 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
     for (int i = 0; i < steps; i++)
     {
         UpdateRay(Ray);
-
-        if (outScattering.a > 0.1)
-        {
-            cone_density += SampleCone(Ray, mip + 1);
-        }
-        else
-        {
-            cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
-        }
+        cone_density += SampleCone(Ray, mip + 1);
     }
 
     return MultiScatter(phi, cone_density, Ray.Stepsize);
