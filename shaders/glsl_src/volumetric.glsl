@@ -5,6 +5,7 @@
 #include "noise.glsl"
 
 vec4 outScattering;
+float outDepth;
 
 layout(push_constant) uniform constants
 {
@@ -52,7 +53,6 @@ layout(set = 1, binding = 0) uniform CloudLayer
     float BottomSmoothnessFactor;
     float LightIntensity;
     float Ambient;
-    float Wind;
     float Density;
     float BottomBound;
     float TopBound;
@@ -68,7 +68,7 @@ layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
 layout(set = 1, binding = 7) uniform sampler2DArray WeatherMapCube;
 
 layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
-layout(set = 2, binding = 1) uniform sampler2D depthImage;
+layout(set = 2, binding = 1, rgba32f) uniform image2D depthImage;
 layout(set = 2, binding = 2) uniform sampler2D oldImage;
 layout(set = 2, binding = 3) uniform UnfiormBuffer2
 {
@@ -77,6 +77,7 @@ layout(set = 2, binding = 3) uniform UnfiormBuffer2
     dmat4 ViewMatrixInverse;
     dmat4 ViewProjectionMatrixInverse;
     dvec4 CameraPositionFP64;
+    mat4 PlanetMatrix;
     mat4 ProjectionMatrix;
     mat4 ProjectionMatrixInverse;
     vec4 CameraPosition;
@@ -128,7 +129,7 @@ vec3 GetUV(vec3 p, float scale, float wind)
 // Cheaper version of Sample-Density
 float SampleCloudShape(in RayMarch Ray, int lod)
 {
-    vec3 uv = GetUV(Ray.Position, 50.0, Params.Wind);
+    vec3 uv = GetUV(Ray.Position, 50.0, ubo.Wind * 0.01);
     float height = 1.0 - Ray.Height;
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
@@ -137,10 +138,13 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
     vec3 sx = Ray.Position / Params.TopBound;
-    vec2 anim = vec2(Params.Wind * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
-    vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim, lod).rgb;
+    vec2 anim = vec2(ubo.Wind * 0.01 * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
+
+    vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).rgb;
+    float weather2 = saturate(temp.r + 0.2);
+
+    temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim + vec2(sin(TWO_PI * temp.r), cos(TWO_PI * temp.b)) * 0.01, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
-    float weather2 = saturate(SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Params.Coverage * h1 * h2 * weather2;
@@ -151,7 +155,7 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 float SampleCloudDetail(in RayMarch Ray, float base, int lod)
 {
     float height = 1.0 - Ray.Height;
-    vec3 uv =  GetUV(Ray.Position, 200.0, -Params.Wind);
+    vec3 uv =  GetUV(Ray.Position, 200.0, -ubo.Wind * 0.01);
 
     vec4 high_frequency_noise = textureLod(CloudHighFrequency, uv, lod);
     float high_frequency_fbm = (high_frequency_noise.r * 1.0 + high_frequency_noise.g * 0.5 + high_frequency_noise.b * 0.25) / 1.75;
@@ -181,9 +185,9 @@ float MultiScatter(float phi, float e, float ds)
     for (int i = 0; i < 15; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
-        a *= 0.6;
+        a *= 0.75;
         b *= 0.75;
-        c *= 0.95;
+        c *= 0.85;
     }
 
     return saturate(luminance + Params.Ambient);
@@ -221,7 +225,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     float sample_density = 0.0;
 
     // skip empty space until cloud is found
-    int steps = int(min(32 * step_mod, 64)), i = 0;
+    int steps = int(min(32.0 * step_mod, 64)), i = 0;
     Ray.Stepsize = ray_length / float(steps);
 
     bool found = false;
@@ -261,7 +265,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     Ray.FirstHit = Ray.End;
     Ray.LastHit = Ray.Start;
     Ray.Direction = -Ray.Direction;
-    steps = min(int(16 * step_mod), 96);
+    steps = min(int(16.0 * step_mod), 96);
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToAEP = distance(Ray.FirstHit, Ray.Start);
@@ -273,7 +277,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
 
     float Dist = 0.0;
     float PrevDist = 0.0, DistAEP = 0.0;
-    float LightIntensity = Params.LightIntensity * MaxLightIntensity;
+    float LightIntensity = PI * Params.LightIntensity * MaxLightIntensity;
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);
@@ -305,6 +309,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
             if (outScattering.a < 1e-5)
                 break;
         }
+        
         DistAEP = Dist / ToAEP;
     }
 

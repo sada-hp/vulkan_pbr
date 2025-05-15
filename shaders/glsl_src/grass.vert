@@ -12,7 +12,6 @@ layout(push_constant) uniform constants
 struct Vertex
 {
     vec4 Position;
-    vec4 World;
     vec4 UV;
 };
 
@@ -30,27 +29,18 @@ vec4 Vertices[11] = {
     vec4(  0.0, 10.0, 0.0, 1.0)
 };
 
-int indices_l0[27] = {
-    0,1,2,
-    0,2,3,
-    3,2,4,
-    3,4,5,
-    5,4,6,
-    5,6,7,
-    7,6,8,
-    7,8,9,
-    9,8,10
-};
-
-int indices_l1[15] = {
-    0,1,4,
-    0,4,5,
-    5,4,8,
-    5,8,9,
-    9,8,10
-};
-
-int indices_l2[3] = {
+int indices[45] = {
+    // lod 0
+    0,1,2, 0,2,3,
+    3,2,4, 3,4,5,
+    5,4,6, 5,6,7,
+    7,6,8, 7,8,9,
+    9,8,10,
+    // lod 1
+    0,1,4, 0,4,5,
+    5,4,8, 5,8,9,
+    9,8,10,
+    // lod 2
     0,1,10
 };
 
@@ -64,83 +54,80 @@ layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
 	Vertex at[];
 } vertices;
 
-layout(location = 0) out vec4 CenterPosition;
-layout(location = 1) out vec4 WorldPosition;
-layout(location = 2) out float AO;
-layout(location = 3) out vec3 Normal;
+layout(location = 0) out vec4 ObjectCenter;
+layout(location = 1) out vec4 FragNormal;
+layout(location = 2) out vec3 SlopeNormal;
 
 void main()
 {
-    ivec2 noiseSize = ivec2(textureSize(NoiseMap, 0));
-    Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % (noiseSize.x * noiseSize.y)];
+    float Level = float(gl_BaseVertex);
+    ivec2 size = ivec2(textureSize(NoiseMap, 0));
+    int VertexCount = int(Level == 0 ? size.x * size.y : size.x * size.y - ceil(float(size.x) / 2.0) * ceil(float(size.y) / 2.0));
+    Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % VertexCount];
+    Level = vert.Position.w; // refine
 
-    WorldPosition = vec4(0.0, 0.0, 0.0, 1.0);
+    float sampleScale = Scale * exp2(Level);
+    vec3 ObjectCenterNorm = vert.Position.xyz;
 
-    float hFrac = vert.World.w;
-    float sampleScale = Scale * exp2(vert.Position.y);
-    vec3 ObjectCenterNorm = vert.World.xyz;
+    vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, Level), 0);
+    float Height = (dH.w - MinHeight) / (MaxHeight - MinHeight);
 
-    dmat3 Orientation = GetTerrainOrientation();
+    SlopeNormal = vec3(normalize(mat3(ubo.PlanetMatrix) * vec3(dH.w - dH.z, sampleScale, dH.w - dH.x)));
+    ObjectCenter = vec4(vert.Position.xyz * (Rg + dH.w), Height);
 
-    dvec3 Camera = ubo.WorldUp.xyz;
-    vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, vert.Position.y), 0);
-    vec3 Normal = vec3(normalize(Orientation * vec3(dH.w - dH.z, sampleScale, dH.w - dH.x)));
-    vec3 ObjectCenter = vert.World.xyz * (Rg + dH.w);
-
-    if (hFrac < 0.01 || saturate(10.0 * (1.0 - saturate(abs(dot(Normal, ObjectCenterNorm))))) > 0.5)
+    vec2 WorldUV = vec2(0.0), UVdir = vec2(0.0);
+    if (abs(ObjectCenter.y) > abs(ObjectCenter.x) && abs(ObjectCenter.y) > abs(ObjectCenter.z))
     {
-        WorldPosition = vec4(0.0, 0.0, -1.0, 1.0);
+        WorldUV = ObjectCenter.xz;
+        UVdir = ObjectCenterNorm.xz;
+    }
+    else if (abs(ObjectCenter.z) > abs(ObjectCenter.x) && abs(ObjectCenter.z) > abs(ObjectCenter.y))
+    {
+        WorldUV = ObjectCenter.xy;
+        UVdir = ObjectCenterNorm.xy;
     }
     else
     {
-        float a1 = abs(dot(ObjectCenterNorm, vec3(0, 1, 0)));
-        float a2 = abs(dot(ObjectCenterNorm, vec3(0, 0, 1)));
-        float a3 = abs(dot(ObjectCenterNorm, vec3(1, 0, 0)));
-
-        float anim = ubo.Time * 0.005;
-        vec2 hash = a1 * noise2((ObjectCenter.xz + 1e3 * Scale * ObjectCenterNorm.xz * gl_InstanceIndex) * 1e-3)
-            + a2 * noise2((ObjectCenter.xy + 1e3 * Scale * ObjectCenterNorm.xy * gl_InstanceIndex) * 1e-3)
-            + a3 * noise2((ObjectCenter.yz + 1e3 * Scale * ObjectCenterNorm.yz * gl_InstanceIndex) * 1e-3);
-
-        vec3 LocalPosition;
-        if (In.Lod == 0)
-        {
-            LocalPosition = Vertices[indices_l0[gl_VertexIndex]].xyz;
-        }
-        else if (In.Lod == 1)
-        {
-            LocalPosition = Vertices[indices_l1[gl_VertexIndex]].xyz;
-        }
-        else
-        {
-            LocalPosition = Vertices[indices_l2[gl_VertexIndex]].xyz;
-        }
-
-        AO = saturate(LocalPosition.y / 10.0);
-        LocalPosition *= vec2(6.0, 10.0).xyx;
-        LocalPosition += sampleScale * vec3(hash.x, 0.0, hash.y);
-
-        float lean = HALF_PI * smootherstep(0.0, 1.0, AO) * (a1 * perlin(5.0 * ObjectCenterNorm.xz + anim, 100.0) + a2 * perlin(5.0 * ObjectCenterNorm.xy + anim, 100.0) + a3 * perlin(5.0 * ObjectCenterNorm.yz + anim, 100.0));
-        mat3 RotX = mat3(vec3(1.0, 0.0, 0.0), 
-            vec3(0.0, cos(lean), -sin(lean)), 
-            vec3(0.0, sin(lean), cos(lean))
-        );
-
-        float bank = 0.5 * (a1 * noise(ObjectCenter.xz) + a2 * noise(ObjectCenter.xy) + a3 * noise(ObjectCenter.yz));
-        mat3 RotZ = mat3(vec3(cos(bank), sin(bank), 0.0), vec3(-sin(bank), cos(bank), 0.0), vec3(0.0, 0.0, 1.0));
-
-        float face = TWO_PI * bank;
-        mat3 RotY = mat3(vec3(cos(face), 0.0, -sin(face)), 
-            vec3(0.0, 1.0, 0.0), 
-            vec3(sin(face), 0.0, cos(face))
-        );
-
-        mat3 Rot = mat3(Orientation * RotX * RotZ * RotY);
-        WorldPosition = vec4(Rot * LocalPosition + ObjectCenter, 1.0);
+        WorldUV = ObjectCenter.yz;
+        UVdir = ObjectCenterNorm.yz;
     }
 
-    gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
-    CenterPosition.xyz = ObjectCenter - ubo.CameraPosition.xyz;
-    WorldPosition.xyz -= ubo.CameraPosition.xyz;
-    Normal = ObjectCenterNorm;
+    float anim = ubo.Wind * ubo.Time * 0.01;
+    vec2 hash = noise2(floor(WorldUV + 1e3 * Scale * UVdir * gl_InstanceIndex) * 1e-3);
+
+    if (Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height- 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
+    {
+        gl_Position = vec4(-2.0);
+    }
+    else
+    {
+        vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (In.Lod == 2 ? 42 : (In.Lod == 1 ? 27 : 0))]].xyz;
+        float AO = saturate(0.1 + LocalPosition.y / 10.0);
+        
+        LocalPosition = LocalPosition * vec2(6.0, 10.0).xyx + 0.5 * sampleScale * vec3(hash.x, 0.0, hash.y);
+
+        float wind = HALF_PI * smootherstep(0.0, 1.0, AO) * perlin(5.0 * UVdir + anim, 100.0);
+        float lean = 0.25 * smootherstep(0.0, 1.0, AO) * hash.y;
+        float bank = 0.5 * noise(WorldUV) + perlin(15.0 * -UVdir + anim, 200.0);
+        float face = TWO_PI * (1.0 - 2.0 * worley(WorldUV, 25.0));
+
+        vec4 windTrig = vec4(cos(wind), sin(wind), 0.0, 0.0);
+        vec4 leanTrig = vec4(cos(lean), sin(lean), 0.0, 0.0);
+        vec4 bankTrig = vec4(cos(bank), sin(bank), 0.0, 0.0);
+        vec4 faceTrig = vec4(cos(face), sin(face), 0.0, 0.0);
+
+        windTrig.z = -windTrig.y;
+        leanTrig.z = -leanTrig.y;
+        bankTrig.z = -bankTrig.y;
+        faceTrig.z = -faceTrig.y;
+
+        mat3 RotWind = mat3(vec3(1.0, 0.0, 0.0), windTrig.wxz, windTrig.wyx);
+        mat3 RotLean = mat3(vec3(1.0, 0.0, 0.0), leanTrig.wxz,  leanTrig.wyx);
+        mat3 RotSide = mat3(vec3(bankTrig.xyw),  bankTrig.zxw, vec3(0.0, 0.0, 1.0));
+        mat3 RotYaw = mat3(faceTrig.xwz, vec3(0.0, 1.0, 0.0), faceTrig.ywx);
+        mat3 Rot = mat3(ubo.PlanetMatrix) * mat3(RotWind * RotLean * RotSide * RotYaw);
+
+        FragNormal = vec4(Rot * normalize(vec3(0.0, 0.0, 1.0)), AO);
+        gl_Position = vec4(ubo.ViewProjectionMatrix * vec4(Rot * LocalPosition + ObjectCenter.xyz, 1.0));
+    }
 }

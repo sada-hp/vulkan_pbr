@@ -18,6 +18,7 @@ struct UniformBuffer
 	glm::dmat4 ViewMatrixInverse;
 	glm::dmat4 ViewProjectionMatrixInverse;
 	glm::dvec4 CameraPositionFP64;
+	glm::mat4 PlanetMatrix;
 	glm::mat4 ProjectionMatrix;
 	glm::mat4 ProjectionMatrixInverse;
 	glm::vec4 CameraPosition;
@@ -28,6 +29,7 @@ struct UniformBuffer
 	glm::vec4 CameraForward; 
 	glm::vec2 Resolution;
 	double CameraRadius;
+	float Wind;
 	float Time;
 };
 /*
@@ -42,7 +44,6 @@ struct CloudLayerProfile
 
 	float Coverage = 0.5;
 	float Density = 0.006;
-	float WindSpeed = 1.0;
 };
 /*
 * 

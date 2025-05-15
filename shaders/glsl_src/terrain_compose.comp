@@ -5,13 +5,18 @@
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
-struct Vertex
+struct TerrainVertex
 {
     vec4 Position;
+    vec4 World;
     vec4 UV;
 };
 
 layout (binding = 0, rgba32f) uniform image2DArray terrainImage;
+layout (std140, binding = 3) buffer TerrainReferenceBuffer
+{
+	TerrainVertex at[];
+} vertices;
 
 layout(push_constant) uniform constants
 {
@@ -29,10 +34,12 @@ void main()
 {
     ivec3 Texel = ivec3(imageSize(terrainImage).xy / 4 + gl_GlobalInvocationID.xy, PushConstants.Sample);
     ivec3 OldTexel = ivec3(gl_GlobalInvocationID.xy * 2, PushConstants.Sample - 1);
-    if (OldTexel.x < imageSize(terrainImage).x && OldTexel.y < imageSize(terrainImage).y)
+    ivec3 NewTexel = ivec3(gl_GlobalInvocationID.xy, PushConstants.Sample);
+    
+    vec4 Value = vec4(0.0); 
+    if (PushConstants.Sample > 0 && OldTexel.x < imageSize(terrainImage).x && OldTexel.y < imageSize(terrainImage).y)
     {
         float Norm = 1.0;
-        vec4 Value = vec4(0.0); 
         vec4 Temp1 = imageLoad(terrainImage, OldTexel);
 
         vec4 Temp2 = vec4(0.0);
@@ -56,10 +63,9 @@ void main()
             Norm++;
         }
 
-        // Value.x = max(max(Temp1.x, Temp2.x), max(Temp3.x, Temp4.x));
         // Value.y = (Temp1.y + Temp2.y + Temp3.y + Temp4.y) / Norm;
-        Value = (Temp1 + Temp2 + Temp3 + Temp4) / Norm;
-
+        // Value = (Temp1 + Temp2 + Temp3 + Temp4) / Norm;
+        Value.x = max(max(Temp1.x, Temp2.x), max(Temp3.x, Temp4.x));
         imageStore(terrainImage, Texel, Value);
     }
 }

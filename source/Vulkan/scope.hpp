@@ -42,6 +42,8 @@ public:
 
 	RenderScope& CreateSimpleRenderPass();
 
+	RenderScope& CreateTerrainRenderPass();
+
 	RenderScope& CreateDescriptorPool(uint32_t setsCount, const std::vector<VkDescriptorPoolSize>& poolSizes);
 
 	void RecreateSwapchain(const VkSurfaceKHR& surface);
@@ -67,6 +69,8 @@ public:
 	inline const VkRenderPass& GetCubemapPass() const { return m_CubemapPass; };
 
 	inline const VkRenderPass& GetSimplePass() const { return m_SimplePass; };
+
+	inline const VkRenderPass& GetTerrainPass() const { return m_TerrainPass; };
 
 	inline const VkSwapchainKHR& GetSwapchain() const { return m_Swapchain; };
 
@@ -108,6 +112,7 @@ private:
 	VkRenderPass m_PostProcessPass = VK_NULL_HANDLE;
 	VkRenderPass m_CubemapPass = VK_NULL_HANDLE;
 	VkRenderPass m_SimplePass = VK_NULL_HANDLE;
+	VkRenderPass m_TerrainPass = VK_NULL_HANDLE;
 
 	VkExtent2D m_SwapchainExtent = { 0, 0 };
 };

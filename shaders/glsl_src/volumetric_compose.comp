@@ -3,7 +3,7 @@
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 layout(binding = 0, rgba32f) uniform image2D outImage;
-layout(binding = 1) uniform sampler2D depthImage;
+layout(binding = 1, rgba32f) uniform image2D depthImage;
 layout(binding = 2) uniform sampler2D oldImage;
 
 layout(push_constant) uniform constants
@@ -21,11 +21,13 @@ void main()
     {
         float norm = 0.0;
         vec4 color_sample = vec4(0.0);
+        float depth_sample = 0.0;
 
         vec4 temp = imageLoad(outImage, Texel + ivec2(1, 0));
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
+            depth_sample = max(depth_sample, imageLoad(depthImage, Texel + ivec2(1, 0)).g);
             norm++;
         }
 
@@ -33,6 +35,7 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
+            depth_sample = max(depth_sample, imageLoad(depthImage, Texel + ivec2(-1, 0)).g);
             norm++;
         }
 
@@ -40,6 +43,7 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
+            depth_sample = max(depth_sample, imageLoad(depthImage, Texel + ivec2(0, 1)).g);
             norm++;
         }
 
@@ -47,16 +51,19 @@ void main()
         if (temp.xyz != vec3(0.0))
         {
             color_sample += temp;
+            depth_sample = max(depth_sample, imageLoad(depthImage, Texel + ivec2(0, -1)).g);
             norm++;
         }
 
         if (norm > 0.0)
         {
-            imageStore(outImage, Texel, mix(vec4(color_sample.xyz / 4.0, color_sample.a / norm), texelFetch(oldImage, Texel, 0), 0.15));
+            imageStore(outImage, Texel, vec4(mix(color_sample.xyz / 4.0, texelFetch(oldImage, Texel, 0).rgb, 0.25), color_sample.a / norm));
+            imageStore(depthImage, Texel, vec4(imageLoad(depthImage, Texel).r, depth_sample, 0.0, 0.0));
         }
         else
         {
-            imageStore(outImage, Texel, mix(vec4(0.0, 0.0, 0.0, 1.0), texelFetch(oldImage, Texel, 0), 0.15));
+            imageStore(outImage, Texel, vec4(0.0, 0.0, 0.0, 1.0));
+            imageStore(depthImage, Texel, vec4(0.0));
         }
     }
 }

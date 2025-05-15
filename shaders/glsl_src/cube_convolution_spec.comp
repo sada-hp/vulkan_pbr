@@ -16,7 +16,7 @@ layout(push_constant) uniform constants
 layout(binding = 1) uniform sampler2D TransmittanceLUT;
 layout(binding = 2) uniform sampler2D IrradianceLUT;
 layout(binding = 3) uniform sampler3D InscatteringLUT;
-layout(binding = 4) uniform samplerCube EnvironmentLUT;
+layout(binding = 4) uniform samplerCubeArray EnvironmentLUT;
 
 layout(set = 1, binding = 0, rgba32f) uniform writeonly imageCube outImage;
 layout(std140, set = 1, binding = 1) readonly buffer PrecomputeBuffer
@@ -73,7 +73,7 @@ void main()
 
                 float MipLevel = max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0f);
 
-                outColor += textureLod(EnvironmentLUT, L, MipLevel).rgb * NdotL;
+                outColor += textureLod(EnvironmentLUT, vec4(L, 0), MipLevel).rgb * NdotL;
                 totalWeight += NdotL;
             }
         }

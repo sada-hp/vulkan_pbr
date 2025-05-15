@@ -24,7 +24,6 @@ layout(binding = 14) uniform CloudLayer
     float BottomSmoothnessFactor;
     float LightIntensity;
     float Ambient;
-    float WindSpeed;
     float Density;
     float BottomBound;
     float TopBound;
@@ -49,7 +48,7 @@ float SampleCloud(vec3 x0, float transmittance, float height)
 {
     const int lod = 1;
 
-    vec3 uv = GetUV(x0, 50.0, Clouds.WindSpeed);
+    vec3 uv = GetUV(x0, 50.0, ubo.Wind * 0.01);
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
 
@@ -57,7 +56,7 @@ float SampleCloud(vec3 x0, float transmittance, float height)
     float h2 = saturate(remap(1.0 - height, 0.0, Clouds.BottomSmoothnessFactor, 0.0, 1.0));
 
     vec3 sx = x0 / Clouds.TopBound;
-    vec2 anim = vec2(Clouds.WindSpeed * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
+    vec2 anim = vec2(ubo.Wind * 0.01 * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
     vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).r + 0.2);
@@ -95,14 +94,14 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
 {
     float Re = length(Eye);
     float len = distance(Eye, World);
-    LightIntensity = mix(1.0, 0.05, smoothstep(0.0, 1.0, Clouds.Coverage)) * MaxLightIntensity;
+    LightIntensity = Clouds.LightIntensity * MaxLightIntensity;
     
     if (Clouds.Coverage == 0.0 || Re > Rt + Rcdelta)
     {
-        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT,  Eye, World, Sun, Atmosphere);
+        AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, World, Sun, Atmosphere);
         Shadow = Atmosphere.Shadow <= 0.1 ? mix(0.05, 1.0, Atmosphere.Shadow / 0.1) : 1.0;
         Atmosphere.S *= Shadow * LightIntensity;
-        Atmosphere.E *= Shadow * LightIntensity;
+        Atmosphere.E *= Shadow * Atmosphere.Shadow * LightIntensity;
         Atmosphere.L *= Shadow;
         return;
     }
@@ -149,7 +148,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
         w0 = w1;
     }
 
-    Atmosphere.E = AtmosphereEnd.E * Shadow * LightIntensity;
+    Atmosphere.E = AtmosphereEnd.E * Atmosphere.Shadow * Shadow * LightIntensity;
     Atmosphere.L = AtmosphereEnd.L * Shadow;
 }
 
@@ -173,8 +172,6 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
     float LightIntensity = MaxLightIntensity;
     SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow, LightIntensity);
 
-    vec3 Illumination = LightIntensity * Atmosphere.L * NdotL;
-
     float A = Material.Roughness;
     float A2 = A * A;
 
@@ -188,28 +185,27 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
         float G  = G_GeometrySmith(NdotV, NdotL, A);
         float D  = D_DistributionGGX(NdotH, A);
 
-        Lo += ONE_OVER_PI * F * G * D / (4.0 * NdotL * NdotV + 0.001);
-        Lo += ONE_OVER_PI * kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
+        Lo += F * G * D / (4.0 * NdotL * NdotV + 0.001);
+        Lo += kD * DisneyDiffuse(Material.Albedo.rgb, NdotL, NdotV, LdotH, A);
     }
 
     vec3 R = 2.0f * N * dot(V, N) - V;
     R = mix(N, R, (1.0f - A2) * (sqrt(1.0f - A2) + A2));
     vec3 reflection = textureLod(SpecularLUT, R, A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;
     vec2 brdf  = texture(BRDFLUT, vec2(NdotV, A2)).rg;
-    vec3 irradiance = Atmosphere.E + texture(DiffuseLUT, N).rgb;
+    vec3 irradiance = max(NdotL, 0.05) * Shadow * texture(DiffuseLUT, N).rgb;
 
     vec3 diffuse = Material.Albedo.rgb * irradiance;
     vec3 specular = reflection * (F * brdf.x + brdf.y);
-    vec3 ambient  = Atmosphere.L * Material.AO * (kD * diffuse + specular);
+    vec3 ambient  = Atmosphere.Shadow * LightIntensity * Material.AO * (kD * diffuse + specular);
     vec3 scattering = Atmosphere.S;
 
-    return scattering + ambient + Illumination * Lo;
-    // return ambient + Illumination * Lo;
+    return scattering + ambient + Lo * (Atmosphere.L + Atmosphere.E) * ONE_OVER_PI * LightIntensity * NdotL;
 }
-
+ 
 vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
 {
-    vec3 SkyColor = SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, View, Sun);
+    vec3 SkyColor = vec3(0.0);
     float Hit = SphereMinDistance(Eye, View, vec3(0.0), Rct - Rcdelta * 0.35);
 
     if (Hit > 0.0)
@@ -218,7 +214,7 @@ vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
 
         SAtmosphere Atmosphere;
         AerialPerspective(TransmittanceLUT, IrradianceLUT, InscatteringLUT, Eye, HitPoint, Sun, Atmosphere);
-        float PhaseF = HGDPhaseCloud(dot(Sun, View));
+        float PhaseF = HGDPhase(0.75 * dot(Sun, View));
         
         vec3 n = normalize(HitPoint);
         float pole = abs(dot(n, vec3(0, 1, 0)));
@@ -232,19 +228,19 @@ vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
         float mask3 = left * texture(WeatherMap, vec2(85.0, 25.0) * uv1).r + right * texture(WeatherMap, vec2(85.0, 25.0) * uv2).r;
 
         float altocumulus = (left * texture(WeatherMap, 700.0 * uv1).g + right * texture(WeatherMap, 700.0 * uv2).g);
-        float altocumulus_mask2 = saturate(mask2 - 0.25) / 0.75;
-        float altocumulus_mask1 = saturate(altocumulus_mask2 * remap(saturate(mask1 - 0.2) / 0.8, altocumulus_mask2, 1.0, 0.0, 1.0));
+        float altocumulus_mask2 = dampen(mask2, 0.25);
+        float altocumulus_mask1 = saturate(altocumulus_mask2 * remap(dampen(mask1, 0.2), altocumulus_mask2, 1.0, 0.0, 1.0));
         altocumulus = altocumulus_mask1 * altocumulus_mask2 * altocumulus;
 
         float cirrus = (left * texture(WeatherMap, vec2(125,15) * uv1).r + right * texture(WeatherMap, vec2(125,15) * uv2).r);
-        float cirrus_mask = saturate(mask3 - 0.35) / 0.65;
+        float cirrus_mask = dampen(mask3, 0.35);
         cirrus = cirrus_mask * cirrus;
 
-        float high_level = saturate((saturate((cirrus + altocumulus) - 0.2) / 0.8) + (cirrus_mask * saturate((1.0 - altocumulus_mask2) - 0.5) / 0.5) * cirrus);
-        SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * high_level;
+        float high_level = saturate(dampen(cirrus + altocumulus, 0.2) + cirrus_mask * dampen(1.0 - altocumulus_mask2, 0.5) * cirrus);
+        SkyColor += PhaseF * Atmosphere.T * Atmosphere.L * dampen(high_level, 0.005);
     }
 
-    return SkyColor * MaxLightIntensity;
+    return (SkyColor + SkyScattering(TransmittanceLUT, InscatteringLUT, Eye, View, Sun)) * MaxLightIntensity;
 }
 
 void main()

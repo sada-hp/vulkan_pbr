@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     dmat4 ViewMatrixInverse;
     dmat4 ViewProjectionMatrixInverse;
     dvec4 CameraPositionFP64;
+    mat4 PlanetMatrix;
     mat4 ProjectionMatrix;
     mat4 ProjectionMatrixInverse;
     vec4 CameraPosition;
@@ -18,6 +19,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     vec4 CameraForward;
     vec2 Resolution;
     double CameraRadius;
+    float Wind;
     float Time;
 } ubo;
 

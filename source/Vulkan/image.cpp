@@ -164,14 +164,14 @@ VulkanImage& VulkanImage::TransferOwnership(VkCommandBuffer cmd1, VkCommandBuffe
 	barrier.dstQueueFamilyIndex = queue2;
 	barrier.image = image;
 	barrier.subresourceRange = subRange;
-	barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-	barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
 
 	if (cmd1 != VK_NULL_HANDLE)
-		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkCmdPipelineBarrier(cmd1, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	if (cmd2 != VK_NULL_HANDLE)
-		vkCmdPipelineBarrier(cmd2, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
+		vkCmdPipelineBarrier(cmd2, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier);
 
 	return *this;
 }
@@ -196,13 +196,18 @@ VulkanImage& VulkanImage::GenerateMipMaps()
 
 VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd)
 {
+	return GenerateMipMaps(cmd, subRange.baseMipLevel, subRange.levelCount, subRange.baseArrayLayer, subRange.layerCount);
+}
+
+VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd, uint32_t baselevel, uint32_t levels, uint32_t baselayer, uint32_t layers)
+{
 	if (subRange.levelCount == 1) {
-		TransitionLayout(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		TransitionLayout(cmd, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, baselevel, levels, baselayer, layers), descriptorInfo.imageLayout, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 		return *this;
 	}
 
-	TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-	for (int k = 0; k < subRange.layerCount; k++) {
+	TransitionLayout(cmd, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, baselevel, levels, baselayer, layers), descriptorInfo.imageLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+	for (int k = baselayer; k < baselayer + layers; k++) {
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.image = image;
@@ -210,14 +215,14 @@ VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd)
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.subresourceRange.aspectMask = subRange.aspectMask;
 		barrier.subresourceRange.baseArrayLayer = k;
-		barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+		barrier.subresourceRange.layerCount = layers - baselayer - k;
 		barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
 		int32_t mipWidth = imageSize.width;
 		int32_t mipHeight = imageSize.height;
 		int32_t mipDepth = imageSize.depth;
 
-		for (uint32_t i = 1; i < subRange.levelCount; i++) {
+		for (uint32_t i = baselevel + 1; i < baselevel + levels; i++) {
 			barrier.subresourceRange.baseMipLevel = i;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -266,9 +271,9 @@ VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd)
 			if (mipHeight > 1) mipHeight /= 2;
 		}
 
-		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.baseMipLevel = baselevel;
 		barrier.subresourceRange.layerCount = 1;
-		barrier.subresourceRange.levelCount = subRange.levelCount;
+		barrier.subresourceRange.levelCount = levels;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;

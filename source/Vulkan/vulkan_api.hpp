@@ -8,13 +8,15 @@
 struct VulkanSynchronization
 {
 	VkCommandBuffer Commands;
-	VkSemaphore Semaphore;
-	VkFence Fence;
+	std::vector<VkSemaphore> Semaphores;
+
+	std::vector<VkPipelineStageFlags> waitStages;
+	std::vector<VkSemaphore> waitSemaphores;
 };
 
-VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out);
+VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, uint32_t semcount, VulkanSynchronization* out);
 
-VkBool32 CreateSyncronizationStruct2(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* out);
+VkBool32 CreateSyncronizationStruct2(const VkDevice& device, const VkCommandPool pool, uint32_t count, uint32_t semcount, VulkanSynchronization* out);
 
 VkBool32 DestroySyncronizationStruct(const VkDevice& device, const VkCommandPool pool, uint32_t count, VulkanSynchronization* in);
 /*

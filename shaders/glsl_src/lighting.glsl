@@ -281,7 +281,7 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         }
         inscatter.w *= smoothstep(0.00, 0.02, EdotL);
 
-        Atmosphere.Shadow = saturate(PdotL);
+        Atmosphere.Shadow = smootherstep(0.0, 1.0, saturate(PdotL + 0.15));
         Atmosphere.S = (max(inscatter.rgb * PhaseR, 0.0) + max(GetMie(inscatter) * PhaseM, 0.0));
 
         if (EdotL < 0.0)
@@ -313,18 +313,18 @@ vec3 SkyScattering(sampler2D TransmittanceLUT, sampler3D InscatteringLUT, vec3 E
     {
         if (Re < Rt)
         {
-            Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
+            Color += max(PhaseR * Scattering.rgb, 0.0) + max(mix(PhaseHGD, 0.1 * PhaseHGD, smootherstep(0.0, 1.0, VdotL)) *  GetMie(Scattering), 0.0);
         }
         else
         {
-            Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD * GetMie(Scattering), 0.0);
+            Color += max(PhaseR * Scattering.rgb, 0.0) + max(PhaseHGD *  GetMie(Scattering), 0.0);
             Color *= smootherstep(0.0, 1.0, 1.0 - saturate(max(min(D.x, D.y) / max(D.x, D.y), 0.0)));
         }
     }
 
- #ifndef SKY_SCATTER_ONLY   
+#ifndef SKY_SCATTER_ONLY   
     // Sun
-    Color += TWO_PI * Transmittance * vec3(smoothstep(0.9999, 1.0, max(0.0, VdotL)));
+    Color += TWO_PI * Transmittance * vec3(smoothstep(0.99995, 1.0, max(0.0, VdotL)));
 #endif
 
     return Color;

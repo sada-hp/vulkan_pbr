@@ -16,56 +16,46 @@ layout(push_constant) uniform constants
 } PushConstants;
 
 layout(location = 0) in vec4 vertPosition;
-layout(location = 1) in vec4 worldPosition;
-layout(location = 2) in vec4 vertUV;
+layout(location = 1) in vec4 vertUV;
 
 layout(location = 0) out vec4 WorldPosition;
-layout(location = 1) out vec2 VertPosition;
-layout(location = 2) out flat float Diameter;
-layout(location = 3) out flat float Diameter2;
-layout(location = 4) out float Height;
-layout(location = 5) out flat int Level;
-layout(location = 6) out mat3 TBN;
+layout(location = 1) out vec4 NormalData;
+layout(location = 2) out float Height;
 
-layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
+layout(set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 
-void GetTBN(float vertexScale)
+void GetNormalData(float vertexScale, inout vec4 dH)
 {
-    dvec3 Camera = ubo.WorldUp.xyz;
-    float sampleScale = vertexScale * exp2(vertPosition.y);
-    dmat3 Orientation = GetTerrainOrientation();
-    vec4 dH = textureGather(NoiseMap, vec3(vertUV.xy, vertPosition.y), 0);
+    float Level = vertPosition.w;
 
-    vec3 Normal = normalize(vec3(dH.w - dH.z, sampleScale, dH.w - dH.x));
+    if (vertUV.x > 0.9 || vertUV.y > 0.9)
+    {
+        float f = smootherstep(0.0, 1.0, (max(vertUV.x, vertUV.y) - 0.9) / 0.1);
+        dH = mix(textureGather(NoiseMap, vec3(vertUV.xy, Level), 0), textureGather(NoiseMap, vec3(vertUV.xy * 0.5 + 0.25, Level + 1), 0), f);
+        vertexScale = mix(vertexScale, 2.0 * vertexScale, f);
+    }
+    else if (vertUV.x < 0.1 || vertUV.y < 0.1)
+    {
+        float f = smootherstep(0.0, 1.0, 1.0 - min(vertUV.x, vertUV.y) / 0.1);
+        dH = mix(textureGather(NoiseMap, vec3(vertUV.xy, Level), 0), textureGather(NoiseMap, vec3(vertUV.xy * 0.5 + 0.25, Level + 1), 0), f);
+        vertexScale = mix(vertexScale, 2.0 * vertexScale, f);
+    }
+    else
+    {
+        dH = textureGather(NoiseMap, vec3(vertUV.xy, Level), 0);
+    }
 
-    vec2 dUV = vec2(sampleScale / vertUV.w, 0.0);
-    float f = 1.0 / (dUV.x * dUV.x);
-
-    vec3 Tangent;
-    Tangent.x = f * dUV.x * sampleScale;
-    Tangent.y = f * dUV.x * (dH.z - dH.w);
-    Tangent.z = 0.0;
-
-    Tangent = normalize(Tangent);
-    vec3 Bitangent = normalize(cross(Normal, Tangent));
-    TBN = mat3(Orientation * mat3(Tangent, Bitangent, Normal));
+    float sampleScale = vertexScale * exp2(Level);
+    NormalData = vec4(dH.w - dH.z, dH.w - dH.x, vertUV.w, sampleScale);
+    Height = (dH.w - MinHeight) / (MaxHeight - MinHeight);
 }
 
 void main()
 {
-    NOISE_SEED = Seed;
-    Level = int(vertPosition.y);
-
-    float vertexScale = Level == 0 ? 2.0 * Scale : Scale;
-    vertexScale = vertexScale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
+    vec4 dH;
+    float vertexScale = Scale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
+    GetNormalData(vertexScale, dH);
     
-    GetTBN(vertexScale);
-    VertPosition = vertexScale * vertPosition.xz;
-    Diameter = vertexScale * vertUV.w;
-    Diameter2 = vertexScale * vertUV.z;
-
-    WorldPosition = vec4(worldPosition.xyz * (Rg + MinHeight + worldPosition.w * (MaxHeight - MinHeight)), 1.0);
-
+    WorldPosition = vec4(vertPosition.xyz * (Rg + dH.w), 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
-    Height = Seed == 0 ? 1.0 : worldPosition.w;
 }

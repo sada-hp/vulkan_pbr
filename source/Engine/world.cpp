@@ -48,9 +48,34 @@ namespace GR
 	void World::DrawScene(double Delta)
 	{
 		auto renderer = static_cast<VulkanBase*>(m_Scope);
+		auto view = Registry.view<PBRObject, Components::WorldMatrix>();
+
+		if (view.size_hint() > 0)
+		{
+			renderer->_beginObjectsPass();
+			for (const auto& [ent, gro, world] : view.each())
+			{
+				PBRConstants constants{};
+				constants.Offset = world.GetOffset();
+				constants.Orientation = glm::mat3x4(world.GetRotation());
+				constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
+				constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
+				constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
+				constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
+
+				if (gro.is_dirty())
+				{
+					renderer->_updateObject(ent, Registry);
+				}
+
+				renderer->_drawObject(gro, constants);
+			}
+			renderer->_endObjectsPass();
+		}
 
 		if (m_TerrainEntity != entt::entity(-1))
 		{
+			renderer->_beginTerrainPass();
 			PBRConstants constants{};
 			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(m_TerrainEntity).Value, 1.0);
 			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(m_TerrainEntity).Value;
@@ -64,25 +89,7 @@ namespace GR
 			}
 
 			renderer->_drawTerrain(tro, constants);
-		}
-
-		auto view = Registry.view<PBRObject, Components::WorldMatrix>();
-		for (const auto& [ent, gro, world] : view.each())
-		{
-			PBRConstants constants{};
-			constants.Offset = world.GetOffset();
-			constants.Orientation = glm::mat3x4(world.GetRotation());
-			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
-			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
-			constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
-			constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
-
-			if (gro.is_dirty())
-			{
-				renderer->_updateObject(ent, Registry);
-			}
-
-			renderer->_drawObject(gro, constants);
+			renderer->_endTerrainPass();
 		}
 	}
 

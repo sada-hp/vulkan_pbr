@@ -13,44 +13,22 @@ layout(push_constant) uniform constants
 }
 PushConstants;
 
-layout(set = 1, binding = 0) uniform sampler2DArray AlbedoMap;
-layout(set = 1, binding = 1) uniform sampler2DArray NormalHeightMap;
-layout(set = 1, binding = 2) uniform sampler2DArray ARMMap;
-
-layout(set = 2, binding = 0) uniform sampler2DArray NoiseMap;
-layout(set = 2, binding = 1) uniform sampler2DArray WaterMap;
-
 layout(location = 0) in vec4 WorldPosition;
-layout(location = 1) in vec2 VertPosition;
-layout(location = 2) in flat float Diameter;
-layout(location = 3) in flat float Diameter2;
-layout(location = 4) in float Height;
-layout(location = 5) in flat int Level;
-layout(location = 6) in mat3 TBN;
+layout(location = 1) in vec4 NormalData;
+layout(location = 2) in float Height;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outDeferred;
 
-float SampleWater(vec3 UVW)
-{
-    float r = textureLod(WaterMap, UVW, 0).r;
-    for (int i = int(UVW.z + 1); i < textureSize(WaterMap, 0).z; i++)
-    {
-        UVW = vec3(UVW.xy * 0.5 + 0.25, UVW.z + 1.0);
-        r = max(r, textureLod(WaterMap, UVW, 0).r);
-    }
-
-    return r;
-}
+// float SampleWater(vec3 UVW)
+// {
+//     return max(textureLod(WaterMap, UVW, 0).r, textureLod(WaterMap, vec3(UVW.xy * 0.5 + 0.25, UVW.z + 1), 0).r);
+// }
 
 void main()
 {
-    HexParams Tiling;
-
     vec2 WorldUV = vec2(0.0);
-    vec3 WaterUV = vec3(0.5 + VertPosition / Diameter, Level);
-
     if (abs(WorldPosition.y) > abs(WorldPosition.x) && abs(WorldPosition.y) > abs(WorldPosition.z))
         WorldUV = WorldPosition.xz;
     else if (abs(WorldPosition.z) > abs(WorldPosition.x) && abs(WorldPosition.z) > abs(WorldPosition.y))
@@ -58,56 +36,7 @@ void main()
     else
         WorldUV = WorldPosition.yz;
 
-    GetHexParams(1.0, WorldUV * 5e-4, Tiling);
-
-    SMaterial Material;
-    SMaterial GrassMaterial, RockMaterial, SandMaterial, SnowMaterial;
-
-    float WaterAmount = SampleWater(WaterUV);
-    vec3 WaterColor = vec3(0.03, 0.03, 0.05);
-
-    vec3 U = normalize(WorldPosition.xyz);
-
-    float w_rock = saturate(10.0 * (1.0 - saturate(abs(dot(normalize(TBN[2]), U)))));
-    float w_sand = saturate((Height <= 0.02 ? smootherstep(0.0, 1.0, 1.0 - Height / 0.02) : 0.0) + dampen(WaterAmount, 85.0));
-    float w_snow = saturate(2.0 * saturate(Height - 0.4) / 0.6);
-    float w_water = saturate((Height <= 2e-3 ? smoothstep(0.0, 1.0, 1.0 - Height / 2e-3) : 0.0) + dampen(WaterAmount, 175.0));
-
-    w_sand *= 1.0 - w_snow;
-    w_sand *= 1.0 - w_water;
-
-    w_rock *= 1.0 - w_snow;
-    w_rock *= 1.0 - w_sand;
-    w_rock *= 1.0 - w_water;
-
-    if (w_rock != 1.0 && w_sand != 1.0 && w_snow != 1.0)
-        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 0, Tiling, Material);
-
-    if (w_rock > 0.0 && w_sand != 1.0 && w_snow != 1.0)
-    {
-        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 1, Tiling, RockMaterial);
-        Material = mixmat(Material, RockMaterial, w_rock);
-    }
-
-    if (w_sand > 0.0 && w_rock != 1.0 && w_snow != 1.0)
-    {
-        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 2, Tiling, SandMaterial);
-        Material = mixmat(Material, SandMaterial, w_sand);
-    }
-
-    if (w_snow > 0.0 && w_rock != 1.0 && w_sand != 1.0)
-    {
-        hex2colTex(AlbedoMap, NormalHeightMap, ARMMap, 3, Tiling, SnowMaterial);
-        Material = mixmat(Material, SnowMaterial, w_snow);
-    }
-
-    Material.Albedo.rgb = mix(Material.Albedo.rgb, WaterColor, w_water);
-    Material.Roughness = max(PushConstants.RoughnessMultiplier * mix(Material.Roughness, 0.0, w_water * w_water * w_water), 0.01);
-    Material.AO = mix(Material.AO, 1.0, w_water);
-    Material.Normal = normalize(mix(normalize(TBN * Material.Normal), TBN[2], w_water));
-    Material.Specular = mix(0.1, 1.0, w_water);
-
-    outColor = vec4(Material.Albedo.rgb, 1.0);
-    outNormal = vec4(Material.Normal, 0.0);
-    outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), Material.Specular);
+    outColor = vec4(WorldUV, Height, 100.5);
+    outNormal = NormalData;
+    outDeferred = vec4(0.0, 0.0, 0.0, 0.0);
 }

@@ -104,6 +104,7 @@ namespace GR
 		*/
 		GR::Camera m_Camera = {};
 		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
+		float WindSpeed = 1.0;
 
 #ifndef PLANET_RADIUS
 		static constexpr float Rg = 6360.0 * 1e3;
@@ -134,7 +135,6 @@ private:
 		float BottomSmoothnessFactor;
 		float LightIntensity;
 		float Ambient;
-		float Wind;
 		float Density;
 		float BottomBound;
 		float TopBound;
@@ -172,10 +172,11 @@ private:
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
 
 	std::vector<VkFramebuffer> m_FramebuffersHR   = {};
-	// std::vector<VkFramebuffer> m_FramebuffersLR   = {};
+	std::vector<VkFramebuffer> m_FramebuffersTR   = {};
 	std::vector<VkFramebuffer> m_FramebuffersCP   = {};
 	std::vector<VkFramebuffer> m_FramebuffersPP   = {};
 
+	std::unique_ptr<GraphicsPipeline> m_TerrainTexturingPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlendingPipeline     = VK_NULL_HANDLE;
@@ -188,6 +189,7 @@ private:
 	std::unique_ptr<ComputePipeline> m_BlurHorizontalPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurVerticalPipeline = VK_NULL_HANDLE;
 
+	std::vector<std::unique_ptr<DescriptorSet>> m_SubpassDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlendingDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
@@ -203,8 +205,6 @@ private:
 	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
 
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
-	std::vector<VkSemaphore> m_ApplyStatusSemaphores = {};
-	std::vector<VkSemaphore> m_FrameStatusSemaphores = {};
 
 	std::vector<VulkanSynchronization> m_ApplySync = {};
 	std::vector<VulkanSynchronization> m_PresentSync = {};
@@ -212,7 +212,6 @@ private:
 	std::vector<VulkanSynchronization> m_DeferredSync = {};
 	std::vector<VulkanSynchronization> m_TerrainAsync = {};
 	std::vector<VulkanSynchronization> m_CubemapAsync = {};
-	std::vector<VulkanSynchronization> m_TransferAsync = {};
 	std::vector<VulkanSynchronization> m_BackgroundAsync = {};
 
 	VkInstance m_VkInstance = VK_NULL_HANDLE;
@@ -222,11 +221,13 @@ private:
 	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
 	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {};
 	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
 	std::unique_ptr<Buffer> m_CloudLayer = {};
 	std::unique_ptr<Buffer> m_TerrainLayer = {};
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSkySets = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_UBOTempSets = {};
 
 	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
@@ -275,6 +276,12 @@ private:
 	uint32_t m_ResourceIndex = 0;
 	uint32_t m_ResourceCount = 0;
 	uint64_t m_FrameCount = 0;
+
+	std::vector<VkSubmitInfo> m_GraphicsSubmits;
+	std::vector<VkSubmitInfo> m_ComputeSubmits;
+
+	std::vector<VkFence> m_GraphicsFences;
+	std::vector<VkFence> m_ComputeFences;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
@@ -350,6 +357,22 @@ public:
 	*
 	*/
 	void _updateTerrain(entt::entity ent, entt::registry& registry) const;
+	/*
+	* 
+	*/
+	void _beginObjectsPass() const;
+	/*
+	* 
+	*/
+	void _endObjectsPass() const;
+	/*
+	* 
+	*/
+	void _beginTerrainPass() const;
+	/*
+	* 
+	*/
+	void _endTerrainPass() const;
 
 private:
 	VkBool32 create_instance();
@@ -359,6 +382,8 @@ private:
 	VkBool32 create_framebuffers();
 
 	VkBool32 create_frame_pipelines();
+
+	VkBool32 create_frame_descriptors();
 
 	VkBool32 prepare_renderer_resources();
 

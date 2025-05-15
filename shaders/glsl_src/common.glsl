@@ -1,4 +1,4 @@
-#ifndef _COMMON_SHADER
+ #ifndef _COMMON_SHADER
 #define _COMMON_SHADER
 
 #define PI 3.1415926535897932384626433832795
@@ -56,10 +56,7 @@ vec4 saturate(vec4 x)
 
 float dampen(float Value, float Factor)
 {
-    Value = saturate(Value / Factor);
-    Value = saturate(Value - 0.1) / 0.9;
-
-    return Value;
+    return saturate(Value - Factor) / (1.0 - Factor);
 }
 
 float saturateAngle(float x)
@@ -245,17 +242,6 @@ dmat4 GetWorldMatrix(mat3x4 Orientation, dvec3 Offset)
                  Orientation[1][0], Orientation[1][1], Orientation[1][2], 0.0,
                  Orientation[2][0], Orientation[2][1], Orientation[2][2], 0.0,
                  Offset[0], Offset[1], Offset[2], 1.0);
-}
-
-dmat3 GetTerrainOrientation()
-{
-    dmat3 Orientation;
-    Orientation[0] = vec3(1.0, 0.0, 0.0);
-    Orientation[1] = ubo.WorldUp.xyz;
-    Orientation[2] = normalize(cross(Orientation[0], Orientation[1]));
-    Orientation[0] = normalize(cross(Orientation[1], Orientation[2]));
-
-    return Orientation;
 }
 #endif
 

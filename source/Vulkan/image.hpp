@@ -57,6 +57,8 @@ struct VulkanImage
 
 	VulkanImage& GenerateMipMaps(VkCommandBuffer cmd);
 
+	VulkanImage& GenerateMipMaps(VkCommandBuffer cmd, uint32_t baselevel, uint32_t levels, uint32_t baselayer, uint32_t layers);
+
 	const VkImage& GetImage() const { return image; };
 
 	const VkImageSubresourceRange& GetSubResourceRange() const { return subRange; };

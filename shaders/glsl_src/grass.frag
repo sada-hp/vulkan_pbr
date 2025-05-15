@@ -7,27 +7,25 @@ layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outDeferred;
 
-layout(location = 0) in vec4 CenterPosition;
-layout(location = 1) in vec4 WorldPosition;
-layout(location = 2) in float AO;
-layout(location = 3) in vec3 Normal;
-
-layout(set = 2, binding = 0) uniform sampler2DArray AlbedoMap;
-layout(set = 2, binding = 1) uniform sampler2DArray NormalHeightMap;
-layout(set = 2, binding = 2) uniform sampler2DArray ARMMap;
+layout(location = 0) in vec4 ObjectCenter;
+layout(location = 1) in vec4 FragNormal;
+layout(location = 2) in vec3 SlopeNormal;
 
 void main()
 {
-    vec3 dX = dFdxFine(WorldPosition.xyz + ubo.CameraPosition.xyz);
-    vec3 dY = dFdyFine(WorldPosition.xyz + ubo.CameraPosition.xyz);
-    vec3 N = normalize(cross(dY.xyz, dX.xyz));
+    vec2 WorldUV = vec2(0.0);
+    if (abs(ObjectCenter.y) > abs(ObjectCenter.x) && abs(ObjectCenter.y) > abs(ObjectCenter.z))
+        WorldUV = ObjectCenter.xz;
+    else if (abs(ObjectCenter.z) > abs(ObjectCenter.x) && abs(ObjectCenter.z) > abs(ObjectCenter.y))
+        WorldUV = ObjectCenter.xy;
+    else
+        WorldUV = ObjectCenter.yz;
 
     // fake transcluency
-    N = normalize(N + mix(0.85, 1.0, AO) * ubo.SunDirection.xyz);
+    float AO = smootherstep(0.0, 1.0, FragNormal.w);
+    vec3 N = normalize(normalize(FragNormal.xyz) + mix(0.5, 1.0, AO) * ubo.SunDirection.xyz);
 
-    vec3 avgAlbedo = texture(AlbedoMap, vec3((ubo.CameraPosition + CenterPosition).xz * 5e-4, 0)).rgb;
-
-    outColor = vec4(mix(avgAlbedo, vec3(0.0, 0.25, 0.0), 0.15), 1.0);
-    outNormal = vec4(N, 1.0);
-    outDeferred = vec4(AO, 1.0, 0.0, 0.1);
+    outColor = vec4(WorldUV, 0.0, 200.5);
+    outNormal = vec4(SlopeNormal, ObjectCenter.w);
+    outDeferred = vec4(AO, N);
 }
