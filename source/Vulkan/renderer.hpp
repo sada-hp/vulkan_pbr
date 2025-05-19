@@ -282,6 +282,7 @@ private:
 
 	std::vector<VkFence> m_GraphicsFences;
 	std::vector<VkFence> m_ComputeFences;
+	VkFence m_AcquireFence;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;

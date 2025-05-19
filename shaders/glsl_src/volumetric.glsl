@@ -68,7 +68,7 @@ layout(set = 1, binding = 6) uniform sampler3D InscatteringLUT;
 layout(set = 1, binding = 7) uniform sampler2DArray WeatherMapCube;
 
 layout(set = 2, binding = 0, rgba32f) uniform image2D outImage;
-layout(set = 2, binding = 1, rgba32f) uniform image2D depthImage;
+layout(set = 2, binding = 1, rg32f) uniform image2D depthImage;
 layout(set = 2, binding = 2) uniform sampler2D oldImage;
 layout(set = 2, binding = 3) uniform UnfiormBuffer2
 {

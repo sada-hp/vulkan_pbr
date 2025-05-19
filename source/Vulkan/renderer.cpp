@@ -120,7 +120,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	featureFloats.shaderImageFloat32Atomics = VK_TRUE;
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
-	std::vector<VkDescriptorPoolSize> poolSizes(3);
 	deviceFeatures.imageCubeArray = VK_TRUE;
 	deviceFeatures.fullDrawIndexUint32 = VK_TRUE;
 	deviceFeatures.shaderFloat64 = VK_TRUE;
@@ -129,12 +128,20 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	deviceFeatures.fillModeNonSolid = VK_TRUE;
 	deviceFeatures.geometryShader = VK_TRUE;
 
-	poolSizes[0].descriptorCount = 100u;
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLER;
-	poolSizes[1].descriptorCount = 100u;
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[2].descriptorCount = 100u;
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	std::vector<VkDescriptorPoolSize> pool_sizes =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
 
 	VkBool32 res = create_instance();
 	
@@ -151,7 +158,7 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		.CreateCubemapRenderPass()
 		.CreateSimpleRenderPass()
 		.CreateTerrainRenderPass()
-		.CreateDescriptorPool(1000u, poolSizes);
+		.CreateDescriptorPool(1000u, pool_sizes);
 	
 	res = create_swapchain_images() & res;
 	res = create_framebuffers() & res;
@@ -194,6 +201,8 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
+	res = CreateFence(m_Scope.GetDevice(), &m_AcquireFence, VK_FALSE) & res;
+
 	res = prepare_renderer_resources() & res;
 	res = atmosphere_precompute() & res;
 	res = volumetric_precompute() & res;
@@ -205,21 +214,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	m_GuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(m_GuiContext);
 	ImGui_ImplGlfw_InitForVulkan(m_GlfwWindow, false);
-
-	std::vector<VkDescriptorPoolSize> pool_sizes =
-	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 100 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 100 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 100 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 100 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 100 }
-	};
 
 	::CreateDescriptorPool(m_Scope.GetDevice(), pool_sizes.data(), pool_sizes.size(), 1000, &m_ImguiPool);
 
@@ -332,6 +326,8 @@ VulkanBase::~VulkanBase() noexcept
 		vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
 		return true;
 	});
+
+	vkDestroyFence(m_Scope.GetDevice(), m_AcquireFence, VK_NULL_HANDLE);
 
 	std::erase_if(m_FramebuffersHR, [&, this](VkFramebuffer& fb) {
 		vkDestroyFramebuffer(m_Scope.GetDevice(), fb, VK_NULL_HANDLE);
@@ -610,7 +606,7 @@ bool VulkanBase::BeginFrame()
 
 	vkWaitForFences(m_Scope.GetDevice(), 1, &m_GraphicsFences[m_ResourceIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(m_Scope.GetDevice(), 1, &m_GraphicsFences[m_ResourceIndex]);
-	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), 0, m_SwapchainSemaphores[m_ResourceIndex], VK_NULL_HANDLE, &m_ImageIndex[m_ResourceIndex]);
+	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), 0, m_SwapchainSemaphores[m_ResourceIndex], m_AcquireFence, &m_ImageIndex[m_ResourceIndex]);
 
 	// Begin IBL pass
 	{
@@ -913,6 +909,9 @@ void VulkanBase::EndFrame()
 
 			vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
 		}
+
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_AcquireFence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_AcquireFence);
 
 		std::array<VkClearValue, 1> clearValues;
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
