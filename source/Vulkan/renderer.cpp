@@ -258,7 +258,7 @@ VulkanBase::~VulkanBase() noexcept
 
 	m_TerrainCompute.reset();
 	m_TerrainCompose.reset();
-	m_WaterCompute.reset();
+	// m_WaterCompute.reset();
 	m_BRDFLUT.reset();
 
 	m_TerrainDrawSet.resize(0);
@@ -267,8 +267,8 @@ VulkanBase::~VulkanBase() noexcept
 	m_DiffuseIrradience.resize(0);
 	m_SpecularLUT.resize(0);
 	m_CubemapLUT.resize(0);
-	m_WaterSet.resize(0);
-	m_WaterLUT.resize(0);
+	// m_WaterSet.resize(0);
+	// m_WaterLUT.resize(0);
 
 	m_VolumetricsAbovePipeline.reset();
 	m_VolumetricsUnderPipeline.reset();
@@ -400,13 +400,12 @@ VulkanBase::~VulkanBase() noexcept
 
 bool VulkanBase::BeginFrame()
 {
+	m_GraphicsSubmits.resize(0);
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0 || glfwWindowShouldClose(m_GlfwWindow))
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		return false;
 	}
-
-	m_GraphicsSubmits.resize(0);
 
 	assert(!m_InFrame, "Finish the frame in progress first!");
 
@@ -475,11 +474,11 @@ bool VulkanBase::BeginFrame()
 		if (m_FrameCount > 1)
 		{
 			m_TerrainLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-			m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+			// m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 		}
 	
 		m_TerrainLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
-		m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		// m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_TerrainCompute);
 		m_TerrainSet[m_ResourceIndex]->BindSet(1, m_TerrainAsync[m_ResourceIndex].Commands, *m_TerrainCompute);
@@ -516,11 +515,11 @@ bool VulkanBase::BeginFrame()
 		}
 		m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 #else
-		m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		// m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 #endif
 
 		m_TerrainLUT[m_ResourceIndex].Image->TransferOwnership(m_TerrainAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-		m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(m_TerrainAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+		// m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(m_TerrainAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
 
 		vkEndCommandBuffer(m_TerrainAsync[m_ResourceIndex].Commands);
 
@@ -702,9 +701,9 @@ bool VulkanBase::BeginFrame()
 			if (m_TerrainCompute.get())
 			{
 				m_TerrainLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_DeferredSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
-				m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_DeferredSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+				// m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_DeferredSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
 				m_TerrainLUT[WRAPR(m_ResourceIndex)].Image->TransferOwnership(m_DeferredSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
-				m_WaterLUT[WRAPR(m_ResourceIndex)].Image->TransferOwnership(m_DeferredSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+				// m_WaterLUT[WRAPR(m_ResourceIndex)].Image->TransferOwnership(m_DeferredSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 			}
 
 			m_HdrAttachmentsHR[m_ResourceIndex]->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
@@ -1676,7 +1675,7 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 	return ent;
 }
 
-void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constants) const
+void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constants, uint32_t grass_rings) const
 {
 	if (m_Scope.GetSwapchainExtent().width == 0 || m_Scope.GetSwapchainExtent().height == 0)
 		return;
@@ -1697,10 +1696,8 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
 
-	vkCmdNextSubpass(m_DeferredSync[m_ResourceIndex].Commands, VK_SUBPASS_CONTENTS_INLINE);
-
 	// grass
-	if (glm::length(m_Camera.Transform.offset) < Rt)
+	if (grass_rings > 0 && glm::length(m_Camera.Transform.offset) < Rt)
 	{
 		m_GrassPipeline->BindPipeline(cmd);
 		m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_GrassPipeline);
@@ -1710,21 +1707,16 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 		uint32_t nextRings = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
 
 		float Lod = 0.0;
-		m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
-		vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 27, firstRing, 0, 0);
-
-		if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 0)
+		uint32_t VertexOffset = 0;
+		int LodVertices[3] = { 27, 15, 3 };
+		for (uint32_t i = 0; i < glm::min(grass_rings, m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers()); i++)
 		{
-			Lod = 1.0;
+			uint32_t VertexCount = i == 0 ? firstRing : nextRings;
 			m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
-			vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 15, 2 * nextRings, 1, m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height);
-		}
+			vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, LodVertices[int(Lod)], (i + 1) * VertexCount, i, VertexOffset);
 
-		if (m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers() > 1)
-		{
-			Lod = 2.0;
-			m_GrassPipeline->PushConstants(cmd, &Lod, sizeof(float), 0, VK_SHADER_STAGE_VERTEX_BIT);
-			vkCmdDraw(m_DeferredSync[m_ResourceIndex].Commands, 3, 3 * nextRings, 2, nextRings + firstRing);
+			Lod = glm::min(Lod + 1, 2.f);
+			VertexOffset += VertexCount;
 		}
 	}
 
@@ -2653,8 +2645,8 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	noiseAllocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
 	m_GrassSet.resize(m_ResourceCount);
-	m_WaterSet.resize(m_ResourceCount);
-	m_WaterLUT.resize(m_ResourceCount);
+	// m_WaterSet.resize(m_ResourceCount);
+	// m_WaterLUT.resize(m_ResourceCount);
 	m_TerrainLUT.resize(m_ResourceCount);
 	m_TerrainSet.resize(m_ResourceCount);
 	m_TerrainDrawSet.resize(m_ResourceCount);
@@ -2675,14 +2667,14 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		m_TerrainLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, noiseInfo, noiseAllocCreateInfo);
 		m_TerrainLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_TerrainLUT[i].Image);
 
-		m_WaterLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, waterInfo, noiseAllocCreateInfo);
-		m_WaterLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_WaterLUT[i].Image);
+		// m_WaterLUT[i].Image = std::make_unique<VulkanImage>(m_Scope, waterInfo, noiseAllocCreateInfo);
+		// m_WaterLUT[i].View = std::make_unique<VulkanImageView>(m_Scope, *m_WaterLUT[i].Image);
 
 		vkCmdClearColorImage(clearCMD, m_TerrainLUT[i].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_TerrainLUT[i].Image->GetSubResourceRange());
-		vkCmdClearColorImage(clearCMD, m_WaterLUT[i].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_WaterLUT[i].Image->GetSubResourceRange());
+		// vkCmdClearColorImage(clearCMD, m_WaterLUT[i].Image->GetImage(), VK_IMAGE_LAYOUT_GENERAL, &Color, 1, &m_WaterLUT[i].Image->GetSubResourceRange());
 
 		m_TerrainLUT[i].Image->TransitionLayout(clearCMD, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-		m_WaterLUT[i].Image->TransitionLayout(clearCMD, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+		// m_WaterLUT[i].Image->TransitionLayout(clearCMD, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 	}
 	::EndCommandBuffer(clearCMD);
 
@@ -2702,14 +2694,14 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.AddStorageBuffer(5, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[(i == 0 ? m_TerrainLUT.size() : i) - 1])
 			.Allocate(m_Scope);
 
-		m_WaterSet[i] = DescriptorSetDescriptor()
-			.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
-			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_WaterLUT[i].View->GetImageView())
-			.Allocate(m_Scope);
+		// m_WaterSet[i] = DescriptorSetDescriptor()
+		// 	 .AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
+		// 	 .AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_WaterLUT[i].View->GetImageView())
+		//   .Allocate(m_Scope);
 
 		m_TerrainDrawSet[i] = DescriptorSetDescriptor()
 			.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
-			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
+			// .AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_WaterLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
 			.Allocate(m_Scope);
 
 		m_GrassSet[i] = DescriptorSetDescriptor()
@@ -2752,16 +2744,16 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.SetShaderName("terrain_compose_comp")
 			.Construct(m_Scope);
 
-		m_WaterCompute = ComputePipelineDescriptor()
-			.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
-			.AddSpecializationConstant(0, Rg)
-			.AddSpecializationConstant(1, Rt)
-			.AddSpecializationConstant(2, shape.m_Scale)
-			.AddSpecializationConstant(3, shape.m_MinHeight)
-			.AddSpecializationConstant(4, shape.m_MaxHeight)
-			.AddSpecializationConstant(5, shape.m_NoiseSeed)
-			.SetShaderName("erosion_comp")
-			.Construct(m_Scope);
+		// m_WaterCompute = ComputePipelineDescriptor()
+		//	.AddDescriptorLayout(m_WaterSet[0]->GetLayout())
+		//	.AddSpecializationConstant(0, Rg)
+		//	.AddSpecializationConstant(1, Rt)
+		//	.AddSpecializationConstant(2, shape.m_Scale)
+		//	.AddSpecializationConstant(3, shape.m_MinHeight)
+		//	.AddSpecializationConstant(4, shape.m_MaxHeight)
+		//	.AddSpecializationConstant(5, shape.m_NoiseSeed)
+		//	.SetShaderName("erosion_comp")
+		//	.Construct(m_Scope);
 
 		std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
 
@@ -2773,7 +2765,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
 			.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.SetCullMode(VK_CULL_MODE_NONE)
-			.SetRenderPass(m_Scope.GetTerrainPass(), 1)
+			.SetRenderPass(m_Scope.GetTerrainPass(), 0)
 			.SetBlendAttachments(3, nullptr)
 			.AddSpecializationConstant(0, Rg, VK_SHADER_STAGE_VERTEX_BIT)
 			.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
@@ -2790,7 +2782,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 			.SetShaderStage("terrain_apply_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 			.SetCullMode(VK_CULL_MODE_NONE)
-			.SetRenderPass(m_Scope.GetTerrainPass(), 2)
+			.SetRenderPass(m_Scope.GetTerrainPass(), 1)
 			.SetBlendAttachments(3, nullptr)
 			.Construct(m_Scope);
 	}

@@ -251,19 +251,19 @@ private:
 	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
 
 	std::vector<VulkanTexture> m_TerrainLUT = {};
-	std::vector<VulkanTexture> m_WaterLUT = {};
+	// std::vector<VulkanTexture> m_WaterLUT = {};
 
 	std::vector<VulkanTexture> m_SSRLUT = {};
 	std::unique_ptr<ComputePipeline> m_SSRPipeline = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_SSRDescriptors = {};
 
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_WaterSet = {};
+	// std::vector<std::unique_ptr<DescriptorSet>> m_WaterSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
 
 	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
 	std::unique_ptr<ComputePipeline> m_TerrainCompose = {};
-	std::unique_ptr<ComputePipeline> m_WaterCompute = {};
+	// std::unique_ptr<ComputePipeline> m_WaterCompute = {};
 
 	std::unique_ptr<GraphicsPipeline> m_GrassPipeline = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
@@ -346,7 +346,7 @@ public:
 	/*
 	*
 	*/
-	void _drawTerrain(const PBRObject& gro, const PBRConstants& constants) const;
+	void _drawTerrain(const PBRObject& gro, const PBRConstants& constants, uint32_t grass_rings = 3) const;
 	/*
 	* 
 	*/

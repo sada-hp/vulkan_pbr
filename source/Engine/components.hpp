@@ -430,6 +430,11 @@ namespace GR
 			}
 		};
 
+		struct TerrainGrassRings
+		{
+			uint32_t Count = 3u;
+		};
+
 		using WorldMatrix = TransformMatrix<float, double>;
 	};
 };
