@@ -13,7 +13,7 @@
 #include "imgui/imgui_impl_vulkan.h"
 #endif
 
-#define WRAPL(i) i == 0 ? m_ResourceCount - 1 : i - 1
+#define WRAPL(i) (i == 0 ? m_ResourceCount : i) - 1
 #define WRAPR(i) i == m_ResourceCount - 1 ? 0 : i + 1
 
 #pragma region Utils
@@ -179,12 +179,11 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	m_BackgroundAsync.resize(m_ResourceCount);
 
 	m_GraphicsFences.resize(m_ResourceCount);
-	m_ComputeFences.resize(m_ResourceCount);
 
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ApplySync.size(), 2, m_ApplySync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), 2, m_PresentSync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), 1, m_TerrainAsync.data());
-	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_CubemapAsync.size(), 1, m_CubemapAsync.data());
+	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_CubemapAsync.size(), 1, m_CubemapAsync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_DeferredSync.size(), 1, m_DeferredSync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ComposeSync.size(), 1, m_ComposeSync.data());
 	::CreateSyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_BackgroundAsync.size(), 1, m_BackgroundAsync.data());
@@ -194,10 +193,6 @@ VulkanBase::VulkanBase(GLFWwindow* window)
 	});
 
 	std::for_each(m_GraphicsFences.begin(), m_GraphicsFences.end(), [&, this](VkFence& it) {
-		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
-	});
-
-	std::for_each(m_ComputeFences.begin(), m_ComputeFences.end(), [&, this](VkFence& it) {
 		res = CreateFence(m_Scope.GetDevice(), &it, VK_TRUE) & res;
 	});
 
@@ -307,7 +302,7 @@ VulkanBase::~VulkanBase() noexcept
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ApplySync.size(), m_ApplySync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_PresentSync.size(), m_PresentSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_TerrainAsync.size(), m_TerrainAsync.data());
-	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
+	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_CubemapAsync.size(), m_CubemapAsync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_DeferredSync.size(), m_DeferredSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetPool(), m_ComposeSync.size(), m_ComposeSync.data());
 	::DestroySyncronizationStruct(m_Scope.GetDevice(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetPool(), m_BackgroundAsync.size(), m_BackgroundAsync.data());
@@ -322,11 +317,6 @@ VulkanBase::~VulkanBase() noexcept
 		return true;
 	});	
 	
-	std::erase_if(m_ComputeFences, [&, this](VkFence& it) {
-		vkDestroyFence(m_Scope.GetDevice(), it, VK_NULL_HANDLE);
-		return true;
-	});
-
 	vkDestroyFence(m_Scope.GetDevice(), m_AcquireFence, VK_NULL_HANDLE);
 
 	std::erase_if(m_FramebuffersHR, [&, this](VkFramebuffer& fb) {
@@ -416,9 +406,6 @@ bool VulkanBase::BeginFrame()
 		return false;
 	}
 
-	vkWaitForFences(m_Scope.GetDevice(), 1, &m_ComputeFences[m_ResourceIndex], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_Scope.GetDevice(), 1, &m_ComputeFences[m_ResourceIndex]);
-	m_ComputeSubmits.resize(0);
 	m_GraphicsSubmits.resize(0);
 
 	assert(!m_InFrame, "Finish the frame in progress first!");
@@ -480,6 +467,8 @@ bool VulkanBase::BeginFrame()
 	// Start async compute to update terrain height
 	if (m_TerrainCompute.get())
 	{
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_TerrainAsync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_TerrainAsync[m_ResourceIndex].Fence);
 		vkBeginCommandBuffer(m_TerrainAsync[m_ResourceIndex].Commands, &beginInfo);
 
 		// Transfer to async queue
@@ -541,11 +530,107 @@ bool VulkanBase::BeginFrame()
 		submitInfo.pCommandBuffers = &m_TerrainAsync[m_ResourceIndex].Commands;
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &m_TerrainAsync[m_ResourceIndex].Semaphores[0];
-		m_ComputeSubmits.push_back(submitInfo);
+		vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, m_TerrainAsync[m_ResourceIndex].Fence);
+	}
+
+	// Begin IBL pass
+	{
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_CubemapAsync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_CubemapAsync[m_ResourceIndex].Fence);
+		vkBeginCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands, &beginInfo);
+
+		if (m_FrameCount >= m_ResourceCount)
+		{
+			m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_CubemapAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+			m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_CubemapAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+		}
+
+		uint32_t mips = m_SpecularLUT[m_ResourceIndex].Image->GetMipLevelsCount();
+		uint32_t X = CubeR / 8 + uint32_t(CubeR % 8 > 0);
+		uint32_t Y = CubeR / 4 + uint32_t(CubeR % 4 > 0);
+
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+
+		m_CubemapPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
+		m_CubemapDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_CubemapPipeline);
+		vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, X, Y, 6u);
+
+		m_CubemapMipPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
+		for (uint32_t mip = 1; mip < mips; mip++)
+		{
+			uint32_t ScaledR = CubeR >> mip;
+			uint32_t scaledX = ScaledR / 8 + uint32_t(ScaledR % 8 > 0);
+			uint32_t scaledY = ScaledR / 4 + uint32_t(ScaledR % 4 > 0);
+
+			m_CubemapMipDescriptors[m_ResourceIndex * mips + mip]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_CubemapMipPipeline);
+			vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, scaledX, scaledY, 6u);
+
+			m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
+		}
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
+		m_ConvolutionPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
+		m_ConvolutionDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_ConvolutionPipeline);
+		m_DiffuseDescriptors[m_ResourceIndex]->BindSet(1, m_CubemapAsync[m_ResourceIndex].Commands, *m_ConvolutionPipeline);
+		vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, X, Y, 6u);
+
+		for (uint32_t mip = 1; mip < mips; mip++)
+		{
+			uint32_t ScaledR = CubeR >> mip;
+			uint32_t scaledX = ceil(float(ScaledR) / 8.f);
+			uint32_t scaledY = ceil(float(ScaledR) / 4.f);
+
+			m_SpecularIBLPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
+			m_ConvolutionDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_SpecularIBLPipeline);
+			m_SpecularDescriptors[m_ResourceIndex * mips + mip]->BindSet(1, m_CubemapAsync[m_ResourceIndex].Commands, *m_SpecularIBLPipeline);
+
+			float pushConstant = float(mip) / float(mips - 1.0);
+			m_SpecularIBLPipeline->PushConstants(m_CubemapAsync[m_ResourceIndex].Commands, &pushConstant, sizeof(float), 0, VK_SHADER_STAGE_COMPUTE_BIT);
+			vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, scaledX, scaledY, 6u);
+		}
+
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
+		VkImageCopy copy{};
+		copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copy.dstSubresource.layerCount = 6;
+		copy.dstSubresource.mipLevel = 0;
+		copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copy.srcSubresource.layerCount = 6;
+		copy.srcSubresource.mipLevel = 0;
+		copy.extent = { CubeR, CubeR, 1 };
+		vkCmdCopyImage(m_CubemapAsync[m_ResourceIndex].Commands, m_CubemapLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_SpecularLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_REMAINING_MIP_LEVELS, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
+
+		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(m_CubemapAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(m_CubemapAsync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+
+		vkEndCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands);
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = 0;
+		submitInfo.pWaitSemaphores = nullptr;
+		submitInfo.pWaitDstStageMask = nullptr;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &m_CubemapAsync[m_ResourceIndex].Commands;
+		submitInfo.signalSemaphoreCount = m_CubemapAsync[m_ResourceIndex].Semaphores.size();
+		submitInfo.pSignalSemaphores = m_CubemapAsync[m_ResourceIndex].Semaphores.data();
+		vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, m_CubemapAsync[m_ResourceIndex].Fence);
 	}
 
 	// Draw Low Resolution Background
 	{
+		vkWaitForFences(m_Scope.GetDevice(), 1, &m_BackgroundAsync[m_ResourceIndex].Fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(m_Scope.GetDevice(), 1, &m_BackgroundAsync[m_ResourceIndex].Fence);
 		vkBeginCommandBuffer(m_BackgroundAsync[m_ResourceIndex].Commands, &beginInfo);
 
 		if (m_FrameCount > 1)
@@ -601,84 +686,12 @@ bool VulkanBase::BeginFrame()
 		submitInfo.waitSemaphoreCount = m_BackgroundAsync[m_ResourceIndex].waitSemaphores.size();
 		submitInfo.pWaitSemaphores = m_BackgroundAsync[m_ResourceIndex].waitSemaphores.data();
 		submitInfo.pWaitDstStageMask = m_BackgroundAsync[m_ResourceIndex].waitStages.data();
-		m_ComputeSubmits.push_back(submitInfo);
+		vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), 1, &submitInfo, m_BackgroundAsync[m_ResourceIndex].Fence);
 	}
 
 	vkWaitForFences(m_Scope.GetDevice(), 1, &m_GraphicsFences[m_ResourceIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(m_Scope.GetDevice(), 1, &m_GraphicsFences[m_ResourceIndex]);
 	vkAcquireNextImageKHR(m_Scope.GetDevice(), m_Scope.GetSwapchain(), 0, m_SwapchainSemaphores[m_ResourceIndex], m_AcquireFence, &m_ImageIndex[m_ResourceIndex]);
-
-	// Begin IBL pass
-	{
-		vkBeginCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands, &beginInfo);
-
-		uint32_t mips = m_SpecularLUT[m_ResourceIndex].Image->GetMipLevelsCount();
-		uint32_t X = CubeR / 8 + uint32_t(CubeR % 8 > 0);
-		uint32_t Y = CubeR / 4 + uint32_t(CubeR % 4 > 0);
-
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
-
-		m_CubemapPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
-		m_CubemapDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_CubemapPipeline);
-		vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, X, Y, 6u);
-
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-		m_ConvolutionPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
-		m_ConvolutionDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_ConvolutionPipeline);
-		m_DiffuseDescriptors[m_ResourceIndex]->BindSet(1, m_CubemapAsync[m_ResourceIndex].Commands, *m_ConvolutionPipeline);
-		vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, X, Y, 6u);
-
-		m_CubemapLUT[m_ResourceIndex].Image->GenerateMipMaps(m_CubemapAsync[m_ResourceIndex].Commands, 0, mips, 0, 6);
-
-		for (uint32_t mip = 1; mip < mips; mip++)
-		{
-			uint32_t ScaledR = CubeR >> mip;
-			uint32_t scaledX = ceil(float(ScaledR) / 8.f);
-			uint32_t scaledY = ceil(float(ScaledR) / 4.f);
-
-			m_SpecularIBLPipeline->BindPipeline(m_CubemapAsync[m_ResourceIndex].Commands);
-			m_ConvolutionDescriptors[m_ResourceIndex]->BindSet(0, m_CubemapAsync[m_ResourceIndex].Commands, *m_SpecularIBLPipeline);
-			m_SpecularDescriptors[m_ResourceIndex * mips + mip]->BindSet(1, m_CubemapAsync[m_ResourceIndex].Commands, *m_SpecularIBLPipeline);
-
-			float pushConstant = float(mip) / float(mips - 1.0);
-			m_SpecularIBLPipeline->PushConstants(m_CubemapAsync[m_ResourceIndex].Commands, &pushConstant, sizeof(float), 0, VK_SHADER_STAGE_COMPUTE_BIT);
-			vkCmdDispatch(m_CubemapAsync[m_ResourceIndex].Commands, scaledX, scaledY, 6u);
-		}
-
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-
-		VkImageCopy copy{};
-		copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		copy.dstSubresource.layerCount = 6;
-		copy.dstSubresource.mipLevel = 0;
-		copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		copy.srcSubresource.layerCount = 6;
-		copy.srcSubresource.mipLevel = 0;
-		copy.extent = { CubeR, CubeR, 1 };
-		vkCmdCopyImage(m_CubemapAsync[m_ResourceIndex].Commands, m_CubemapLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_SpecularLUT[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-
-		m_CubemapLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-		m_SpecularLUT[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_REMAINING_MIP_LEVELS, 0, 6), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-
-		m_DiffuseIrradience[m_ResourceIndex].Image->TransitionLayout(m_CubemapAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-
-		vkEndCommandBuffer(m_CubemapAsync[m_ResourceIndex].Commands);
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.waitSemaphoreCount = 0;
-		submitInfo.pWaitSemaphores = nullptr;
-		submitInfo.pWaitDstStageMask = nullptr;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &m_CubemapAsync[m_ResourceIndex].Commands;
-		submitInfo.signalSemaphoreCount = m_CubemapAsync[m_ResourceIndex].Semaphores.size();
-		submitInfo.pSignalSemaphores = m_CubemapAsync[m_ResourceIndex].Semaphores.data();
-		m_GraphicsSubmits.push_back(submitInfo); // might move back to compute
-	}
 
 	// Start deferred
 	{
@@ -757,6 +770,9 @@ void VulkanBase::EndFrame()
 	{
 		vkBeginCommandBuffer(m_ComposeSync[m_ResourceIndex].Commands, &beginInfo);
 
+		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_ComposeSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_ComposeSync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex());
+
 		std::array<VkClearValue, 1> clearValues;
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 
@@ -789,6 +805,9 @@ void VulkanBase::EndFrame()
 		m_CompositionPipeline->BindPipeline(m_ComposeSync[m_ResourceIndex].Commands);
 		vkCmdDraw(m_ComposeSync[m_ResourceIndex].Commands, 3, 1, 0, 0);
 		vkCmdEndRenderPass(m_ComposeSync[m_ResourceIndex].Commands);
+
+		m_SpecularLUT[m_ResourceIndex].Image->TransferOwnership(m_ComposeSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
+		m_DiffuseIrradience[m_ResourceIndex].Image->TransferOwnership(m_ComposeSync[m_ResourceIndex].Commands, VK_NULL_HANDLE, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 
 		vkEndCommandBuffer(m_ComposeSync[m_ResourceIndex].Commands);
 
@@ -976,10 +995,7 @@ void VulkanBase::EndFrame()
 
 	// Submit queues
 	{
-		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetQueue(), m_ComputeSubmits.size(), m_ComputeSubmits.data(), m_ComputeFences[m_ResourceIndex]);
-		assert(res != VK_ERROR_DEVICE_LOST);
-
-		res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), m_GraphicsSubmits.size(), m_GraphicsSubmits.data(), m_GraphicsFences[m_ResourceIndex]);
+		VkResult res = vkQueueSubmit(m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetQueue(), m_GraphicsSubmits.size(), m_GraphicsSubmits.data(), m_GraphicsFences[m_ResourceIndex]);
 		assert(res != VK_ERROR_DEVICE_LOST);
 	}
 

@@ -7,6 +7,7 @@
 
 struct VulkanSynchronization
 {
+	VkFence Fence;
 	VkCommandBuffer Commands;
 	std::vector<VkSemaphore> Semaphores;
 

@@ -8,6 +8,7 @@ VkBool32 CreateSyncronizationStruct(const VkDevice& device, const VkCommandPool 
 	for (uint32_t i = 0; i < count; i++)
 	{
 		res *= ::AllocateCommandBuffers(device, pool, 1, &out[i].Commands);
+		res *= ::CreateFence(device, &out[i].Fence, VK_TRUE);
 
 		out[i].Semaphores.resize(semcount);
 		for (uint32_t j = 0; j < semcount; j++)
@@ -23,6 +24,7 @@ VkBool32 CreateSyncronizationStruct2(const VkDevice& device, const VkCommandPool
 	for (uint32_t i = 0; i < count; i++)
 	{
 		res *= ::AllocateCommandBuffers2(device, pool, 1, &out[i].Commands);
+		res *= ::CreateFence(device, &out[i].Fence, VK_TRUE);
 
 		out[i].Semaphores.resize(semcount);
 		for (uint32_t j = 0; j < semcount; j++)
@@ -39,6 +41,7 @@ VkBool32 DestroySyncronizationStruct(const VkDevice& device, const VkCommandPool
 		for (uint32_t j = 0; j < in[i].Semaphores.size(); j++)
 			vkDestroySemaphore(device, in[i].Semaphores[j], VK_NULL_HANDLE);
 
+		vkDestroyFence(device, in[i].Fence, VK_NULL_HANDLE);
 		vkFreeCommandBuffers(device, pool, 1, &in[i].Commands);
 	}
 

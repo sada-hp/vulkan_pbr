@@ -278,10 +278,7 @@ private:
 	uint64_t m_FrameCount = 0;
 
 	std::vector<VkSubmitInfo> m_GraphicsSubmits;
-	std::vector<VkSubmitInfo> m_ComputeSubmits;
-
 	std::vector<VkFence> m_GraphicsFences;
-	std::vector<VkFence> m_ComputeFences;
 	VkFence m_AcquireFence;
 
 #ifdef INCLUDE_GUI
