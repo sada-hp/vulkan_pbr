@@ -48,6 +48,7 @@ layout (constant_id = 2) const float Scale = 1.f;
 layout (constant_id = 3) const float MinHeight = 1.f;
 layout (constant_id = 4) const float MaxHeight = 1.f;
 layout (constant_id = 5) const float deltaS = 0;
+layout (constant_id = 6) const float Seed = 0;
 
 layout(set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
@@ -66,14 +67,14 @@ void main()
     Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % VertexCount];
     Level = vert.Position.w; // refine
 
-    float sampleScale = Scale * exp2(Level);
-    vec3 ObjectCenterNorm = vert.Position.xyz;
-
     vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, Level), 0);
     float Height = (dH.w - MinHeight) / (MaxHeight - MinHeight);
 
+    float sampleScale = Scale * exp2(Level);
+    vec3 ObjectCenterNorm = vert.Position.xyz / (Rg + dH.w);
+
     SlopeNormal = vec3(normalize(mat3(ubo.PlanetMatrix) * vec3(dH.w - dH.z, sampleScale, dH.w - dH.x)));
-    ObjectCenter = vec4(vert.Position.xyz * (Rg + dH.w), Height);
+    ObjectCenter = vec4(vert.Position.xyz, Height);
 
     vec2 WorldUV = vec2(0.0), UVdir = vec2(0.0);
     if (abs(ObjectCenter.y) > abs(ObjectCenter.x) && abs(ObjectCenter.y) > abs(ObjectCenter.z))
@@ -93,9 +94,9 @@ void main()
     }
 
     float anim = ubo.Wind * ubo.Time * 0.01;
-    vec2 hash = noise2(floor(WorldUV + 1e3 * Scale * UVdir * gl_InstanceIndex) * 1e-3);
+    vec2 hash = noise2(vec2(mix(dH.w, dH.z, float(gl_InstanceIndex) / float(Level + 1)), mix(dH.w, dH.y, float(gl_InstanceIndex) / float(Level + 1))));
 
-    if (Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height- 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
+    if (Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height - 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
     {
         gl_Position = vec4(-2.0);
     }
@@ -108,7 +109,7 @@ void main()
 
         float wind = HALF_PI * smootherstep(0.0, 1.0, AO) * perlin(5.0 * UVdir + anim, 100.0);
         float lean = 0.25 * smootherstep(0.0, 1.0, AO) * hash.y;
-        float bank = 0.5 * noise(WorldUV) + perlin(15.0 * -UVdir + anim, 200.0);
+        float bank = perlin(15.0 * -UVdir + anim, 200.0);
         float face = TWO_PI * (1.0 - 2.0 * worley(WorldUV, 25.0));
 
         vec4 windTrig = vec4(cos(wind), sin(wind), 0.0, 0.0);
@@ -125,7 +126,7 @@ void main()
         mat3 RotLean = mat3(vec3(1.0, 0.0, 0.0), leanTrig.wxz,  leanTrig.wyx);
         mat3 RotSide = mat3(vec3(bankTrig.xyw),  bankTrig.zxw, vec3(0.0, 0.0, 1.0));
         mat3 RotYaw = mat3(faceTrig.xwz, vec3(0.0, 1.0, 0.0), faceTrig.ywx);
-        mat3 Rot = mat3(ubo.PlanetMatrix) * mat3(RotWind * RotLean * RotSide * RotYaw);
+        mat3 Rot = mat3(ubo.PlanetMatrix) * RotWind * RotSide * RotYaw * RotLean;
 
         FragNormal = vec4(Rot * normalize(vec3(0.0, 0.0, 1.0)), AO);
         gl_Position = vec4(ubo.ViewProjectionMatrix * vec4(Rot * LocalPosition + ObjectCenter.xyz, 1.0));

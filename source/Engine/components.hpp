@@ -332,7 +332,7 @@ namespace GR
 
 		struct TerrainGrassRings
 		{
-			uint32_t Count = 3u;
+			uint32_t Count = 0u;
 		};
 
 		using WorldMatrix = TransformMatrix<float, double>;

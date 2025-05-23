@@ -4,15 +4,6 @@
 #include "brdf.glsl"
 #include "hextiling.glsl"
 
-layout(push_constant) uniform constants
-{
-    layout(offset = 80) vec4 ColorMask;
-    layout(offset = 96) float RoughnessMultiplier;
-    layout(offset = 100) float Metallic;
-    layout(offset = 104) float HeightScale;
-}
-PushConstants;
-
 layout(location = 0) in vec4 WorldPosition;
 layout(location = 1) in vec4 NormalData;
 layout(location = 2) in float Height;

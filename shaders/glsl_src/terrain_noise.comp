@@ -179,16 +179,26 @@ void main()
                 Val.x = mix(T2, T1, pole_w);
                 Val.x = floor(MinHeight + saturate(Val.x) * (MaxHeight - MinHeight));
 
-                verticesOut.at[gl_GlobalInvocationID.x].Position = vec4(Normal, Level);
+                verticesOut.at[gl_GlobalInvocationID.x].Position = vec4(Normal * (Rg + Val.x), Level);
                 imageStore(terrainImage, Texel, Val);
             }
         }
     }
     else if (gl_GlobalInvocationID.x < VertexCount)
     {
-        // TerrainVertex vertex = vertices.at[gl_GlobalInvocationID.x];
-        // int Level = int(vertex.Position.y);
+        TerrainVertex vertex = verticesRef.at[gl_GlobalInvocationID.x];
+        int Level = int(vertex.Position.y);
 
-        // imageStore(terrainImage, ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level), vec4(MinHeight, 0.0, 0.0, 0.0));
+        float vertexScale = Scale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
+        float adjustScale = vertexScale * exp2(max(Level, deltaS));
+        vertexScale = Level == 0 ? 2.0 * vertexScale : vertexScale;
+
+        dvec3 Camera1 = ubo.WorldUp.xyz;
+        dvec3 Center1 = round(RoundToIncrement(Camera1 * Rg, adjustScale));
+        vec3 ObjectPosition = round(vec3(mat3(ubo.PlanetMatrix) * vec3(vertexScale * vertex.Position.x, 0.0, vertexScale * vertex.Position.z) + Center1));
+        vec3 Normal = vec3(normalize(ObjectPosition));
+
+        imageStore(terrainImage, ivec3(round(vertex.UV.xy * (imageSize(terrainImage).xy - 1)), Level), vec4(MinHeight, 0.0, 0.0, 0.0));
+        verticesOut.at[gl_GlobalInvocationID.x].Position = vec4(Normal * (Rg + MinHeight), Level);
     }
 }

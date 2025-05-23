@@ -126,6 +126,8 @@ struct VulkanMesh
 {
 	VulkanMesh(const RenderScope& Scope, MeshVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices);
 
+	VulkanMesh(const RenderScope& Scope, MeshVertex* vertices, size_t numVertices, uint16_t* indices, size_t numIndices);
+
 	VulkanMesh(const RenderScope& Scope, TerrainVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices);
 
 	VulkanMesh(const VulkanMesh& other) = delete;
@@ -161,11 +163,14 @@ struct VulkanMesh
 
 	uint32_t GetVerticesCount() const { return verticesCount; };
 
+	VkIndexType GetIndexType() const { return indexType; };
+
 private:
 	std::shared_ptr<Buffer> vertexBuffer = {};
 	std::shared_ptr<Buffer> indexBuffer = {};
 	uint32_t indicesCount = 0;
 	uint32_t verticesCount = 0;
+	VkIndexType indexType;
 
 	const RenderScope* Scope = VK_NULL_HANDLE;
 };

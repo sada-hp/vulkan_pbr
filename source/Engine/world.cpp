@@ -51,32 +51,27 @@ namespace GR
 		auto renderer = static_cast<VulkanBase*>(m_Scope);
 		auto view = Registry.view<PBRObject, Components::WorldMatrix>();
 
-		if (view.size_hint() > 0)
+		for (const auto& [ent, gro, world] : view.each())
 		{
-			renderer->_beginObjectsPass();
-			for (const auto& [ent, gro, world] : view.each())
+			PBRConstants constants{};
+			constants.Offset = world.GetOffset();
+			constants.Orientation = glm::mat3x4(world.GetRotation());
+			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
+			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
+			constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
+			constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
+
+			if (gro.is_dirty())
 			{
-				PBRConstants constants{};
-				constants.Offset = world.GetOffset();
-				constants.Orientation = glm::mat3x4(world.GetRotation());
-				constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
-				constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
-				constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
-				constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
-
-				if (gro.is_dirty())
-				{
-					renderer->_updateObject(ent, Registry);
-				}
-
-				renderer->_drawObject(gro, constants);
+				renderer->_updateObject(ent, Registry);
 			}
-			renderer->_endObjectsPass();
+
+			renderer->_drawObject(gro, constants);
 		}
 
 		if (m_TerrainEntity != entt::entity(-1))
 		{
-			renderer->_beginTerrainPass();
+			renderer->_beginTerrainPass(); // hack, explicitely switch from objects to terrain rendering (this call happen after all objects)
 			PBRConstants constants{};
 			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(m_TerrainEntity).Value, 1.0);
 			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(m_TerrainEntity).Value;
@@ -90,7 +85,6 @@ namespace GR
 			}
 
 			renderer->_drawTerrain(tro, constants, Registry.get<Components::TerrainGrassRings>(m_TerrainEntity).Count);
-			renderer->_endTerrainPass();
 		}
 	}
 

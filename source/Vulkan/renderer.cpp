@@ -64,12 +64,6 @@ std::unique_ptr<VulkanImage> create_image(const RenderScope& Scope, void* pixels
 	imageCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	imageCI.imageType = VK_IMAGE_TYPE_2D;
 
-	VkImageViewCreateInfo imageViewCI{};
-	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	imageViewCI.format = imageCI.format;
-	imageViewCI.viewType = (flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 ? VK_IMAGE_VIEW_TYPE_CUBE : (subRes.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D);
-	imageViewCI.subresourceRange = subRes;
-
 	VmaAllocationCreateInfo skyAlloc{};
 	skyAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 	
@@ -715,6 +709,37 @@ bool VulkanBase::BeginFrame()
 		vkCmdCopyBuffer(m_DeferredSync[m_ResourceIndex].Commands, m_UBOTempBuffers[m_ResourceIndex]->GetBuffer(), m_UBOBuffers[m_ResourceIndex]->GetBuffer(), 1, &region);
 		vkCmdCopyBuffer(m_DeferredSync[m_ResourceIndex].Commands, m_UBOTempBuffers[m_ResourceIndex]->GetBuffer(), m_UBOSkyBuffers[WRAPR(m_ResourceIndex)]->GetBuffer(), 1, &region);
 
+		std::array<VkClearValue, 4> clearValues;
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[3].depthStencil = { 0.0f, 0 };
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.framebuffer = m_FramebuffersHR[m_ResourceIndex];
+		renderPassInfo.renderPass = m_Scope.GetRenderPass();
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
+		renderPassInfo.clearValueCount = clearValues.size();
+		renderPassInfo.pClearValues = clearValues.data();
+
+		VkViewport viewport{};
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width);
+		viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = m_Scope.GetSwapchainExtent();
+		vkCmdSetScissor(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &scissor);
+
+		vkCmdBeginRenderPass(m_DeferredSync[m_ResourceIndex].Commands, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
 #ifdef INCLUDE_GUI
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -737,6 +762,7 @@ void VulkanBase::EndFrame()
 	assert(m_InFrame);
 
 	{
+		vkCmdEndRenderPass(m_DeferredSync[m_ResourceIndex].Commands);
 		vkEndCommandBuffer(m_DeferredSync[m_ResourceIndex].Commands);
 
 		m_DeferredSync[m_ResourceIndex].waitStages = { };
@@ -1026,47 +1052,10 @@ void VulkanBase::EndFrame()
 #endif
 }
 
-void VulkanBase::_beginObjectsPass() const
-{
-	std::array<VkClearValue, 4> clearValues;
-	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[3].depthStencil = { 0.0f, 0 };
-
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.framebuffer = m_FramebuffersHR[m_ResourceIndex];
-	renderPassInfo.renderPass = m_Scope.GetRenderPass();
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = m_Scope.GetSwapchainExtent();
-	renderPassInfo.clearValueCount = clearValues.size();
-	renderPassInfo.pClearValues = clearValues.data();
-
-	VkViewport viewport{};
-	viewport.x = 0;
-	viewport.y = 0;
-	viewport.width = static_cast<float>(m_Scope.GetSwapchainExtent().width);
-	viewport.height = static_cast<float>(m_Scope.GetSwapchainExtent().height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = m_Scope.GetSwapchainExtent();
-	vkCmdSetScissor(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &scissor);
-
-	vkCmdBeginRenderPass(m_DeferredSync[m_ResourceIndex].Commands, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void VulkanBase::_endObjectsPass() const
-{
-	vkCmdEndRenderPass(m_DeferredSync[m_ResourceIndex].Commands);
-}
-
 void VulkanBase::_beginTerrainPass() const
 {
+	vkCmdEndRenderPass(m_DeferredSync[m_ResourceIndex].Commands);
+
 	std::array<VkClearValue, 4> clearValues;
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -1097,11 +1086,6 @@ void VulkanBase::_beginTerrainPass() const
 	vkCmdSetScissor(m_DeferredSync[m_ResourceIndex].Commands, 0, 1, &scissor);
 
 	vkCmdBeginRenderPass(m_DeferredSync[m_ResourceIndex].Commands, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void VulkanBase::_endTerrainPass() const
-{
-	vkCmdEndRenderPass(m_DeferredSync[m_ResourceIndex].Commands);
 }
 
 void VulkanBase::_handleResize()
@@ -1503,21 +1487,28 @@ VkBool32 VulkanBase::prepare_renderer_resources()
 			.Allocate(m_Scope);
 	}
 
-	m_DefaultWhite = std::make_shared<VulkanTexture>();
-	m_DefaultWhite->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u));
-	m_DefaultWhite->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultWhite->Image);
+	m_DefaultWhite  = std::make_shared<VulkanTextureMultiView>();
+	m_DefaultBlack  = std::make_shared<VulkanTextureMultiView>();
+	m_DefaultNormal = std::make_shared<VulkanTextureMultiView>();
+	m_DefaultARM    = std::make_shared<VulkanTextureMultiView>();
 
-	m_DefaultBlack = std::make_shared<VulkanTexture>();
+	m_DefaultWhite->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(255u), std::byte(255u), std::byte(255u), std::byte(255u));
 	m_DefaultBlack->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(0u));
-	m_DefaultBlack->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultBlack->Image);
-
-	m_DefaultNormal = std::make_shared<VulkanTexture>();
 	m_DefaultNormal->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(127u), std::byte(127u), std::byte(255u), std::byte(255u));
-	m_DefaultNormal->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultNormal->Image);
+	m_DefaultARM->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, std::byte(255u), std::byte(255u), std::byte(0u), std::byte(255u));
 
-	m_DefaultARM = std::make_shared<VulkanTexture>();
-	m_DefaultARM->Image = GRNoise::GenerateSolidColor(m_Scope, { 1, 1 }, VK_FORMAT_R8G8B8A8_SRGB, std::byte(255u), std::byte(255u), std::byte(0u), std::byte(255u));
-	m_DefaultARM->View = std::make_unique<VulkanImageView>(m_Scope, *m_DefaultARM->Image);
+	VkImageSubresourceRange SubRange = m_DefaultWhite->Image->GetSubResourceRange();
+	m_DefaultWhite->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultWhite->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D));
+	m_DefaultWhite->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultWhite->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D_ARRAY));
+
+	m_DefaultBlack->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultBlack->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D));
+	m_DefaultBlack->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultBlack->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D_ARRAY));
+
+	m_DefaultNormal->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultNormal->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D));
+	m_DefaultNormal->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultNormal->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D_ARRAY));
+
+	m_DefaultARM->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultARM->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D));
+	m_DefaultARM->Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DefaultARM->Image, SubRange, VK_IMAGE_VIEW_TYPE_2D_ARRAY));
 
 	return res;
 }
@@ -1659,7 +1650,7 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 
 	const_cast<VulkanBase*>(this)->terrain_init(*gro.mesh->GetVertexBuffer(), shape);
 
-	gro.descriptorSet = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+	gro.descriptorSet = create_terrain_set(*m_DefaultWhite->Views[1], *m_DefaultNormal->Views[1], *m_DefaultARM->Views[1]);
 	gro.pipeline = create_terrain_pipeline(*gro.descriptorSet, shape);
 
 	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
@@ -1672,7 +1663,7 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const
 {
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
-	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->Views[0], *m_DefaultNormal->Views[0], *m_DefaultARM->Views[0]);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
 	gro.mesh = shape.Generate(m_Scope);
 
@@ -1697,7 +1688,6 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	m_TerrainDrawSet[m_ResourceIndex]->BindSet(1, cmd, *gro.pipeline);
 
 	gro.pipeline->PushConstants(cmd, &constants.Offset, PBRConstants::VertexSize(), 0u, VK_SHADER_STAGE_VERTEX_BIT);
-	gro.pipeline->PushConstants(cmd, &constants.Color, PBRConstants::FragmentSize(), PBRConstants::VertexSize(), VK_SHADER_STAGE_FRAGMENT_BIT);
 	gro.pipeline->BindPipeline(cmd);
 	
 	vkCmdBindVertexBuffers(cmd, 0, 1, &TerrainVBs[m_ResourceIndex]->GetBuffer(), offsets);
@@ -1705,7 +1695,8 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
 
 	// grass
-	if (grass_rings > 0 && glm::length(m_Camera.Transform.offset) < Rt)
+	float Re = glm::length(m_Camera.Transform.offset);
+	if (grass_rings > 0 && Re < Rt)
 	{
 		m_GrassPipeline->BindPipeline(cmd);
 		m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_GrassPipeline);
@@ -1714,7 +1705,7 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 		uint32_t firstRing = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height;
 		uint32_t nextRings = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
 
-		float Lod = glm::length(m_Camera.Transform.offset) < Rg + (Rt - Rg) * 0.5 ? 0.0 : 2.0;
+		float Lod = Re < Rg + (Rt - Rg) * 0.5 ? 0.0 : 2.0;
 		uint32_t VertexOffset = 0;
 		int LodVertices[3] = { 27, 15, 3 };
 		for (uint32_t i = 0; i < glm::min(grass_rings, m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers()); i++)
@@ -1730,6 +1721,7 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 
 	vkCmdNextSubpass(m_DeferredSync[m_ResourceIndex].Commands, VK_SUBPASS_CONTENTS_INLINE);
 
+	m_TerrainTexturingPipeline->PushConstants(cmd, &constants.Color, PBRConstants::FragmentSize(), 0.0, VK_SHADER_STAGE_FRAGMENT_BIT);
 	m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_TerrainTexturingPipeline);
 	gro.descriptorSet->BindSet(1, cmd, *m_TerrainTexturingPipeline);
 	m_SubpassDescriptors[m_ResourceIndex]->BindSet(2, cmd, *m_TerrainTexturingPipeline);
@@ -1754,7 +1746,7 @@ void VulkanBase::_drawObject(const PBRObject& gro, const PBRConstants& constants
 	gro.pipeline->BindPipeline(cmd);
 
 	vkCmdBindVertexBuffers(cmd, 0, 1, &gro.mesh->GetVertexBuffer()->GetBuffer(), offsets);
-	vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(cmd, gro.mesh->GetIndexBuffer()->GetBuffer(), 0, gro.mesh->GetIndexType());
 	vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
 }
 
@@ -1846,7 +1838,7 @@ std::unique_ptr<GraphicsPipeline> VulkanBase::create_terrain_pipeline(const Desc
 		.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
-		.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
+		.AddSpecializationConstant(4, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1), VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(5, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
 		.AddSpecializationConstant(6, float(glm::ceil(float(shape.m_Rings) / 3.f) +  1.f), VK_SHADER_STAGE_VERTEX_BIT)
 		.SetRenderPass(m_Scope.GetTerrainPass(), 0)
@@ -2487,38 +2479,8 @@ VkBool32 VulkanBase::volumetric_precompute()
 		.AddImageSampler(7, VK_SHADER_STAGE_COMPUTE_BIT, m_VolumeWeatherCube.View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearRepeat, m_VolumeWeatherCube.View->GetSubresourceRange().levelCount))
 		.Allocate(m_Scope);
 
-	VkDescriptorSetLayoutBinding bindngs[4];
-	bindngs[0].binding = 0;
-	bindngs[0].descriptorCount = 1;
-	bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	bindngs[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	bindngs[0].pImmutableSamplers = VK_NULL_HANDLE;
-
-	bindngs[1].binding = 1;
-	bindngs[1].descriptorCount = 1;
-	bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	bindngs[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	bindngs[1].pImmutableSamplers = VK_NULL_HANDLE;
-
-	bindngs[2].binding = 2;
-	bindngs[2].descriptorCount = 1;
-	bindngs[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	bindngs[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	bindngs[2].pImmutableSamplers = VK_NULL_HANDLE;
-
-	bindngs[3].binding = 3;
-	bindngs[3].descriptorCount = 1;
-	bindngs[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bindngs[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	bindngs[3].pImmutableSamplers = VK_NULL_HANDLE;
-
-	VkDescriptorSetLayoutCreateInfo dummyInfo{};
-	dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	dummyInfo.bindingCount = 4;
-	dummyInfo.pBindings = bindngs;
-
 	VkDescriptorSetLayout dummy;
-	vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
+	CreateDescriptorLayout(m_Scope.GetDevice(), {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}, VK_SHADER_STAGE_COMPUTE_BIT, &dummy);
 
 	VkPushConstantRange ConstantOrder{};
 	ConstantOrder.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -2728,7 +2690,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.AddSpecializationConstant(2, VertexCount)
 			.AddSpecializationConstant(3, shape.m_Scale)
 			.AddSpecializationConstant(4, shape.m_MinHeight)
-			.AddSpecializationConstant(5, shape.m_MaxHeight)
+			.AddSpecializationConstant(5, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1))
 			.AddSpecializationConstant(6, shape.m_NoiseSeed)
 			.AddSpecializationConstant(7, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f))
 			.AddSpecializationConstant(8, shape.m_Rings)
@@ -2746,7 +2708,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.AddSpecializationConstant(2, VertexCount)
 			.AddSpecializationConstant(3, shape.m_Scale)
 			.AddSpecializationConstant(4, shape.m_MinHeight)
-			.AddSpecializationConstant(5, shape.m_MaxHeight)
+			.AddSpecializationConstant(5, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1))
 			.AddSpecializationConstant(6, shape.m_NoiseSeed)
 			.AddPushConstant(ConstantCompose)
 			.SetShaderName("terrain_compose_comp")
@@ -2758,12 +2720,12 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		//	.AddSpecializationConstant(1, Rt)
 		//	.AddSpecializationConstant(2, shape.m_Scale)
 		//	.AddSpecializationConstant(3, shape.m_MinHeight)
-		//	.AddSpecializationConstant(4, shape.m_MaxHeight)
+		//	.AddSpecializationConstant(4, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1))
 		//	.AddSpecializationConstant(5, shape.m_NoiseSeed)
 		//	.SetShaderName("erosion_comp")
 		//	.Construct(m_Scope);
 
-		std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->View, *m_DefaultNormal->View, *m_DefaultARM->View);
+		std::unique_ptr<DescriptorSet> dummy = create_terrain_set(*m_DefaultWhite->Views[1], *m_DefaultNormal->Views[1], *m_DefaultARM->Views[1]);
 
 		ConstantCompose.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		m_GrassPipeline = GraphicsPipelineDescriptor()
@@ -2779,8 +2741,9 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.AddSpecializationConstant(1, Rt, VK_SHADER_STAGE_VERTEX_BIT)
 			.AddSpecializationConstant(2, shape.m_Scale, VK_SHADER_STAGE_VERTEX_BIT)
 			.AddSpecializationConstant(3, shape.m_MinHeight, VK_SHADER_STAGE_VERTEX_BIT)
-			.AddSpecializationConstant(4, shape.m_MaxHeight, VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(4, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1), VK_SHADER_STAGE_VERTEX_BIT)
 			.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
+			.AddSpecializationConstant(6, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
 			.Construct(m_Scope);
 
 		m_TerrainTexturingPipeline = GraphicsPipelineDescriptor()
@@ -2789,45 +2752,17 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.AddDescriptorLayout(m_SubpassDescriptors[0]->GetLayout())
 			.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 			.SetShaderStage("terrain_apply_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+			.AddPushConstant({ VK_SHADER_STAGE_FRAGMENT_BIT, 0u, static_cast<uint32_t>(PBRConstants::FragmentSize()) })
 			.SetCullMode(VK_CULL_MODE_NONE)
 			.SetRenderPass(m_Scope.GetTerrainPass(), 1)
 			.SetBlendAttachments(3, nullptr)
 			.Construct(m_Scope);
 	}
 
+	// we can refine clouds discard range
 	{
-		VkDescriptorSetLayoutBinding bindngs[4];
-		bindngs[0].binding = 0;
-		bindngs[0].descriptorCount = 1;
-		bindngs[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		bindngs[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		bindngs[0].pImmutableSamplers = VK_NULL_HANDLE;
-
-		bindngs[1].binding = 1;
-		bindngs[1].descriptorCount = 1;
-		bindngs[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		bindngs[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		bindngs[1].pImmutableSamplers = VK_NULL_HANDLE;
-
-		bindngs[2].binding = 2;
-		bindngs[2].descriptorCount = 1;
-		bindngs[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		bindngs[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		bindngs[2].pImmutableSamplers = VK_NULL_HANDLE;
-
-		bindngs[3].binding = 3;
-		bindngs[3].descriptorCount = 1;
-		bindngs[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		bindngs[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		bindngs[3].pImmutableSamplers = VK_NULL_HANDLE;
-
-		VkDescriptorSetLayoutCreateInfo dummyInfo{};
-		dummyInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		dummyInfo.bindingCount = 4;
-		dummyInfo.pBindings = bindngs;
-
 		VkDescriptorSetLayout dummy;
-		vkCreateDescriptorSetLayout(m_Scope.GetDevice(), &dummyInfo, VK_NULL_HANDLE, &dummy);
+		CreateDescriptorLayout(m_Scope.GetDevice(), {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER , VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}, VK_SHADER_STAGE_COMPUTE_BIT, & dummy);
 
 		VkPushConstantRange ConstantOrder{};
 		ConstantOrder.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;

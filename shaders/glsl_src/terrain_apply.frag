@@ -4,6 +4,15 @@
 #include "brdf.glsl"
 #include "hextiling.glsl"
 
+layout(push_constant) uniform constants
+{
+    layout(offset = 0) vec4 ColorMask;
+    layout(offset = 16) float RoughnessMultiplier;
+    layout(offset = 20) float Metallic;
+    layout(offset = 24) float HeightScale;
+}
+PushConstants;
+
 layout(set = 1, binding = 0) uniform sampler2DArray AlbedoMap;
 layout(set = 1, binding = 1) uniform sampler2DArray NormalHeightMap;
 layout(set = 1, binding = 2) uniform sampler2DArray ARMMap;
@@ -126,9 +135,9 @@ void main()
         Material.Normal = normalize(mix(normalize(TBN * Material.Normal), TBN[2], w_water));
         Material.Specular *= mix(0.1, 1.0, w_water);
 
-        outColor = vec4(Material.Albedo.rgb, 1.0);
+        outColor = vec4(PushConstants.ColorMask.rgb * Material.Albedo.rgb, 1.0);
         outNormal = vec4(Material.Normal, 1.0);
-        outDeferred = vec4(vec3(Material.AO, Material.Roughness, Material.Metallic), Material.Specular);
+        outDeferred = vec4(vec3(Material.AO, PushConstants.RoughnessMultiplier * Material.Roughness, Material.Metallic), Material.Specular);
     }
     else if (round(Descriptor1.w) == 200.0)
     {
@@ -143,9 +152,9 @@ void main()
 
         vec3 Albedo = 0.65 * mix(avgGroundAlbedo, vec3(0.35, 0.25, 0.0), 0.15);
     
-        outColor = vec4(Albedo, 1.0);
+        outColor = vec4(PushConstants.ColorMask.rgb * Albedo, 1.0);
         outNormal = vec4(Descriptor2.yzw, 1.0);
-        outDeferred = vec4(Descriptor2.x, 1.0, 0.0, 0.1);
+        outDeferred = vec4(Descriptor2.x, PushConstants.RoughnessMultiplier, 0.0, 0.1);
     }
     else
     {

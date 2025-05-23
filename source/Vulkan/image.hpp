@@ -59,6 +59,16 @@ struct VulkanImage
 
 	VulkanImage& GenerateMipMaps(VkCommandBuffer cmd, uint32_t baselevel, uint32_t levels, uint32_t baselayer, uint32_t layers);
 
+	VulkanImage& ClearImage(float ClearValue);
+
+	VulkanImage& ClearImage(uint32_t ClearValue);
+
+	VulkanImage& ClearImage(int32_t ClearValue);
+
+	VulkanImage& ClearImage(VkClearColorValue ClearValue);
+
+	VulkanImage& ClearImage(VkClearDepthStencilValue ClearValue);
+
 	const VkImage& GetImage() const { return image; };
 
 	const VkImageSubresourceRange& GetSubResourceRange() const { return subRange; };
@@ -101,6 +111,8 @@ public:
 
 	VulkanImageView(const RenderScope& Scope, const VulkanImage& Image, const VkImageSubresourceRange& SubResource);
 
+	VulkanImageView(const RenderScope& Scope, const VulkanImage& Image, const VkImageSubresourceRange& SubResource, VkImageViewType TypeOverride);
+
 	VulkanImageView(const VulkanImageView& other) = delete;
 
 	void operator=(const VulkanImageView& other) = delete;
@@ -122,6 +134,8 @@ public:
 	}
 
 	VulkanImageView& CreateImageView(const VulkanImage& Image, const VkImageSubresourceRange& SubResource);
+
+	VulkanImageView& CreateImageView(const VulkanImage& Image, const VkImageSubresourceRange& SubResource, VkImageViewType TypeOverride);
 
 	VkImageView GetImageView() const { return m_View; };
 

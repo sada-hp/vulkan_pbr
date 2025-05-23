@@ -172,7 +172,7 @@ float MultiScatter(float phi, float e, float ds)
     for (int i = 0; i < 15; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
-        a *= 0.65;
+        a *= 0.7;
         b *= 0.75;
         c *= 0.9;
     }
@@ -264,7 +264,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
 
     float Dist = 0.0;
     float PrevDist = 0.0, DistAEP = 0.0;
-    float LightIntensity = PI * MaxLightIntensity;
+    float LightIntensity = MaxLightIntensity;
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);

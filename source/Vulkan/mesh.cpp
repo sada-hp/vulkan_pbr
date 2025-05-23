@@ -24,6 +24,33 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t 
 
 	verticesCount = numVertices;
 	indicesCount = numIndices;
+	indexType = VK_INDEX_TYPE_UINT32;
+}
+
+VulkanMesh::VulkanMesh(const RenderScope& InScope, MeshVertex* vertices, size_t numVertices, uint16_t* indices, size_t numIndices)
+	: Scope(&InScope)
+{
+	VkBufferCreateInfo sbInfo{};
+	sbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	sbInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	sbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	sbInfo.size = sizeof(MeshVertex) * numVertices;
+
+	VmaAllocationCreateInfo sbAlloc{};
+	sbAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+	vertexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
+
+	sbInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	sbInfo.size = sizeof(uint16_t) * numIndices;
+	indexBuffer = std::make_unique<Buffer>(*Scope, sbInfo, sbAlloc);
+
+	vertexBuffer->Update(vertices);
+	indexBuffer->Update(indices);
+
+	verticesCount = numVertices;
+	indicesCount = numIndices;
+	indexType = VK_INDEX_TYPE_UINT16;
 }
 
 VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size_t numVertices, uint32_t* indices, size_t numIndices)
@@ -55,4 +82,5 @@ VulkanMesh::VulkanMesh(const RenderScope& InScope, TerrainVertex* vertices, size
 
 	verticesCount = numVertices;
 	indicesCount = numIndices;
+	indexType = VK_INDEX_TYPE_UINT32;
 }

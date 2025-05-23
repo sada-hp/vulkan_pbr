@@ -114,6 +114,25 @@ VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize
 	return vkCreateDescriptorPool(device, &dpoolInfo, VK_NULL_HANDLE, outPool) == VK_SUCCESS;
 }
 
+VkBool32 CreateDescriptorLayout(const VkDevice& device, const std::vector<VkDescriptorType> types, VkShaderStageFlags stages, VkDescriptorSetLayout* out)
+{
+	std::vector<VkDescriptorSetLayoutBinding> bindings(types.size());
+
+	for (uint32_t i = 0; i < types.size(); i++)
+	{
+		bindings[i].binding = i;
+		bindings[i].descriptorCount = 1;
+		bindings[i].descriptorType = types[i];
+		bindings[i].stageFlags = stages;
+	}
+
+	VkDescriptorSetLayoutCreateInfo dsetInfo{};
+	dsetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dsetInfo.bindingCount = bindings.size();
+	dsetInfo.pBindings = bindings.data();
+	return vkCreateDescriptorSetLayout(device, &dsetInfo, VK_NULL_HANDLE, out) == VK_SUCCESS;
+}
+
 std::vector<uint32_t> FindDeviceQueues(const VkPhysicalDevice& physicalDevice, const std::vector<VkQueueFlagBits>& flags)
 {
 	uint32_t familiesCount;

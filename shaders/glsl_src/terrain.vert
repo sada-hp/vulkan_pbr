@@ -47,7 +47,7 @@ void GetNormalData(float vertexScale, inout vec4 dH)
 
     float sampleScale = vertexScale * exp2(Level);
     NormalData = vec4(dH.w - dH.z, dH.w - dH.x, vertUV.w, sampleScale);
-    Height = (dH.w - MinHeight) / (MaxHeight - MinHeight);
+    Height = Seed == 0 ? 0.5 : (dH.w - MinHeight) / (MaxHeight - MinHeight);
 }
 
 void main()
@@ -56,6 +56,6 @@ void main()
     float vertexScale = Scale * (ubo.CameraRadius - Rg > MaxHeight ? exp2(mix(5.0, 0.0, saturate(float(MaxHeight - MinHeight) / float(ubo.CameraRadius - Rg)))) : 1.0);
     GetNormalData(vertexScale, dH);
     
-    WorldPosition = vec4(vertPosition.xyz * (Rg + dH.w), 1.0);
+    WorldPosition = vec4(vertPosition.xyz, 1.0);
     gl_Position = vec4(ubo.ViewProjectionMatrix * WorldPosition);
 }

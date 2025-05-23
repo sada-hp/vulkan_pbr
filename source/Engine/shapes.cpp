@@ -152,7 +152,20 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
-		return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		if (vertices.size() < UINT16_MAX)
+		{
+			std::vector<uint16_t> indices16;
+			indices16.reserve(indices.size());
+
+			for (uint32_t i = 0; i < indices.size(); i++)
+				indices16.push_back(static_cast<uint16_t>(indices[i]));
+
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices16.data(), indices16.size());
+		}
+		else
+		{
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		}
 	}
 
 	std::unique_ptr<VulkanMesh> Shapes::Plane::Generate(const RenderScope& Scope) const
@@ -189,7 +202,20 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
-		return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		if (vertices.size() < UINT16_MAX)
+		{
+			std::vector<uint16_t> indices16;
+			indices16.reserve(indices.size());
+
+			for (uint32_t i = 0; i < indices.size(); i++)
+				indices16.push_back(static_cast<uint16_t>(indices[i]));
+
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices16.data(), indices16.size());
+		}
+		else
+		{
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		}
 	}
 
 	std::unique_ptr<VulkanMesh> Shapes::Sphere::Generate(const RenderScope& Scope) const
@@ -259,7 +285,20 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.0, 1.0);
 
-		return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		if (vertices.size() < UINT16_MAX)
+		{
+			std::vector<uint16_t> indices16;
+			indices16.reserve(indices.size());
+
+			for (uint32_t i = 0; i < indices.size(); i++)
+				indices16.push_back(static_cast<uint16_t>(indices[i]));
+
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices16.data(), indices16.size());
+		}
+		else
+		{
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		}
 	}
 
 	std::unique_ptr<VulkanMesh> Shapes::Mesh::Generate(const RenderScope& Scope) const
@@ -312,7 +351,20 @@ namespace GR
 			}
 		}
 
-		return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		if (vertices.size() < UINT16_MAX)
+		{
+			std::vector<uint16_t> indices16;
+			indices16.reserve(indices.size());
+
+			for (uint32_t i = 0; i < indices.size(); i++)
+				indices16.push_back(static_cast<uint16_t>(indices[i]));
+
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices16.data(), indices16.size());
+		}
+		else
+		{
+			return std::make_unique<VulkanMesh>(Scope, vertices.data(), vertices.size(), indices.data(), indices.size());
+		}
 	}
 
 	std::unique_ptr<VulkanMesh> Shapes::GeoClipmap::Generate(const RenderScope& Scope) const

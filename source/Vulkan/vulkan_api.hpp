@@ -64,6 +64,10 @@ VkBool32 AllocateCommandBuffers2(const VkDevice& device, const VkCommandPool& po
 */
 VkBool32 CreateDescriptorPool(const VkDevice& device, const VkDescriptorPoolSize* poolSizes, const size_t poolSizesCount, const uint32_t setsCount, VkDescriptorPool* outPool);
 /*
+* 
+*/
+VkBool32 CreateDescriptorLayout(const VkDevice& device, const std::vector<VkDescriptorType> types, VkShaderStageFlags stages, VkDescriptorSetLayout* out);
+/*
 * !@brief Finds suitable queue indices for specified queue flag bits
 *
 * @param[in] physicalDevice - physical device to find queues on

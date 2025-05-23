@@ -15,8 +15,9 @@ void main()
     {
         vec2 ScreenUV = (0.5 + vec2(Texel)) / size;
         vec4 ScreenNDC = vec4(2.0 * ScreenUV - 1.0, 0.0, 1.0);
-        vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * (ubo.ProjectionMatrixInverse * ScreenNDC));
-
+        vec4 ScreenView = ubo.ProjectionMatrixInverse * ScreenNDC;
+        vec4 ScreenWorld = vec4(ubo.ViewMatrixInverse * vec4(ScreenView.xy, -1.0, 0.0));
+        
         vec4 OldPosition = ubo.ProjectionMatrix * vec4(uboOld.ViewMatrix * ScreenWorld);
         OldPosition.xy = (OldPosition.xy / OldPosition.w) * 0.5 + 0.5;
         float inDepth = imageLoad(depthImage, ivec2((size - 1) * OldPosition.xy)).r;

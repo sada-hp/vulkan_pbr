@@ -291,6 +291,102 @@ VulkanImage& VulkanImage::GenerateMipMaps(VkCommandBuffer cmd, uint32_t baseleve
 	return *this;
 }
 
+VulkanImage& VulkanImage::ClearImage(float ClearValue)
+{
+	if (subRange.aspectMask == VK_IMAGE_ASPECT_DEPTH_BIT)
+	{
+		VkClearDepthStencilValue Value;
+		Value.depth = ClearValue;
+		Value.stencil = 0u;
+
+		return ClearImage(Value);
+	}
+	else
+	{
+		VkClearColorValue Value;
+		Value.float32[0] = ClearValue;
+		Value.float32[1] = ClearValue;
+		Value.float32[2] = ClearValue;
+		Value.float32[3] = ClearValue;
+
+		return ClearImage(Value);
+	}
+}
+
+VulkanImage& VulkanImage::ClearImage(uint32_t ClearValue)
+{
+	VkClearColorValue Value;
+	Value.uint32[0] = ClearValue;
+	Value.uint32[1] = ClearValue;
+	Value.uint32[2] = ClearValue;
+	Value.uint32[3] = ClearValue;
+
+	return ClearImage(Value);
+}
+
+VulkanImage& VulkanImage::ClearImage(int32_t ClearValue)
+{
+	VkClearColorValue Value;
+	Value.int32[0] = ClearValue;
+	Value.int32[1] = ClearValue;
+	Value.int32[2] = ClearValue;
+	Value.int32[3] = ClearValue;
+
+	return ClearImage(Value);
+}
+
+VulkanImage& VulkanImage::ClearImage(VkClearColorValue ClearValue)
+{
+	VkImageLayout oldLayout = descriptorInfo.imageLayout;
+
+	VkCommandBuffer cmd;
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(1, &cmd);
+
+	::BeginOneTimeSubmitCmd(cmd);
+
+	TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+
+	vkCmdClearColorImage(cmd, image, descriptorInfo.imageLayout, &ClearValue, 1, &subRange);
+
+	TransitionLayout(cmd, oldLayout, VK_QUEUE_GRAPHICS_BIT);
+
+	::EndCommandBuffer(cmd);
+
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
+	return *this;
+}
+
+VulkanImage& VulkanImage::ClearImage(VkClearDepthStencilValue ClearValue)
+{
+	VkImageLayout oldLayout = descriptorInfo.imageLayout;
+
+	VkCommandBuffer cmd;
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.AllocateCommandBuffers(1, &cmd);
+
+	::BeginOneTimeSubmitCmd(cmd);
+
+	TransitionLayout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+
+	vkCmdClearDepthStencilImage(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &ClearValue, 1, &subRange);
+
+	TransitionLayout(cmd, oldLayout, VK_QUEUE_GRAPHICS_BIT);
+
+	::EndCommandBuffer(cmd);
+
+	Scope->GetQueue(VK_QUEUE_GRAPHICS_BIT)
+		.Submit(cmd)
+		.Wait()
+		.FreeCommandBuffers(1, &cmd);
+
+	return *this;
+}
+
 VulkanImageView::VulkanImageView(const RenderScope& InScope)
 	: Scope(&InScope)
 {
@@ -309,7 +405,36 @@ VulkanImageView::VulkanImageView(const RenderScope& InScope, const VulkanImage& 
 	CreateImageView(Image, SubResource);
 }
 
+VulkanImageView::VulkanImageView(const RenderScope& InScope, const VulkanImage& Image, const VkImageSubresourceRange& SubResource, VkImageViewType TypeOverride)
+	: Scope(&InScope)
+{
+	CreateImageView(Image, SubResource, TypeOverride);
+}
+
 VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, const VkImageSubresourceRange& SubResource)
+{
+	VkImageViewType viewType;
+	if ((Image.GetImageFlags() & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0)
+	{
+		viewType = SubResource.layerCount > 6 ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
+	}
+	else if (Image.GetImageType() == VK_IMAGE_TYPE_2D)
+	{
+		viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
+	}
+	else if (Image.GetImageType() == VK_IMAGE_TYPE_3D)
+	{
+		viewType = VK_IMAGE_VIEW_TYPE_3D;
+	}
+	else
+	{
+		viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_1D_ARRAY : VK_IMAGE_VIEW_TYPE_1D;
+	}
+
+	return CreateImageView(Image, SubResource, viewType);
+}
+
+VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, const VkImageSubresourceRange& SubResource, VkImageViewType TypeOverride)
 {
 	if (m_View != VK_NULL_HANDLE)
 		vkDestroyImageView(Scope->GetDevice(), m_View, VK_NULL_HANDLE);
@@ -323,25 +448,9 @@ VulkanImageView& VulkanImageView::CreateImageView(const VulkanImage& Image, cons
 	Info.subresourceRange.baseMipLevel = SubResource.baseMipLevel;
 	Info.subresourceRange.layerCount = SubResource.layerCount;
 	Info.subresourceRange.levelCount = SubResource.levelCount;
+	Info.viewType = TypeOverride;
 
 	subRange = SubResource;
-
-	if ((Image.GetImageFlags() & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0)
-	{
-		Info.viewType = SubResource.layerCount > 6 ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
-	}
-	else if (Image.GetImageType() == VK_IMAGE_TYPE_2D)
-	{
-		Info.viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
-	}
-	else if (Image.GetImageType() == VK_IMAGE_TYPE_3D)
-	{
-		Info.viewType = VK_IMAGE_VIEW_TYPE_3D;
-	}
-	else
-	{
-		Info.viewType = SubResource.layerCount > 1 ? VK_IMAGE_VIEW_TYPE_1D_ARRAY : VK_IMAGE_VIEW_TYPE_1D;
-	}
 
 	VkBool32 res = vkCreateImageView(Scope->GetDevice(), &Info, VK_NULL_HANDLE, &m_View) == VK_SUCCESS;
 

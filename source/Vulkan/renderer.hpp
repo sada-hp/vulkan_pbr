@@ -108,7 +108,7 @@ namespace GR
 		*/
 		GR::Camera m_Camera = {};
 		glm::vec3 m_SunDirection = glm::normalize(glm::vec3(1.0));
-		float WindSpeed = 1.0;
+		float WindSpeed = 0.25;
 
 #ifndef PLANET_RADIUS
 		static constexpr float Rg = 6360.0 * 1e3;
@@ -289,10 +289,10 @@ private:
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
 #endif
 
-	std::shared_ptr<VulkanTexture> m_DefaultWhite = {};
-	std::shared_ptr<VulkanTexture> m_DefaultBlack = {};
-	std::shared_ptr<VulkanTexture> m_DefaultNormal = {};
-	std::shared_ptr<VulkanTexture> m_DefaultARM = {};
+	std::shared_ptr<VulkanTextureMultiView> m_DefaultWhite = {};
+	std::shared_ptr<VulkanTextureMultiView> m_DefaultBlack = {};
+	std::shared_ptr<VulkanTextureMultiView> m_DefaultNormal = {};
+	std::shared_ptr<VulkanTextureMultiView> m_DefaultARM = {};
 
 #if DEBUG == 1
 	bool m_InFrame = false;
@@ -362,19 +362,7 @@ public:
 	/*
 	* 
 	*/
-	void _beginObjectsPass() const;
-	/*
-	* 
-	*/
-	void _endObjectsPass() const;
-	/*
-	* 
-	*/
 	void _beginTerrainPass() const;
-	/*
-	* 
-	*/
-	void _endTerrainPass() const;
 
 private:
 	VkBool32 create_instance();
