@@ -16,9 +16,9 @@ void main()
         vec4 Color = texelFetch(HDRColor, Texel, 0);
         float Brightness = dot(Color.rgb, vec3(0.2126, 0.7152, 0.0722));
 
-        if (Brightness > 1.413)
+        if (Brightness > 1.0)
         {
-            imageStore(BlurV, Texel, Color * smootherstep(0.0, 1.0, Brightness - 1.413) * (1.0 / float(MaxLightIntensity)));
+            imageStore(BlurV, Texel, 0.00005 * Color * smootherstep(0.0, 1.0, Brightness - 1.0) * (1.0 / float(MaxLightIntensity)));
         }
         else
         {

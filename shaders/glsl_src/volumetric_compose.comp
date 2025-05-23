@@ -57,7 +57,7 @@ void main()
 
         if (norm > 0.0)
         {
-            imageStore(outImage, Texel, vec4(mix(color_sample.xyz / 4.0, texelFetch(oldImage, Texel, 0).rgb, 0.25), color_sample.a / norm));
+            imageStore(outImage, Texel, vec4(mix(color_sample.xyz / 4.0, texelFetch(oldImage, Texel, 0).rgb, 0.1), color_sample.a / norm));
             imageStore(depthImage, Texel, vec4(imageLoad(depthImage, Texel).r, depth_sample, 0.0, 0.0));
         }
         else

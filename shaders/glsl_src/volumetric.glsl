@@ -76,19 +76,6 @@ layout(set = 2, binding = 3) uniform UnfiormBuffer2
     dmat4 ViewMatrix;
     dmat4 ViewMatrixInverse;
     dmat4 ViewProjectionMatrixInverse;
-    dvec4 CameraPositionFP64;
-    mat4 PlanetMatrix;
-    mat4 ProjectionMatrix;
-    mat4 ProjectionMatrixInverse;
-    vec4 CameraPosition;
-    vec4 SunDirection;
-    vec4 WorldUp;
-    vec4 CameraUp;
-    vec4 CameraRight;
-    vec4 CameraForward;
-    vec2 Resolution;
-    double CameraRadius;
-    float Time;
 } uboOld;
 
 void UpdateRay(inout RayMarch Ray)
@@ -172,7 +159,7 @@ float SampleCone(RayMarch Ray, int mip)
     for (int i = 0; i <= 6; i++)
     {
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
-        cone_density += Params.Density * SampleCloudShape(Ray, mip + 1);
+        cone_density += Params.Density * SampleCloudShape(Ray, mip);
     }
 
     return cone_density;
@@ -185,9 +172,9 @@ float MultiScatter(float phi, float e, float ds)
     for (int i = 0; i < 15; i++)
     {
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
-        a *= 0.75;
+        a *= 0.65;
         b *= 0.75;
-        c *= 0.85;
+        c *= 0.9;
     }
 
     return saturate(luminance + Params.Ambient);
@@ -196,8 +183,9 @@ float MultiScatter(float phi, float e, float ds)
 float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
 {
     RayMarch Ray;
-    float len = SphereMinDistance(pos, rd, vec3(0.0), Params.TopBound);
-    Ray.Stepsize = min(len, Rcdelta) / float(steps);
+    const float len = SphereMinDistance(pos, rd, vec3(0.0), Params.TopBound);
+    steps = int(ceil(float(steps) * mix(0.25, 1.0, smootherstep(0.0, 1.0, saturate(len / Params.BoundDelta)))));
+    Ray.Stepsize = min(len, Params.BoundDelta * 1.5) / float(steps);
     Ray.Direction = rd;
     Ray.Position = pos;
 
@@ -205,13 +193,12 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
     for (int i = 0; i < steps; i++)
     {
         UpdateRay(Ray);
-        cone_density += SampleCone(Ray, mip + 1);
+        cone_density += outScattering.a > 0.01 ? SampleCone(Ray, mip) : SampleCloudShape(Ray, mip);
     }
 
     return MultiScatter(phi, cone_density, Ray.Stepsize);
 }
 
-// Unoptimized and expensive
 void MarchToCloud(inout RayMarch Ray, float ray_length)
 {
     vec3 Sun = ubo.SunDirection.xyz;
@@ -221,11 +208,11 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     float phi = dot(Sun, Ray.Direction);
     float EdotV = dot(ubo.WorldUp.xyz, Ray.Direction);
     float EdotL = dot(ubo.WorldUp.xyz, Sun);
-    float step_mod = max(float(ray_length / Params.BoundDelta), 1.0);
+    float step_mod = smootherstep(0.0, 1.0, saturate(ray_length / (Params.BoundDelta * 10.0)));
     float sample_density = 0.0;
 
     // skip empty space until cloud is found
-    int steps = int(min(32.0 * step_mod, 64)), i = 0;
+    int steps = int(mix(32.0, 64.0, step_mod)), i = 0;
     Ray.Stepsize = ray_length / float(steps);
 
     bool found = false;
@@ -265,7 +252,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     Ray.FirstHit = Ray.End;
     Ray.LastHit = Ray.Start;
     Ray.Direction = -Ray.Direction;
-    steps = min(int(16.0 * step_mod), 96);
+    steps = int(mix(16.0, 96.0, step_mod));
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToAEP = distance(Ray.FirstHit, Ray.Start);
@@ -277,7 +264,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
 
     float Dist = 0.0;
     float PrevDist = 0.0, DistAEP = 0.0;
-    float LightIntensity = PI * Params.LightIntensity * MaxLightIntensity;
+    float LightIntensity = PI * MaxLightIntensity;
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);

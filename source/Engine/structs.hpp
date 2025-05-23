@@ -31,6 +31,8 @@ struct UniformBuffer
 	double CameraRadius;
 	float Wind;
 	float Time;
+	float Gamma;
+	float Exposure;
 };
 /*
 * !@brief Struct describing the coverage of volumetric clouds

@@ -5,6 +5,7 @@
 
 #include "pch.hpp"
 #include "renderer.hpp"
+#include "Engine/utils.hpp"
 #include <stb/stb_image.h>
 
 #ifdef INCLUDE_GUI
@@ -425,12 +426,7 @@ bool VulkanBase::BeginFrame()
 		glm::vec4 CameraRight = glm::vec4(m_Camera.Transform.GetRight(), 0.0);
 		glm::vec4 CameraForward = glm::vec4(m_Camera.Transform.GetForward(), 0.0);
 		glm::vec2 ScreenSize = glm::vec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
-
-		glm::mat3 WorldOrientation;
-		WorldOrientation[0] = glm::vec3(1.0, 0.0, 0.0);
-		WorldOrientation[1] = WorldUp;
-		WorldOrientation[2] = glm::normalize(glm::cross(WorldOrientation[0], WorldOrientation[1]));
-		WorldOrientation[0] = glm::normalize(glm::cross(WorldOrientation[1], WorldOrientation[2]));
+		glm::mat3 WorldOrientation = glm::mat3_cast(GR::Utils::OrientationFromNormal(glm::vec3(WorldUp)));
 
 		double CameraRadius = glm::length(CameraPositionFP64);
 		float Time = glfwGetTime();
@@ -454,7 +450,9 @@ bool VulkanBase::BeginFrame()
 			ScreenSize,
 			CameraRadius,
 			WindSpeed,
-			Time
+			Time,
+			m_Camera.Gamma,
+			m_Camera.Exposure
 		};
 
 		m_UBOTempBuffers[m_ResourceIndex]->Update(static_cast<void*>(&Uniform), sizeof(Uniform));
@@ -899,7 +897,7 @@ void VulkanBase::EndFrame()
 		barrier[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		const int Radius = 5;
+		const int Radius = 13;
 		m_BlurSetupPipeline->BindPipeline(m_PresentSync[m_ResourceIndex].Commands);
 		m_BlurDescriptors[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_BlurSetupPipeline);
 		vkCmdDispatch(m_PresentSync[m_ResourceIndex].Commands, X, Y, 1);
@@ -922,10 +920,16 @@ void VulkanBase::EndFrame()
 			{
 				barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				barrier[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
+				vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
 			}
-
-			vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, barrier.size(), barrier.data());
+			else if (i % 2 == 0)
+			{
+				vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier[0]);
+			}
+			else
+			{
+				vkCmdPipelineBarrier(m_PresentSync[m_ResourceIndex].Commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, 1, &barrier[1]);
+			}
 		}
 
 		vkWaitForFences(m_Scope.GetDevice(), 1, &m_AcquireFence, VK_TRUE, UINT64_MAX);
@@ -959,7 +963,8 @@ void VulkanBase::EndFrame()
 
 		vkCmdBeginRenderPass(m_PresentSync[m_ResourceIndex].Commands, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		m_PostProcessDescriptors[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_PostProcessPipeline);
+		m_UBOSets[m_ResourceIndex]->BindSet(0, m_PresentSync[m_ResourceIndex].Commands, *m_PostProcessPipeline);
+		m_PostProcessDescriptors[m_ResourceIndex]->BindSet(1, m_PresentSync[m_ResourceIndex].Commands, *m_PostProcessPipeline);
 		m_PostProcessPipeline->BindPipeline(m_PresentSync[m_ResourceIndex].Commands);
 		vkCmdDraw(m_PresentSync[m_ResourceIndex].Commands, 3, 1, 0, 0);
 
@@ -1179,9 +1184,9 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 	cloudParams.Coverage = settings.Coverage;
 	cloudParams.CoverageSq = settings.Coverage * settings.Coverage;
 	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.125);
-	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, cloudParams.CoverageSq);
-	cloudParams.LightIntensity = glm::mix(1.0, 0.05, glm::pow(settings.Coverage, 1.25));
-	cloudParams.Ambient = glm::mix(0.01, 0.0, cloudParams.CoverageSq);
+	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, glm::smoothstep(0.0f, 1.0f, cloudParams.CoverageSq));
+	cloudParams.LightIntensity = glm::mix(1.0, 0.05, settings.Coverage);
+	cloudParams.Ambient = 0.0; // glm::mix(0.01, 0.0, glm::smoothstep(0.0f, 1.0f, cloudParams.Coverage));
 	cloudParams.Density = settings.Density;
 	cloudParams.TopBound = Rct;
 	cloudParams.BottomBound = Rcb + (Rct - Rcb) * (0.5 - glm::min(cloudParams.Coverage, 0.5f));
@@ -1192,6 +1197,8 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 
 void VulkanBase::SetTerrainLayerSettings(float Scale, int Count, TerrainLayerProfile* settings)
 {
+	assert(Count < 100, "Too many layers!");
+
 	m_TerrainLayer->Update(&Count, sizeof(int));
 	m_TerrainLayer->Update(&Scale, sizeof(float), sizeof(int));
 	m_TerrainLayer->Update(settings, Count * sizeof(TerrainLayerProfile), 16u);
@@ -1417,6 +1424,7 @@ VkBool32 VulkanBase::create_frame_pipelines()
 	m_PostProcessPipeline = GraphicsPipelineDescriptor()
 		.SetShaderStage("fullscreen", VK_SHADER_STAGE_VERTEX_BIT)
 		.SetShaderStage("post_process_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
+		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(m_PostProcessDescriptors[0]->GetLayout())
 		.SetRenderPass(m_Scope.GetPostProcessPass(), 0)
 		.Construct(m_Scope);
@@ -1706,7 +1714,7 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 		uint32_t firstRing = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height;
 		uint32_t nextRings = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
 
-		float Lod = 0.0;
+		float Lod = glm::length(m_Camera.Transform.offset) < Rg + (Rt - Rg) * 0.5 ? 0.0 : 2.0;
 		uint32_t VertexOffset = 0;
 		int LodVertices[3] = { 27, 15, 3 };
 		for (uint32_t i = 0; i < glm::min(grass_rings, m_TerrainLUT[m_ResourceIndex].Image->GetArrayLayers()); i++)

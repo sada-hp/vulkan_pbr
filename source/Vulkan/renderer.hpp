@@ -19,7 +19,9 @@
 #endif
 
 #if DEBUG == 1
+#ifndef VALIDATION_OFF
 #define VALIDATION
+#endif
 #endif
 
 struct VulkanTexture : Texture
@@ -57,6 +59,8 @@ namespace GR
 	public:
 		Components::ProjectionMatrix Projection = {};
 		Components::WorldMatrix Transform = {};
+		float Exposure = 1.0;
+		float Gamma = 2.2;
 
 		glm::dmat4 get_view_matrix() const
 		{
@@ -118,8 +122,8 @@ namespace GR
 		static constexpr float Rt = ATMOSPHERE_RADIUS;
 #endif
 
-		static constexpr float Rcb = Rg + 0.15 * (Rt - Rg);
-		static constexpr float Rct = Rg + 0.85 * (Rt - Rg);
+		static constexpr float Rcb = Rg + 0.25 * (Rt - Rg);
+		static constexpr float Rct = Rg + 0.95 * (Rt - Rg);
 	};
 };
 

@@ -21,6 +21,8 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     double CameraRadius;
     float Wind;
     float Time;
+    float Gamma;
+    float Exposure;
 } ubo;
 
 #endif

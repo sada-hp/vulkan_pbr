@@ -153,7 +153,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
 }
 
 // get specular and ambient part from sunlight
-vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SMaterial Material)
+vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, inout float Shadow, in SMaterial Material)
 {
     vec3 Lo = vec3(0.0);
     vec3 N = Material.Normal;
@@ -167,7 +167,6 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
     float LdotH = saturate(dot(S, H));
     float HdotV = saturate(dot(H, V));
 
-    float Shadow = 1.0;
     SAtmosphere Atmosphere;
     float LightIntensity = MaxLightIntensity;
     SampleAtmosphere(Eye, World, -V, Sun, Atmosphere, Shadow, LightIntensity);
@@ -193,7 +192,7 @@ vec3 DirectSunlight(in vec3 Eye, in vec3 World, in vec3 View, in vec3 Sun, in SM
     R = mix(N, R, (1.0f - A2) * (sqrt(1.0f - A2) + A2));
     vec3 reflection = textureLod(SpecularLUT, R, A2 * float(textureQueryLevels(SpecularLUT) - 1)).rgb;
     vec2 brdf  = texture(BRDFLUT, vec2(NdotV, A2)).rg;
-    vec3 irradiance = max(NdotL, 0.05) * Shadow * texture(DiffuseLUT, N).rgb;
+    vec3 irradiance = max(NdotL, 0.05) * (0.5 * Shadow + 0.25 * dFdx(Shadow) + 0.25 * dFdy(Shadow)) * texture(DiffuseLUT, N).rgb;
 
     vec3 diffuse = Material.Albedo.rgb * irradiance;
     vec3 specular = reflection * (F * brdf.x + brdf.y);
@@ -245,6 +244,7 @@ vec3 GetSkyColor(vec3 Eye, vec3 View, vec3 Sun)
 
 void main()
 {
+    float Shadow = 1.0;
     vec4 Color     = texelFetch(HDRColor, ivec2(gl_FragCoord.xy), 0);
     float Depth    = texelFetch(SceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 Deferred  = texelFetch(HDRDeferred, ivec2(gl_FragCoord.xy), 0).rgba;
@@ -266,7 +266,7 @@ void main()
         Material.Specular   = Deferred.a;
         Material.Normal     = Normal;
         
-        Color.rgb = DirectSunlight(Eye, World, View, Sun, Material);
+        Color.rgb = DirectSunlight(Eye, World, View, Sun, Shadow, Material);
     }
 
     if (Color.a != 1.0)

@@ -31,17 +31,18 @@ void main()
         Ray.Direction = normalize(ScreenWorld.xyz);
 
         Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-        Hits.Ground = Hits.Ground == 0 ? distance(inWorld, RayOrigin) : min(distance(inWorld, RayOrigin), Hits.Ground);
+        Hits.Ground = Hits.Ground == 0 ? (sampledDepth > 0.0 ? distance(inWorld, RayOrigin) : 0.0) : (sampledDepth > 0.0 ? min(distance(inWorld, RayOrigin), Hits.Ground) : Hits.Ground);
         Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.TopBound);
         Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.BottomBound);
         Hits.Camera = float(ubo.CameraRadius);
 
         float muHoriz = sqrt(1.0 - pow(Rg / Hits.Camera, 2.0));
         float horizon = dot(RayOrigin, Ray.Direction) / Hits.Camera + muHoriz;
-        if (horizon >= 0)
+        if (horizon > 0)
         {
+            float t = Hits.Ground == 0 ? Hits.TopCloud : (Hits.Ground > Hits.BottomCloud ? min(Hits.TopCloud, Hits.Ground) : Hits.TopCloud);
             Ray.End = RayOrigin;
-            Ray.Start = RayOrigin + Ray.Direction * min(Hits.TopCloud, Hits.Ground);
+            Ray.Start = RayOrigin + Ray.Direction * t;
         }
         else
         {
@@ -57,7 +58,7 @@ void main()
             vec4 clip2 = ubo.ProjectionMatrix * vec4(uboOld.ViewMatrix * vec4(Ray.LastHit, 1.0));
             outDepth = max(clip1.z / clip1.w, clip2.z / clip2.w);
 
-            outScattering = outDepth > sampledDepth ? vec4(mix(outScattering.rgb, texelFetch(oldImage, Texel, 0).rgb, 0.25), outScattering.a) : vec4(0.0, 0.0, 0.0, 1.0);
+            outScattering = outDepth > sampledDepth ? vec4(mix(outScattering.rgb, texelFetch(oldImage, Texel, 0).rgb, 0.1), outScattering.a) : vec4(0.0, 0.0, 0.0, 1.0);
         }
 
         imageStore(outImage, Texel, outScattering);
