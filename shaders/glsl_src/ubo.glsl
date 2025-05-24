@@ -23,6 +23,7 @@ layout(set = 0, binding = 0) uniform UnfiormBuffer
     float Time;
     float Gamma;
     float Exposure;
+    vec4 FrustumPlanes[6];
 } ubo;
 
 #endif

@@ -203,6 +203,17 @@ private:
 	friend class GR::Window;
 
 	std::vector<const char*> m_ExtensionsList = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME, VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME };
+
+	std::vector<VulkanSynchronization> m_ApplySync = {};
+	std::vector<VulkanSynchronization> m_PresentSync = {};
+	std::vector<VulkanSynchronization> m_ComposeSync = {};
+	std::vector<VulkanSynchronization> m_DeferredSync = {};
+	std::vector<VulkanSynchronization> m_TerrainAsync = {};
+	std::vector<VulkanSynchronization> m_CubemapAsync = {};
+	std::vector<VulkanSynchronization> m_BackgroundAsync = {};
+	/*
+	* Frame resources
+	*/
 	std::vector<VkImage> m_SwapchainImages = {};
 	std::vector<VkImageView> m_SwapchainViews = {};
 
@@ -232,15 +243,9 @@ private:
 	std::vector<VkFramebuffer> m_FramebuffersCP   = {};
 	std::vector<VkFramebuffer> m_FramebuffersPP   = {};
 
-	std::unique_ptr<GraphicsPipeline> m_TerrainTexturingPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_CompositionPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<GraphicsPipeline> m_PostProcessPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_BlendingPipeline     = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_CubemapPipeline      = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_CubemapMipPipeline   = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline  = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline  = VK_NULL_HANDLE;
-
+	std::unique_ptr<ComputePipeline> m_BlendingPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurSetupPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurHorizontalPipeline = VK_NULL_HANDLE;
 	std::unique_ptr<ComputePipeline> m_BlurVerticalPipeline = VK_NULL_HANDLE;
@@ -248,85 +253,10 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_SubpassDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_BlendingDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_CompositionDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors        = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_BlurDescriptors = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_PostProcessDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapMipDescriptors     = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_TemporalVolumetrics = {};
-
-	std::unique_ptr<Buffer> m_DiffusePrecompute = VK_NULL_HANDLE;
-	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
 
 	std::vector<VkSemaphore> m_SwapchainSemaphores = {};
-
-	std::vector<VulkanSynchronization> m_ApplySync = {};
-	std::vector<VulkanSynchronization> m_PresentSync = {};
-	std::vector<VulkanSynchronization> m_ComposeSync = {};
-	std::vector<VulkanSynchronization> m_DeferredSync = {};
-	std::vector<VulkanSynchronization> m_TerrainAsync = {};
-	std::vector<VulkanSynchronization> m_CubemapAsync = {};
-	std::vector<VulkanSynchronization> m_BackgroundAsync = {};
-
-	VkInstance m_VkInstance = VK_NULL_HANDLE;
-	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
-
-	RenderScope m_Scope = {};
-	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
-
-	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
-	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {};
-	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
-	std::unique_ptr<Buffer> m_CloudLayer = {};
-	std::unique_ptr<Buffer> m_TerrainLayer = {};
-
-	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSkySets = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_UBOTempSets = {};
-
-	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_VolumetricsBetweenPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_VolumetricsUnderPipeline = VK_NULL_HANDLE;
-	std::unique_ptr<ComputePipeline> m_VolumetricsComposePipeline = VK_NULL_HANDLE;
-	std::unique_ptr<DescriptorSet> m_VolumetricsDescriptor = VK_NULL_HANDLE;
-
-	VulkanTexture m_VolumeShape = {};
-	VulkanTexture m_VolumeDetail = {};
-	VulkanTexture m_VolumeWeather = {};
-	VulkanTexture m_VolumeWeatherCube = {};
-
-	VulkanTexture m_ScatteringLUT = {};
-	VulkanTexture m_IrradianceLUT = {};
-	VulkanTexture m_TransmittanceLUT = {};
-
-	VulkanTexture m_BRDFLUT = {};
-	std::vector<VulkanTexture> m_DiffuseIrradience = {};
-	std::vector<VulkanTextureMultiView> m_CubemapLUT = {};
-	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
-
-	std::vector<VulkanTexture> m_TerrainLUT = {};
-	// std::vector<VulkanTexture> m_WaterLUT = {};
-
-	std::vector<VulkanTexture> m_SSRLUT = {};
-	std::unique_ptr<ComputePipeline> m_SSRPipeline = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_SSRDescriptors = {};
-
-	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
-	// std::vector<std::unique_ptr<DescriptorSet>> m_WaterSet = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
-
-	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
-	std::unique_ptr<ComputePipeline> m_TerrainCompose = {};
-	// std::unique_ptr<ComputePipeline> m_WaterCompute = {};
-
-	std::unique_ptr<GraphicsPipeline> m_GrassPipeline = {};
-	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
-
-	std::vector<std::unique_ptr<Buffer>> TerrainVBs = {};
-
-	uint32_t m_TerrainDispatches = 0u;
 
 	std::vector<uint32_t> m_ImageIndex = {};
 	uint32_t m_ResourceIndex = 0;
@@ -336,6 +266,89 @@ private:
 	std::vector<VkSubmitInfo> m_GraphicsSubmits;
 	std::vector<VkFence> m_GraphicsFences;
 	VkFence m_AcquireFence;
+	/*
+	* Volumetrics resources
+	*/
+	std::vector<std::unique_ptr<DescriptorSet>> m_TemporalVolumetrics = {};
+
+	std::unique_ptr<DescriptorSet> m_VolumetricsDescriptor = VK_NULL_HANDLE;
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSkySets = {};
+
+	std::vector<std::unique_ptr<Buffer>> m_UBOSkyBuffers = {};
+	std::unique_ptr<Buffer> m_CloudLayer = {};
+
+	std::unique_ptr<ComputePipeline> m_VolumetricsAbovePipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsBetweenPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsUnderPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_VolumetricsComposePipeline = VK_NULL_HANDLE;
+
+	VulkanTexture m_VolumeShape = {};
+	VulkanTexture m_VolumeDetail = {};
+	VulkanTexture m_VolumeWeather = {};
+	VulkanTexture m_VolumeWeatherCube = {};
+	/*
+	* Atmosphere resources
+	*/
+	VulkanTexture m_ScatteringLUT = {};
+	VulkanTexture m_IrradianceLUT = {};
+	VulkanTexture m_TransmittanceLUT = {};
+	/*
+	* PBR resources
+	*/
+	std::unique_ptr<ComputePipeline> m_CubemapPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_CubemapMipPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_ConvolutionPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_SpecularIBLPipeline = VK_NULL_HANDLE;
+
+	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_CubemapMipDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_ConvolutionDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_SpecularDescriptors = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_DiffuseDescriptors = {};
+
+	std::unique_ptr<Buffer> m_DiffusePrecompute = VK_NULL_HANDLE;
+	std::unique_ptr<Buffer> m_SpecularPrecompute = VK_NULL_HANDLE;
+
+	VulkanTexture m_BRDFLUT = {};
+	std::vector<VulkanTexture> m_DiffuseIrradience = {};
+	std::vector<VulkanTextureMultiView> m_CubemapLUT = {};
+	std::vector<VulkanTextureMultiView> m_SpecularLUT = {};
+	/*
+	* Terrain resources
+	*/
+	std::unique_ptr<GraphicsPipeline> m_TerrainTexturingPipeline = VK_NULL_HANDLE;
+	std::unique_ptr<ComputePipeline> m_TerrainCompute = {};
+	std::unique_ptr<ComputePipeline> m_TerrainCompose = {};
+	std::unique_ptr<ComputePipeline> m_GrassOcclude   = {};
+	std::unique_ptr<GraphicsPipeline> m_GrassPipeline = {};
+
+	std::unique_ptr<Buffer> m_TerrainLayer = {};
+	std::unique_ptr<Buffer> m_GrassIndirectRef = {};
+	std::vector<std::unique_ptr<Buffer>> m_GrassIndirect  = {};
+	std::vector<std::unique_ptr<Buffer>> m_GrassPositions = {};
+	std::vector<std::unique_ptr<Buffer>> TerrainVBs = {};
+
+	std::vector<VulkanTexture> m_TerrainLUT = {};
+
+	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
+
+	uint32_t m_TerrainDispatches = 0u;
+	/*
+	* Common
+	*/
+	std::vector<std::unique_ptr<Buffer>> m_UBOTempBuffers = {};
+	std::vector<std::unique_ptr<Buffer>> m_UBOBuffers = {};
+
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOSets = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_UBOTempSets = {};
+
+	VkInstance m_VkInstance = VK_NULL_HANDLE;
+	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
+
+	RenderScope m_Scope = {};
+	GLFWwindow* m_GlfwWindow = VK_NULL_HANDLE;
 
 #ifdef INCLUDE_GUI
 	VkDescriptorPool m_ImguiPool = VK_NULL_HANDLE;
@@ -402,7 +415,7 @@ public:
 	/*
 	*
 	*/
-	void _drawTerrain(const PBRObject& gro, const PBRConstants& constants, uint32_t grass_rings = 3) const;
+	void _drawTerrain(const PBRObject& gro, const PBRConstants& constants) const;
 	/*
 	* 
 	*/

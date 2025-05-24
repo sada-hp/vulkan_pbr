@@ -33,6 +33,7 @@ struct UniformBuffer
 	float Time;
 	float Gamma;
 	float Exposure;
+	glm::vec4 FrustumPlanes[6];
 };
 /*
 * !@brief Struct describing the coverage of volumetric clouds

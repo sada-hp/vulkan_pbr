@@ -329,11 +329,6 @@ namespace GR
 				return glm::vec<3, Type>(orientation[1]);
 			}
 		};
-
-		struct TerrainGrassRings
-		{
-			uint32_t Count = 0u;
-		};
 		
 		struct BoundingBox
 		{

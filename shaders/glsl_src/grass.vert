@@ -4,11 +4,6 @@
 #include "common.glsl"
 #include "constants.glsl"
 
-layout(push_constant) uniform constants
-{
-    layout(offset = 0) float Lod;
-} In;
-
 struct Vertex
 {
     vec4 Position;
@@ -54,6 +49,10 @@ layout(set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 layout (std140, set = 1, binding = 1) readonly buffer TerrainVertex{
 	Vertex at[];
 } vertices;
+layout (std140, set = 1, binding = 2) readonly buffer PositionsBuffer
+{
+	ivec4 at[];
+} positions;
 
 layout(location = 0) out vec4 ObjectCenter;
 layout(location = 1) out vec4 FragNormal;
@@ -61,11 +60,9 @@ layout(location = 2) out vec3 SlopeNormal;
 
 void main()
 {
-    float Level = float(gl_BaseVertex);
     ivec2 size = ivec2(textureSize(NoiseMap, 0));
-    int VertexCount = int(Level == 0 ? size.x * size.y : size.x * size.y - ceil(float(size.x) / 2.0) * ceil(float(size.y) / 2.0));
-    Vertex vert = vertices.at[gl_BaseInstance + gl_InstanceIndex % VertexCount];
-    Level = vert.Position.w; // refine
+    Vertex vert = vertices.at[positions.at[gl_InstanceIndex / 4][gl_InstanceIndex % 4]];
+    float Level = vert.Position.w; // refine
 
     vec4 dH = textureGather(NoiseMap, vec3(vert.UV.xy, Level), 0);
     float Height = (dH.w - MinHeight) / (MaxHeight - MinHeight);
@@ -94,7 +91,7 @@ void main()
     }
 
     float anim = ubo.Wind * ubo.Time * 0.01;
-    vec2 hash = noise2(vec2(mix(dH.w, dH.z, float(gl_InstanceIndex) / float(Level + 1)), mix(dH.w, dH.y, float(gl_InstanceIndex) / float(Level + 1))));
+    vec2 hash = noise2(vec2(mix(dH.w, dH.z, 0.5), mix(dH.w, dH.y, 0.5)));
 
     if (Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height - 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
     {
@@ -102,10 +99,10 @@ void main()
     }
     else
     {
-        vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (In.Lod == 2 ? 42 : (In.Lod == 1 ? 27 : 0))]].xyz;
+        vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (gl_DrawID == 2 ? 42 : (gl_DrawID == 1 ? 27 : 0))]].xyz;
         float AO = saturate(0.1 + LocalPosition.y / 10.0);
         
-        LocalPosition = LocalPosition * vec2(6.0, 10.0).xyx + 0.5 * sampleScale * vec3(hash.x, 0.0, hash.y);
+        LocalPosition = LocalPosition * vec2(5.0, 10.0).xyx + 0.5 * sampleScale * vec3(hash.x, 0.0, hash.y);
 
         float wind = HALF_PI * smootherstep(0.0, 1.0, AO) * perlin(5.0 * UVdir + anim, 100.0);
         float lean = 0.25 * smootherstep(0.0, 1.0, AO) * hash.y;

@@ -1,0 +1,61 @@
+#version 460
+#include "ubo.glsl"
+#include "constants.glsl"
+#include "common.glsl"
+#include "noise.glsl"
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+struct TerrainVertex
+{
+    vec4 Position;
+    vec4 UV;
+};
+
+struct IndirectCommand
+{
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+layout (constant_id = 2) const uint RingsCount = 0;
+
+layout (set = 1, binding = 0) uniform sampler2DArray NoiseMap;
+layout (std140, set = 1, binding = 1) readonly buffer TerrainBuffer
+{
+	TerrainVertex at[];
+} vertices;
+layout (std140, set = 1, binding = 2) writeonly buffer PositionsBuffer
+{
+	ivec4 at[];
+} positions;
+layout (std140, set = 1, binding = 3) buffer IndirectBuffer
+{
+	IndirectCommand at[];
+} commands;
+
+bool Cull(vec4 Position)
+{
+    return dot(ubo.FrustumPlanes[0], Position) > 0.0
+        && dot(ubo.FrustumPlanes[1], Position) > 0.0
+        && dot(ubo.FrustumPlanes[2], Position) > 0.0
+        && dot(ubo.FrustumPlanes[3], Position) > 0.0
+        && dot(ubo.FrustumPlanes[4], Position) > 0.0
+        && dot(ubo.FrustumPlanes[5], Position) > 0.0;
+}
+
+void main()
+{
+    ivec2 size = ivec2(textureSize(NoiseMap, 0));
+    TerrainVertex vertex = vertices.at[int(gl_GlobalInvocationID.x)];
+    int Level = int(vertex.Position.w);
+    
+    if (Cull(vec4(vertex.Position.xyz + normalize(vertex.Position.xyz) * 50.0, 1.0)))
+    {
+        uint index = atomicAdd(commands.at[Level].instanceCount, 1);
+        int vtx_new = int(commands.at[Level].firstInstance + index);
+        positions.at[vtx_new / 4][vtx_new % 4] = int(gl_GlobalInvocationID.x);
+    }
+}

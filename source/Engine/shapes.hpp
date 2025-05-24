@@ -114,6 +114,7 @@ namespace GR
 			float m_MinHeight = 1.f;
 			float m_MaxHeight = 1.f;
 			uint32_t m_NoiseSeed = 0u;
+			uint32_t m_GrassRings = 0u;
 		};
 	};
 }

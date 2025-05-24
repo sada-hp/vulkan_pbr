@@ -19,7 +19,6 @@ namespace GR
 		Registry.emplace<Components::MetallicOverride>(m_TerrainEntity);
 		Registry.emplace<Components::DisplacementScale>(m_TerrainEntity);
 		Registry.emplace<Components::RoughnessMultiplier>(m_TerrainEntity);
-		Registry.emplace<Components::TerrainGrassRings>(m_TerrainEntity);
 		Registry.emplace<Components::EntityType>(m_TerrainEntity, Enums::EEntity::Terrain);
 
 		return static_cast<VulkanBase*>(m_Scope)->_constructShape(m_TerrainEntity, Registry, Descriptor);
@@ -100,7 +99,7 @@ namespace GR
 				renderer->_updateTerrain(m_TerrainEntity, Registry);
 			}
 
-			renderer->_drawTerrain(tro, constants, Registry.get<Components::TerrainGrassRings>(m_TerrainEntity).Count);
+			renderer->_drawTerrain(tro, constants);
 		}
 	}
 
