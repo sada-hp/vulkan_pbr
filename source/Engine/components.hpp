@@ -334,6 +334,16 @@ namespace GR
 		{
 			uint32_t Count = 0u;
 		};
+		
+		struct BoundingBox
+		{
+			glm::vec3 Points[8];
+		};
+
+		struct CullDistance
+		{
+			float Value = 1e6f;
+		};
 
 		using WorldMatrix = TransformMatrix<float, double>;
 	};

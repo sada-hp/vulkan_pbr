@@ -3,6 +3,8 @@
 #include "Engine/components.hpp"
 #include "Vulkan/graphics_object.hpp"
 
+#define SQR(x) x * x
+
 namespace GR
 {
 	Entity World::AddShape(const Shapes::GeoClipmap& Descriptor)
@@ -33,7 +35,17 @@ namespace GR
 		Registry.emplace<Components::RoughnessMultiplier>(ent);
 		Registry.emplace<Components::EntityType>(ent, Enums::EEntity::Shape);
 
-		return static_cast<VulkanBase*>(m_Scope)->_constructShape(ent, Registry, Descriptor);
+		Shapes::GeometryDescriptor Geometry;
+		ent = static_cast<VulkanBase*>(m_Scope)->_constructShape(ent, Registry, Descriptor, &Geometry);
+
+		Registry.emplace<Components::CullDistance>(ent);
+		Components::BoundingBox& Box = Registry.emplace<Components::BoundingBox>(ent);
+		Box.Points[0] = { Geometry.Min.x, Geometry.Min.y, Geometry.Min.z }; Box.Points[1] = { Geometry.Max.x, Geometry.Max.y, Geometry.Max.z };
+		Box.Points[2] = { Geometry.Max.x, Geometry.Min.y, Geometry.Min.z }; Box.Points[3] = { Geometry.Min.x, Geometry.Max.y, Geometry.Min.z };
+		Box.Points[4] = { Geometry.Min.x, Geometry.Min.y, Geometry.Max.z }; Box.Points[5] = { Geometry.Max.x, Geometry.Max.y, Geometry.Min.z };
+		Box.Points[6] = { Geometry.Min.x, Geometry.Max.y, Geometry.Max.z }; Box.Points[7] = { Geometry.Max.x, Geometry.Min.y, Geometry.Max.z };
+
+		return ent;
 	}
 
 	void World::BindTexture(Components::Resource<Texture>& Resource, const std::string& path)
@@ -53,20 +65,24 @@ namespace GR
 
 		for (const auto& [ent, gro, world] : view.each())
 		{
-			PBRConstants constants{};
-			constants.Offset = world.GetOffset();
-			constants.Orientation = glm::mat3x4(world.GetRotation());
-			constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
-			constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
-			constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
-			constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
-
-			if (gro.is_dirty())
+			if (glm::distance2(renderer->m_Camera.Transform.offset, world.offset) < SQR(Registry.get<Components::CullDistance>(ent).Value)
+				&& renderer->m_Camera.FrustumCull(world.GetMatrix(), Registry.get<Components::BoundingBox>(ent).Points))
 			{
-				renderer->_updateObject(ent, Registry);
-			}
+				PBRConstants constants{};
+				constants.Offset = world.GetOffset();
+				constants.Orientation = glm::mat3x4(world.GetRotation());
+				constants.Color = glm::vec4(Registry.get<Components::RGBColor>(ent).Value, 1.0);
+				constants.RoughnessMultiplier = Registry.get<Components::RoughnessMultiplier>(ent).Value;
+				constants.Metallic = Registry.get<Components::MetallicOverride>(ent).Value;
+				constants.HeightScale = Registry.get<Components::DisplacementScale>(ent).Value;
 
-			renderer->_drawObject(gro, constants);
+				if (gro.is_dirty())
+				{
+					renderer->_updateObject(ent, Registry);
+				}
+
+				renderer->_drawObject(gro, constants);
+			}
 		}
 
 		if (m_TerrainEntity != entt::entity(-1))

@@ -7,6 +7,13 @@ namespace GR
 {
 	namespace Shapes
 	{
+		struct GeometryDescriptor
+		{
+			glm::vec3 Min;
+			glm::vec3 Max;
+			glm::vec3 Center;
+			float Radius;
+		};
 		/*
 		* !@brief This is a base class, use one of the specifications
 		*/
@@ -14,7 +21,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const = 0;
+			virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const = 0;
 
 		public:
 			virtual glm::vec3 GetDimensions() const = 0;
@@ -24,7 +31,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const override;
 
 		public:
 			glm::vec3 GetDimensions() const override
@@ -41,7 +48,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const override;
 			
 		public:
 			glm::vec3 GetDimensions() const override
@@ -58,7 +65,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const override;
 
 		public:
 			glm::vec3 GetDimensions() const override
@@ -76,7 +83,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const override;
 
 		public:
 			glm::vec3 GetDimensions() const override
@@ -92,7 +99,7 @@ namespace GR
 		{
 		protected:
 			friend class VulkanBase;
-			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope) const override;
+			GRAPI virtual std::unique_ptr<VulkanMesh> Generate(const RenderScope& Scope, GeometryDescriptor* outGeometry = nullptr) const override;
 
 		public:
 			glm::vec3 GetDimensions() const override

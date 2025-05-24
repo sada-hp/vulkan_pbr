@@ -50,6 +50,8 @@ public:
 	}
 };
 
+class VulkanBase;
+
 namespace GR
 {
 	class Window;
@@ -57,28 +59,78 @@ namespace GR
 	class Camera
 	{
 	public:
-		Components::ProjectionMatrix Projection = {};
-		Components::WorldMatrix Transform = {};
-		float Exposure = 1.0;
-		float Gamma = 2.2;
-
-		glm::dmat4 get_view_matrix() const
+		glm::dmat4 GetViewMatrix() const
 		{
 			return glm::lookAt(Transform.GetOffset(), Transform.GetOffset() + glm::dvec3(Transform.GetForward()), glm::dvec3(Transform.GetUp()));
 		}
 
-		glm::mat4 get_projection_matrix() const
+		glm::mat4 GetProjectionMatrix() const
 		{
 			return Projection.matrix;
 		}
 
-		glm::dmat4 get_view_projection() const
+		glm::dmat4 GetViewProjection() const
 		{
-			return glm::dmat4(get_projection_matrix()) * get_view_matrix();
+			return glm::dmat4(GetProjectionMatrix()) * GetViewMatrix();
+		}
+
+		glm::vec4* GetFrustumPlanes() const
+		{
+			return (glm::vec4*)_planes;
+		}
+
+		bool FrustumCull(glm::dmat4 worldmatrix, glm::vec3 bounds[8])
+		{
+			glm::vec4 points[8] = {
+				worldmatrix * glm::vec4(bounds[0], 1.0),
+				worldmatrix * glm::vec4(bounds[1], 1.0),
+				worldmatrix * glm::vec4(bounds[2], 1.0),
+				worldmatrix * glm::vec4(bounds[3], 1.0),
+				worldmatrix * glm::vec4(bounds[4], 1.0),
+				worldmatrix * glm::vec4(bounds[5], 1.0),
+				worldmatrix * glm::vec4(bounds[6], 1.0),
+				worldmatrix * glm::vec4(bounds[7], 1.0)
+			};
+
+			for (uint32_t i = 0; i < 6; i++)
+			{
+				if (glm::dot(_planes[i], points[0]) < 0.0
+					&& glm::dot(_planes[i], points[1]) < 0.0
+					&& glm::dot(_planes[i], points[2]) < 0.0
+					&& glm::dot(_planes[i], points[3]) < 0.0
+					&& glm::dot(_planes[i], points[4]) < 0.0
+					&& glm::dot(_planes[i], points[5]) < 0.0
+					&& glm::dot(_planes[i], points[6]) < 0.0
+					&& glm::dot(_planes[i], points[7]) < 0.0)
+				{
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 	private:
+		void build_frustum_planes(glm::dmat4 view_projection)
+		{
+			for (int i = 4; i--; ) { _planes[0][i] = view_projection[i][3] + view_projection[i][0]; }
+			for (int i = 4; i--; ) { _planes[1][i] = view_projection[i][3] - view_projection[i][0]; }
+			for (int i = 4; i--; ) { _planes[2][i] = view_projection[i][3] + view_projection[i][1]; }
+			for (int i = 4; i--; ) { _planes[3][i] = view_projection[i][3] - view_projection[i][1]; }
+			for (int i = 4; i--; ) { _planes[4][i] = view_projection[i][3] + view_projection[i][2]; }
+			for (int i = 4; i--; ) { _planes[5][i] = view_projection[i][3] - view_projection[i][2]; }
+		}
+
+	public:
+		Components::ProjectionMatrix Projection = {};
+		Components::WorldMatrix Transform = {};
+
+		float Exposure = 1.0;
+		float Gamma = 2.2;
+
+	private:
 		friend class VulkanBase;
+		glm::vec4 _planes[6];
 	};
 
 	class Renderer
@@ -338,11 +390,11 @@ public:
 	/*
 	* 
 	*/
-	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const;
+	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape);
 	/*
 	* 
 	*/
-	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const;
+	entt::entity _constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape, GR::Shapes::GeometryDescriptor* geometry);
 	/*
 	* 
 	*/

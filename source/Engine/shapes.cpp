@@ -7,7 +7,7 @@
 
 namespace GR
 {
-	std::unique_ptr<VulkanMesh> Shapes::Cube::Generate(const RenderScope& Scope) const
+	std::unique_ptr<VulkanMesh> Shapes::Cube::Generate(const RenderScope& Scope, GeometryDescriptor* Geometry) const
 	{
 		std::vector<MeshVertex> vertices;
 		std::vector<uint32_t> indices;
@@ -152,6 +152,14 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
+		if (Geometry)
+		{
+			Geometry->Min = glm::vec3(-h);
+			Geometry->Max = glm::vec3(h);
+			Geometry->Center = (Geometry->Min + Geometry->Max) * 0.5f;
+			Geometry->Radius = glm::length(Geometry->Max - Geometry->Center);
+		}
+
 		if (vertices.size() < UINT16_MAX)
 		{
 			std::vector<uint16_t> indices16;
@@ -168,7 +176,7 @@ namespace GR
 		}
 	}
 
-	std::unique_ptr<VulkanMesh> Shapes::Plane::Generate(const RenderScope& Scope) const
+	std::unique_ptr<VulkanMesh> Shapes::Plane::Generate(const RenderScope& Scope, GeometryDescriptor* Geometry) const
 	{
 		std::vector<MeshVertex> vertices;
 		std::vector<uint32_t> indices;
@@ -202,6 +210,14 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.f, 1.f);
 
+		if (Geometry)
+		{
+			Geometry->Min = glm::vec3(-h, 0.0, -h);
+			Geometry->Max = glm::vec3(h, 0.0, h);
+			Geometry->Center = (Geometry->Min + Geometry->Max) * 0.5f;
+			Geometry->Radius = glm::length(Geometry->Max - Geometry->Center);
+		}
+
 		if (vertices.size() < UINT16_MAX)
 		{
 			std::vector<uint16_t> indices16;
@@ -218,7 +234,7 @@ namespace GR
 		}
 	}
 
-	std::unique_ptr<VulkanMesh> Shapes::Sphere::Generate(const RenderScope& Scope) const
+	std::unique_ptr<VulkanMesh> Shapes::Sphere::Generate(const RenderScope& Scope, GeometryDescriptor* Geometry) const
 	{
 		std::vector<MeshVertex> vertices;
 		std::vector<uint32_t> indices;
@@ -285,6 +301,14 @@ namespace GR
 		Utils::CalculateNormals(vertices, indices);
 		Utils::CalculateTangents(vertices, indices, 1.0, 1.0);
 
+		if (Geometry)
+		{
+			Geometry->Min = glm::vec3(-m_Radius);
+			Geometry->Max = glm::vec3(m_Radius);
+			Geometry->Center = (Geometry->Min + Geometry->Max) * 0.5f;
+			Geometry->Radius = glm::length(Geometry->Max - Geometry->Center);
+		}
+
 		if (vertices.size() < UINT16_MAX)
 		{
 			std::vector<uint16_t> indices16;
@@ -301,7 +325,7 @@ namespace GR
 		}
 	}
 
-	std::unique_ptr<VulkanMesh> Shapes::Mesh::Generate(const RenderScope& Scope) const
+	std::unique_ptr<VulkanMesh> Shapes::Mesh::Generate(const RenderScope& Scope, GeometryDescriptor* Geometry) const
 	{
 		std::unordered_map<MeshVertex, uint32_t> uniqueVertices{};
 		std::vector<uint32_t> indices;
@@ -330,6 +354,9 @@ namespace GR
 				vertex.uv = { cur_mesh->mTextureCoords[uv_ind][vert_ind].x, 1.0 - cur_mesh->mTextureCoords[uv_ind][vert_ind].y };
 				vertex.submesh = submesh_ind;
 
+				Geometry->Max = glm::max(Geometry->Max, vertex.position);
+				Geometry->Min = glm::min(Geometry->Min, vertex.position);
+
 				if (cur_mesh->HasNormals())
 					vertex.normal = { cur_mesh->mNormals[vert_ind].x, cur_mesh->mNormals[vert_ind].y, cur_mesh->mNormals[vert_ind].z };
 
@@ -351,6 +378,12 @@ namespace GR
 			}
 		}
 
+		if (Geometry)
+		{
+			Geometry->Center = (Geometry->Min + Geometry->Max) * 0.5f;
+			Geometry->Radius = glm::length(Geometry->Max - Geometry->Center);
+		}
+
 		if (vertices.size() < UINT16_MAX)
 		{
 			std::vector<uint16_t> indices16;
@@ -367,7 +400,7 @@ namespace GR
 		}
 	}
 
-	std::unique_ptr<VulkanMesh> Shapes::GeoClipmap::Generate(const RenderScope& Scope) const
+	std::unique_ptr<VulkanMesh> Shapes::GeoClipmap::Generate(const RenderScope& Scope, GeometryDescriptor* Geometry) const
 	{
 		const uint32_t m = (glm::max(m_VerPerRing, 7u) + 1) / 4;
 		std::vector<uint32_t> indices{};

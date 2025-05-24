@@ -406,11 +406,11 @@ bool VulkanBase::BeginFrame()
 
 	// Udpate UBO
 	{
-		glm::dmat4 view_matrix = m_Camera.get_view_matrix();
+		glm::dmat4 view_matrix = m_Camera.GetViewMatrix();
+		glm::dmat4 view_proj_matrix = m_Camera.GetViewProjection();
+		glm::mat4 projection_matrix = m_Camera.GetProjectionMatrix();
 		glm::dmat4 view_matrix_inverse = glm::inverse(view_matrix);
-		glm::mat4 projection_matrix = m_Camera.get_projection_matrix();
 		glm::mat4 projection_matrix_inverse = glm::inverse(projection_matrix);
-		glm::dmat4 view_proj_matrix = static_cast<glm::dmat4>(projection_matrix) * view_matrix;
 		glm::dmat4 view_proj_matrix_inverse = view_matrix_inverse * static_cast<glm::dmat4>(projection_matrix_inverse);
 		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.Transform.GetOffset(), 1.0);
 		glm::vec4 CameraPosition = glm::vec4(m_Camera.Transform.GetOffset(), 1.0);
@@ -421,6 +421,8 @@ bool VulkanBase::BeginFrame()
 		glm::vec4 CameraForward = glm::vec4(m_Camera.Transform.GetForward(), 0.0);
 		glm::vec2 ScreenSize = glm::vec2(static_cast<float>(m_Scope.GetSwapchainExtent().width), static_cast<float>(m_Scope.GetSwapchainExtent().height));
 		glm::mat3 WorldOrientation = glm::mat3_cast(GR::Utils::OrientationFromNormal(glm::vec3(WorldUp)));
+
+		m_Camera.build_frustum_planes(view_proj_matrix);
 
 		double CameraRadius = glm::length(CameraPositionFP64);
 		float Time = glfwGetTime();
@@ -1643,10 +1645,10 @@ std::unique_ptr<VulkanTexture> VulkanBase::_loadImage(const std::vector<std::str
 	return Texture;
 }
 
-entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape) const
+entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::GeoClipmap& shape)
 {
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
-	gro.mesh = shape.Generate(m_Scope);
+	gro.mesh = shape.Generate(m_Scope, nullptr);
 
 	const_cast<VulkanBase*>(this)->terrain_init(*gro.mesh->GetVertexBuffer(), shape);
 
@@ -1660,12 +1662,12 @@ entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& regis
 	return ent;
 }
 
-entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape) const
+entt::entity VulkanBase::_constructShape(entt::entity ent, entt::registry& registry, const GR::Shapes::Shape& shape, GR::Shapes::GeometryDescriptor* geometry)
 {
 	PBRObject& gro = registry.emplace_or_replace<PBRObject>(ent);
 	gro.descriptorSet = create_pbr_set(*m_DefaultWhite->Views[0], *m_DefaultNormal->Views[0], *m_DefaultARM->Views[0]);
 	gro.pipeline = create_pbr_pipeline(*gro.descriptorSet);
-	gro.mesh = shape.Generate(m_Scope);
+	gro.mesh = shape.Generate(m_Scope, geometry);
 
 	registry.emplace_or_replace<GR::Components::AlbedoMap>(ent, m_DefaultWhite, &gro.dirty);
 	registry.emplace_or_replace<GR::Components::NormalDisplacementMap>(ent, m_DefaultNormal, &gro.dirty);
