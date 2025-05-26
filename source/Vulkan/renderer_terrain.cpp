@@ -29,7 +29,7 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	{
 		m_GrassPipeline->BindPipeline(cmd);
 		m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_GrassPipeline);
-		m_GrassSet[m_ResourceIndex]->BindSet(1, cmd, *m_GrassPipeline);
+		m_GrassDrawSet[m_ResourceIndex]->BindSet(1, cmd, *m_GrassPipeline);
 		vkCmdDrawIndirectCount(m_DeferredSync[m_ResourceIndex].Commands, m_GrassIndirect[m_ResourceIndex]->GetBuffer(), 0, m_GrassIndirect[m_ResourceIndex]->GetBuffer(), m_GrassIndirect[m_ResourceIndex]->GetSize() - sizeof(uint32_t), m_TerrainLUT[0].Image->GetArrayLayers(), sizeof(VkDrawIndirectCommand));
 	}
 
@@ -199,6 +199,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 	m_GrassSet.resize(m_ResourceCount);
 	m_TerrainLUT.resize(m_ResourceCount);
 	m_TerrainSet.resize(m_ResourceCount);
+	m_GrassDrawSet.resize(m_ResourceCount);
 	m_GrassIndirect.resize(m_ResourceCount);
 	m_GrassPositions.resize(m_ResourceCount);
 	m_TerrainDrawSet.resize(m_ResourceCount);
@@ -286,13 +287,19 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			m_GrassPositions[i] = std::make_unique<Buffer>(m_Scope, grassInfo, grassAllocCreateInfo);
 
 			m_GrassSet[i] = DescriptorSetDescriptor()
-				.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
-				.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT, *TerrainVBs[i])
-				.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT, *m_GrassPositions[i])
+				.AddImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
+				.AddStorageBuffer(1, VK_SHADER_STAGE_COMPUTE_BIT, *TerrainVBs[i])
+				.AddStorageBuffer(2, VK_SHADER_STAGE_COMPUTE_BIT, *m_GrassPositions[i])
 				.AddStorageBuffer(3, VK_SHADER_STAGE_COMPUTE_BIT, *m_GrassIndirect[i])
 				.Allocate(m_Scope);
-		}
 
+			m_GrassDrawSet[i] = DescriptorSetDescriptor()
+				.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
+				.AddStorageBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *TerrainVBs[i])
+				.AddStorageBuffer(2, VK_SHADER_STAGE_VERTEX_BIT, *m_GrassPositions[i])
+				.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT, m_DepthHR[i].Views[1]->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
+				.Allocate(m_Scope);
+		}
 
 		m_TerrainSet[i] = DescriptorSetDescriptor()
 			.AddStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT, m_TerrainLUT[i].View->GetImageView())
@@ -348,7 +355,7 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 		{
 			m_GrassPipeline = GraphicsPipelineDescriptor()
 				.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-				.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
+				.AddDescriptorLayout(m_GrassDrawSet[0]->GetLayout())
 				.SetShaderStage("grass_vert", VK_SHADER_STAGE_VERTEX_BIT)
 				.SetShaderStage("grass_frag", VK_SHADER_STAGE_FRAGMENT_BIT)
 				.SetCullMode(VK_CULL_MODE_NONE)
@@ -362,6 +369,16 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 				.AddSpecializationConstant(5, float(glm::ceil(float(shape.m_Rings) / 3.f) + 1.f), VK_SHADER_STAGE_VERTEX_BIT)
 				.AddSpecializationConstant(6, shape.m_NoiseSeed, VK_SHADER_STAGE_VERTEX_BIT)
 				.Construct(m_Scope);
+
+			m_GrassOcclude = ComputePipelineDescriptor()
+				.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
+				.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
+				.AddSpecializationConstant(0, Rg)
+				.AddSpecializationConstant(1, Rt)
+				.AddSpecializationConstant(2, shape.m_GrassRings)
+				.AddSpecializationConstant(3, shape.m_Scale)
+				.SetShaderName("grass_indirect_comp")
+				.Construct(m_Scope);
 		}
 
 		m_TerrainTexturingPipeline = GraphicsPipelineDescriptor()
@@ -374,15 +391,6 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 			.SetCullMode(VK_CULL_MODE_NONE)
 			.SetRenderPass(m_Scope.GetTerrainPass(), 1)
 			.SetBlendAttachments(3, nullptr)
-			.Construct(m_Scope);
-
-		m_GrassOcclude = ComputePipelineDescriptor()
-			.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
-			.AddDescriptorLayout(m_GrassSet[0]->GetLayout())
-			.AddSpecializationConstant(0, Rg)
-			.AddSpecializationConstant(1, Rt)
-			.AddSpecializationConstant(2, shape.m_GrassRings)
-			.SetShaderName("grass_indirect_comp")
 			.Construct(m_Scope);
 	}
 

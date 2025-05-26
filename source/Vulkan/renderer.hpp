@@ -217,8 +217,10 @@ private:
 	std::vector<VkImage> m_SwapchainImages = {};
 	std::vector<VkImageView> m_SwapchainViews = {};
 
-	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsHR = {};
-	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsHR = {};
+	std::vector<VulkanTextureMultiView> m_DepthHR = {};
+	
+	// std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsHR = {};
+	// std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsHR = {};
 	
 	std::vector<std::unique_ptr<VulkanImage>> m_HdrAttachmentsHR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_HdrViewsHR = {};
@@ -237,6 +239,8 @@ private:
 
 	std::vector<std::unique_ptr<VulkanImage>> m_DepthAttachmentsLR = {};
 	std::vector<std::unique_ptr<VulkanImageView>> m_DepthViewsLR = {};
+
+	// std::vector<VulkanTexture> m_DepthCopies = {};
 
 	std::vector<VkFramebuffer> m_FramebuffersHR   = {};
 	std::vector<VkFramebuffer> m_FramebuffersTR   = {};
@@ -333,6 +337,7 @@ private:
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_TerrainDrawSet = {};
 	std::vector<std::unique_ptr<DescriptorSet>> m_GrassSet = {};
+	std::vector<std::unique_ptr<DescriptorSet>> m_GrassDrawSet = {};
 
 	uint32_t m_TerrainDispatches = 0u;
 	/*

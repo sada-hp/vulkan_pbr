@@ -53,6 +53,7 @@ layout (std140, set = 1, binding = 2) readonly buffer PositionsBuffer
 {
 	ivec4 at[];
 } positions;
+layout(set = 1, binding = 3) uniform sampler2D DepthMap;
 
 layout(location = 0) out vec4 ObjectCenter;
 layout(location = 1) out vec4 FragNormal;
@@ -90,10 +91,17 @@ void main()
         UVdir = ObjectCenterNorm.yz;
     }
 
+    mat3 Rot = mat3(ubo.PlanetMatrix);
     float anim = ubo.Wind * ubo.Time * 0.01;
-    vec2 hash = noise2(vec2(mix(dH.w, dH.z, 0.5), mix(dH.w, dH.y, 0.5)));
+    vec2 hash = noise2(WorldUV);
 
-    if (Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height - 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
+    ObjectCenter.xyz = ObjectCenter.xyz + Rot * 0.5 * sampleScale * vec3(hash.x, 0.0, hash.y);
+    vec4 CenterUV = vec4(ubo.ViewProjectionMatrix * vec4(ObjectCenter.xyz, 1.0));
+    CenterUV.xyz /= CenterUV.w;
+    CenterUV.xy = saturate(CenterUV.xy * 0.5 + 0.5);
+    float depth = texture(DepthMap, CenterUV.xy).r;
+
+    if (depth > CenterUV.z || Height < 0.0096 || (Height < 0.01 && max(abs(hash.x), abs(hash.y)) > saturate(Height - 0.0096) / (0.01 - 0.0096)) || Height > 0.53 || saturate(10.0 * (1.0 - saturate(abs(dot(SlopeNormal, ObjectCenterNorm))))) > 0.45)
     {
         gl_Position = vec4(-2.0);
     }
@@ -102,7 +110,7 @@ void main()
         vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (gl_DrawID == 2 ? 42 : (gl_DrawID == 1 ? 27 : 0))]].xyz;
         float AO = saturate(0.1 + LocalPosition.y / 10.0);
         
-        LocalPosition = LocalPosition * vec2(5.0, 10.0).xyx + 0.5 * sampleScale * vec3(hash.x, 0.0, hash.y);
+        LocalPosition = LocalPosition * vec2(5.0, 10.0).xyx;
 
         float wind = HALF_PI * smootherstep(0.0, 1.0, AO) * perlin(5.0 * UVdir + anim, 100.0);
         float lean = 0.25 * smootherstep(0.0, 1.0, AO) * hash.y;
@@ -123,7 +131,7 @@ void main()
         mat3 RotLean = mat3(vec3(1.0, 0.0, 0.0), leanTrig.wxz,  leanTrig.wyx);
         mat3 RotSide = mat3(vec3(bankTrig.xyw),  bankTrig.zxw, vec3(0.0, 0.0, 1.0));
         mat3 RotYaw = mat3(faceTrig.xwz, vec3(0.0, 1.0, 0.0), faceTrig.ywx);
-        mat3 Rot = mat3(ubo.PlanetMatrix) * RotWind * RotSide * RotYaw * RotLean;
+        mat3 Rot = Rot * RotWind * RotSide * RotYaw * RotLean;
 
         FragNormal = vec4(Rot * normalize(vec3(0.0, 0.0, 1.0)), AO);
         gl_Position = vec4(ubo.ViewProjectionMatrix * vec4(Rot * LocalPosition + ObjectCenter.xyz, 1.0));

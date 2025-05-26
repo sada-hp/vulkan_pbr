@@ -257,6 +257,7 @@ VulkanBase::~VulkanBase() noexcept
 	m_GrassIndirect.resize(0);
 	m_GrassIndirectRef.reset();
 	m_GrassPositions.resize(0);
+	m_GrassDrawSet.resize(0);
 
 	m_TerrainCompute.reset();
 	m_TerrainCompose.reset();
@@ -354,8 +355,7 @@ VulkanBase::~VulkanBase() noexcept
 	m_ConvolutionPipeline.reset();
 	m_SpecularIBLPipeline.reset();
 
-	m_DepthAttachmentsHR.resize(0);
-	m_DepthViewsHR.resize(0);
+	m_DepthHR.resize(0);
 
 	m_NormalAttachments.resize(0);
 	m_NormalViews.resize(0);
@@ -719,7 +719,7 @@ bool VulkanBase::BeginFrame()
 			}
 
 			m_HdrAttachmentsHR[m_ResourceIndex]->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
-			m_DepthAttachmentsHR[m_ResourceIndex]->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+			m_DepthHR[m_ResourceIndex].Image->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
 			m_BlurAttachments[2 * m_ResourceIndex]->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
 			m_BlurAttachments[2 * m_ResourceIndex + 1]->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_GRAPHICS_BIT);
 		}
@@ -1076,6 +1076,27 @@ void VulkanBase::_beginTerrainPass() const
 {
 	vkCmdEndRenderPass(m_DeferredSync[m_ResourceIndex].Commands);
 
+	m_DepthHR[m_ResourceIndex].Image->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+	m_DepthHR[m_ResourceIndex].Image->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 1, 1, 0, 1), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+
+	VkImageBlit blit{};
+	blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	blit.srcSubresource.layerCount = 1;
+	blit.srcSubresource.mipLevel = 0;
+	blit.dstSubresource.layerCount = 1;
+	blit.dstSubresource.mipLevel = 1;
+	blit.srcOffsets[1].x = m_DepthHR[m_ResourceIndex].Image->GetExtent().width;
+	blit.srcOffsets[1].y = m_DepthHR[m_ResourceIndex].Image->GetExtent().height;
+	blit.srcOffsets[1].z = 1;
+	blit.dstOffsets[1].x = m_DepthHR[m_ResourceIndex].Image->GetExtent().width / 2;
+	blit.dstOffsets[1].y = m_DepthHR[m_ResourceIndex].Image->GetExtent().height / 2;
+	blit.dstOffsets[1].z = 1;
+	vkCmdBlitImage(m_DeferredSync[m_ResourceIndex].Commands, m_DepthHR[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_DepthHR[m_ResourceIndex].Image->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+
+	m_DepthHR[m_ResourceIndex].Image->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+	m_DepthHR[m_ResourceIndex].Image->TransitionLayout(m_DeferredSync[m_ResourceIndex].Commands, VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 1, 1, 0, 1), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_GRAPHICS_BIT);
+
 	std::array<VkClearValue, 4> clearValues;
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -1149,8 +1170,7 @@ void VulkanBase::_handleResize()
 	m_NormalAttachments.resize(0);
 	m_NormalViews.resize(0);
 
-	m_DepthAttachmentsHR.resize(0);
-	m_DepthViewsHR.resize(0);
+	m_DepthHR.resize(0);
 
 	m_HdrAttachmentsLR.resize(0);
 	m_HdrViewsLR.resize(0);
@@ -1269,8 +1289,7 @@ VkBool32 VulkanBase::create_swapchain_images()
 	m_SwapchainImages.resize(imagesCount);
 	m_SwapchainViews.resize(imagesCount);
 
-	m_DepthAttachmentsHR.resize(m_ResourceCount);
-	m_DepthViewsHR.resize(m_ResourceCount);
+	m_DepthHR.resize(m_ResourceCount);
 
 	m_HdrAttachmentsHR.resize(m_ResourceCount);
 	m_HdrViewsHR.resize(m_ResourceCount);
@@ -1362,9 +1381,17 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_NormalAttachments[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_NormalViews[i] = std::make_unique<VulkanImageView>(m_Scope, *m_NormalAttachments[i]);
 
-		depthInfo.usage = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		m_DepthAttachmentsHR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
-		m_DepthViewsHR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsHR[i]);
+		depthInfo.usage = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		depthInfo.mipLevels = 2;
+		m_DepthHR[i].Image = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
+
+		VkImageSubresourceRange depthRange = m_DepthHR[i].Image->GetSubResourceRange();
+
+		depthRange.levelCount = 1;
+		depthRange.baseMipLevel = 0;
+		m_DepthHR[i].Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DepthHR[i].Image, depthRange));
+		depthRange.baseMipLevel = 1;
+		m_DepthHR[i].Views.push_back(std::make_unique<VulkanImageView>(m_Scope, *m_DepthHR[i].Image, depthRange));
 
 		hdrInfo.extent.width /= LRr;
 		hdrInfo.extent.height /= LRr;
@@ -1373,11 +1400,11 @@ VkBool32 VulkanBase::create_swapchain_images()
 		m_HdrAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, hdrInfo, allocCreateInfo);
 		m_HdrViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_HdrAttachmentsLR[i]);
 
-		depthInfo.extent.width /= LRr;
-		depthInfo.extent.height /= LRr;
+		depthInfo.extent = { m_Scope.GetSwapchainExtent().width / LRr, m_Scope.GetSwapchainExtent().height / LRr, 1 };
 		depthInfo.format = VK_FORMAT_R32G32_SFLOAT;
 		depthInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		depthInfo.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+		depthInfo.mipLevels = 1;
 		m_DepthAttachmentsLR[i] = std::make_unique<VulkanImage>(m_Scope, depthInfo, allocCreateInfo);
 		m_DepthViewsLR[i] = std::make_unique<VulkanImageView>(m_Scope, *m_DepthAttachmentsLR[i]);
 	}
@@ -1397,8 +1424,8 @@ VkBool32 VulkanBase::create_framebuffers()
 	VkBool32 res = 1;
 	for (size_t i = 0; i < m_ResourceCount; i++)
 	{
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthViewsHR[i]->GetImageView() }, &m_FramebuffersHR[i]) & res;
-		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetTerrainPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthViewsHR[i]->GetImageView() }, &m_FramebuffersTR[i]) & res;
+		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetRenderPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthHR[i].Views[0]->GetImageView()}, &m_FramebuffersHR[i]) & res;
+		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetTerrainPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView(), m_NormalViews[i]->GetImageView(),m_DeferredViews[i]->GetImageView(), m_DepthHR[i].Views[0]->GetImageView() }, &m_FramebuffersTR[i]) & res;
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetCompositionPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_HdrViewsHR[i]->GetImageView() }, &m_FramebuffersCP[i]);
 		res &= CreateFramebuffer(m_Scope.GetDevice(), m_Scope.GetPostProcessPass(), { m_Scope.GetSwapchainExtent().width, m_Scope.GetSwapchainExtent().height, 1 }, { m_SwapchainViews[i] }, &m_FramebuffersPP[i]);
 	}
@@ -1545,7 +1572,7 @@ VkBool32 VulkanBase::create_frame_descriptors()
 			.AddImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView(), SamplerPoint, VK_IMAGE_LAYOUT_GENERAL)
 			.AddImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_NormalViews[i]->GetImageView(), SamplerPoint)
 			.AddImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_DeferredViews[i]->GetImageView(), SamplerPoint)
-			.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthViewsHR[i]->GetImageView(), SamplerPoint)
+			.AddImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthHR[i].Views[0]->GetImageView(), SamplerPoint)
 			.AddImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT, m_TransmittanceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(6, VK_SHADER_STAGE_FRAGMENT_BIT, m_IrradianceLUT.View->GetImageView(), SamplerLinear)
 			.AddImageSampler(7, VK_SHADER_STAGE_FRAGMENT_BIT, m_ScatteringLUT.View->GetImageView(), SamplerLinear)
@@ -1581,15 +1608,25 @@ VkBool32 VulkanBase::create_frame_descriptors()
 			.AddStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[WRAPR(i)]->GetImageView())
 			.AddImageSampler(2, VK_SHADER_STAGE_COMPUTE_BIT, m_HdrViewsLR[i]->GetImageView(), SamplerLinear)
 			.AddImageSampler(3, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsLR[i]->GetImageView(), SamplerPoint)
-			.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthViewsHR[i]->GetImageView(), SamplerPoint)
+			.AddImageSampler(4, VK_SHADER_STAGE_COMPUTE_BIT, m_DepthHR[i].Views[0]->GetImageView(), SamplerPoint)
 			.Allocate(m_Scope);
 
 		m_SubpassDescriptors[i] = DescriptorSetDescriptor()
 			.AddSubpassAttachment(0, VK_SHADER_STAGE_FRAGMENT_BIT, m_HdrViewsHR[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
 			.AddSubpassAttachment(1, VK_SHADER_STAGE_FRAGMENT_BIT, m_NormalViews[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
 			.AddSubpassAttachment(2, VK_SHADER_STAGE_FRAGMENT_BIT, m_DeferredViews[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
-			.AddSubpassAttachment(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthViewsHR[i]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
+			.AddSubpassAttachment(3, VK_SHADER_STAGE_FRAGMENT_BIT, m_DepthHR[i].Views[0]->GetImageView(), VK_IMAGE_LAYOUT_GENERAL)
 			.Allocate(m_Scope);
+
+		if (m_GrassDrawSet.size() > 0)
+		{
+			m_GrassDrawSet[i] = DescriptorSetDescriptor()
+				.AddImageSampler(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, m_TerrainLUT[i].View->GetImageView(), m_Scope.GetSampler(ESamplerType::BillinearClamp, 1))
+				.AddStorageBuffer(1, VK_SHADER_STAGE_VERTEX_BIT, *TerrainVBs[i])
+				.AddStorageBuffer(2, VK_SHADER_STAGE_VERTEX_BIT, *m_GrassPositions[i])
+				.AddImageSampler(3, VK_SHADER_STAGE_VERTEX_BIT, m_DepthHR[i].Views[1]->GetImageView(), m_Scope.GetSampler(ESamplerType::PointClamp, 1))
+				.Allocate(m_Scope);
+		}
 	}
 
 	return res;

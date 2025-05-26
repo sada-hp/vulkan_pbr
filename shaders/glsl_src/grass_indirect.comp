@@ -21,6 +21,7 @@ struct IndirectCommand
 };
 
 layout (constant_id = 2) const uint RingsCount = 0;
+layout (constant_id = 3) const float Scale = 1.f;
 
 layout (set = 1, binding = 0) uniform sampler2DArray NoiseMap;
 layout (std140, set = 1, binding = 1) readonly buffer TerrainBuffer
@@ -52,7 +53,27 @@ void main()
     TerrainVertex vertex = vertices.at[int(gl_GlobalInvocationID.x)];
     int Level = int(vertex.Position.w);
     
-    if (Cull(vec4(vertex.Position.xyz + normalize(vertex.Position.xyz) * 50.0, 1.0)))
+    commands.at[Level].vertexCount = Level >= 2 || ubo.CameraRadius > Rg + Rdelta * 0.25 ? 3 : (Level == 1 ? 15 : 27);
+
+    vec2 WorldUV = vec2(0.0);
+    if (abs(vertex.Position.y) > abs(vertex.Position.x) && abs(vertex.Position.y) > abs(vertex.Position.z))
+    {
+        WorldUV = vertex.Position.xz;
+    }
+    else if (abs(vertex.Position.z) > abs(vertex.Position.x) && abs(vertex.Position.z) > abs(vertex.Position.y))
+    {
+        WorldUV = vertex.Position.xy;
+    }
+    else
+    {
+        WorldUV = vertex.Position.yz;
+    }
+
+    vec2 hash = noise2(WorldUV);
+    mat3 Rot = mat3(ubo.PlanetMatrix);
+    vec3 p = vertex.Position.xyz + normalize(vertex.Position.xyz) * 50.0 + Rot * 0.5 * Scale * exp2(Level) * vec3(hash.x, 0.0, hash.y);
+
+    if (Cull(vec4(p, 1.0)))
     {
         uint index = atomicAdd(commands.at[Level].instanceCount, 1);
         int vtx_new = int(commands.at[Level].firstInstance + index);

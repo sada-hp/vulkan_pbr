@@ -158,22 +158,27 @@ void main()
                 vec2 uv2 = 0.5 + vec2(atan(Normal.x, Normal.y) * ONE_OVER_2PI, asin(Normal.z) * ONE_OVER_2PI);
                 float pole_w = pole > 0.9 ? 0.0 : (pole >= 0.7 ? 1.0 - ((pole - 0.7) / (0.9 - 0.7)) : 1.0);
 
-                float T1 = terrain_fbm(Normal, uv1, 0, Level);
-                float T2 = terrain_fbm(Normal, uv2, 0, Level);
+                float T1 = pole_w != 0.0 ? terrain_fbm(Normal, uv1, 0, Level) : 0.0;
+                float T2 = pole_w != 1.0 ? terrain_fbm(Normal, uv2, 0, Level) : 0.0;
 
                 float f1 = 0.5, f2 = 0.5;
                 for (int layer = 1; layer < Layers.Count; layer++)
                 {
                     NOISE_SEED += layer * layer * layer;
 
-                    f1 = smootherstep(0.0, 1.0, 1.0 - fbm_worley(uv1, Layers.TileScale, 3));
-                    f2 = smootherstep(0.0, 1.0, 1.0 - fbm_worley(uv2, Layers.TileScale, 3));
+                    if (pole_w != 0.0)
+                    {
+                        f1 = smootherstep(0.0, 1.0, 1.0 - fbm_worley(uv1, Layers.TileScale, 3));
+                        f1 = smootherstep(0.0, 1.0, smootherstep(0.0, 1.0, f1));
+                        T1 = (1.0 - f1) * T1 + f1 * terrain_fbm(Normal, uv1, layer, Level);
+                    }
 
-                    f1 = smootherstep(0.0, 1.0, smootherstep(0.0, 1.0, f1));
-                    f2 = smootherstep(0.0, 1.0, smootherstep(0.0, 1.0, f2));
-
-                    T1 = (1.0 - f1) * T1 + f1 * terrain_fbm(Normal, uv1, layer, Level);
-                    T2 = (1.0 - f2) * T2 + f2 * terrain_fbm(Normal, uv2, layer, Level);
+                    if (pole_w != 1.0)
+                    {
+                        f2 = smootherstep(0.0, 1.0, 1.0 - fbm_worley(uv2, Layers.TileScale, 3));
+                        f2 = smootherstep(0.0, 1.0, smootherstep(0.0, 1.0, f2));
+                        T2 = (1.0 - f2) * T2 + f2 * terrain_fbm(Normal, uv2, layer, Level); 
+                    }
                 }
 
                 Val.x = mix(T2, T1, pole_w);
