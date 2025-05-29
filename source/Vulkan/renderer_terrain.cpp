@@ -377,6 +377,8 @@ VkBool32 VulkanBase::terrain_init(const Buffer& VB, const GR::Shapes::GeoClipmap
 				.AddSpecializationConstant(1, Rt)
 				.AddSpecializationConstant(2, shape.m_GrassRings)
 				.AddSpecializationConstant(3, shape.m_Scale)
+				.AddSpecializationConstant(4, shape.m_MinHeight)
+				.AddSpecializationConstant(5, glm::max(shape.m_MaxHeight, shape.m_MinHeight + 1))
 				.SetShaderName("grass_indirect_comp")
 				.Construct(m_Scope);
 		}

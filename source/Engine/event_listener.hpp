@@ -22,20 +22,20 @@ namespace GR
 	private:
 		friend class Window;
 
-		std::vector<void(*)(Events::KeyPress, void*)> m_KeyPressEvents = {};
-		std::vector<void(*)(Events::MousePress, void*)> m_MousePressEvents = {};
-		std::vector<void(*)(Events::MousePosition, void*)> m_MouseMoveEvents = {};
-		std::vector<void(*)(Events::ScrollDelta, void*)> m_ScrollEvents = {};
+		std::vector<void(*)(Events::KeyPress, void*)> m_KeyPressEvents;
+		std::vector<void(*)(Events::MousePress, void*)> m_MousePressEvents;
+		std::vector<void(*)(Events::MousePosition, void*)> m_MouseMoveEvents;
+		std::vector<void(*)(Events::ScrollDelta, void*)> m_ScrollEvents;
 
 		void* m_UserPointer = nullptr;
 
 	public:
 		EventListener()
 		{
-			m_KeyPressEvents.resize(0);
-			m_MousePressEvents.resize(0);
-			m_MouseMoveEvents.resize(0);
-			m_ScrollEvents.resize(0);
+			m_KeyPressEvents.reserve(10);
+			m_MousePressEvents.reserve(10);
+			m_MouseMoveEvents.reserve(10);
+			m_ScrollEvents.reserve(10);
 		}
 
 		~EventListener() = default;

@@ -107,7 +107,7 @@ void main()
     }
     else
     {
-        vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (gl_DrawID == 2 ? 42 : (gl_DrawID == 1 ? 27 : 0))]].xyz;
+        vec3 LocalPosition = Vertices[indices[gl_VertexIndex - gl_BaseVertex + (gl_DrawID == 2 || ubo.CameraRadius > Rg + MaxHeight ? 42 : (gl_DrawID == 1 ? 27 : 0))]].xyz;
         float AO = saturate(0.1 + LocalPosition.y / 10.0);
         
         LocalPosition = LocalPosition * vec2(5.0, 10.0).xyx;

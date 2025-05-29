@@ -72,6 +72,7 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 	m_VolumetricsComposePipeline = ComputePipelineDescriptor()
 		.SetShaderName("volumetric_compose_comp")
+		.AddDescriptorLayout(m_UBOSets[0]->GetLayout())
 		.AddDescriptorLayout(dummy)
 		.AddPushConstant(ConstantOrder)
 		.Construct(m_Scope);
