@@ -602,7 +602,7 @@ VkBool32 RenderScope::IsReadyToUse() const
 		&& m_DescriptorPool != VK_NULL_HANDLE;
 }
 
-const VkSampler& RenderScope::GetSampler(ESamplerType Type, uint32_t Mips) const
+const VkSampler RenderScope::GetSampler(ESamplerType Type, uint32_t Mips) const
 {
 	for (auto tuple : m_Samplers)
 	{
@@ -646,7 +646,5 @@ const VkSampler& RenderScope::GetSampler(ESamplerType Type, uint32_t Mips) const
 	samplerInfo.maxLod = static_cast<float>(Mips);
 	vkCreateSampler(m_LogicalDevice, &samplerInfo, VK_NULL_HANDLE, &sampler);
 
-	m_Samplers.emplace_back(std::tuple(Type, Mips, sampler));
-
-	return sampler;
+	return m_Samplers.emplace_back(std::tuple(Type, Mips, sampler))._Get_rest()._Get_rest()._Myfirst._Val;
 }

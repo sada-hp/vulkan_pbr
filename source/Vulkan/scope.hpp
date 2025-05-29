@@ -74,7 +74,7 @@ public:
 
 	inline const VkSwapchainKHR& GetSwapchain() const { return m_Swapchain; };
 
-	inline const VkExtent2D& GetSwapchainExtent() const { return m_SwapchainExtent; };
+	inline VkExtent2D GetSwapchainExtent() const { return m_SwapchainExtent; };
 
 	inline const VkDescriptorPool& GetDescriptorPool() const { return m_DescriptorPool; };
 
@@ -86,7 +86,7 @@ public:
 
 	inline const uint32_t& GetMaxFramesInFlight() const { return m_FramesInFlight; };
 
-	const VkSampler& GetSampler(ESamplerType Type, uint32_t Mips) const;
+	const VkSampler GetSampler(ESamplerType Type, uint32_t Mips) const;
 
 	inline const Queue& GetQueue(VkQueueFlagBits Type) const 
 	{
