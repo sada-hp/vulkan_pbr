@@ -39,14 +39,40 @@ layout (std140, set = 1, binding = 3) buffer IndirectBuffer
 	IndirectCommand at[];
 } commands;
 
-bool Cull(vec4 Position)
+bool Cull(vec3 CenterPosition, mat3 Rotation)
 {
-    return dot(ubo.FrustumPlanes[0], Position) > 0.0
-        && dot(ubo.FrustumPlanes[1], Position) > 0.0
-        && dot(ubo.FrustumPlanes[2], Position) > 0.0
-        && dot(ubo.FrustumPlanes[3], Position) > 0.0
-        && dot(ubo.FrustumPlanes[4], Position) > 0.0
-        && dot(ubo.FrustumPlanes[5], Position) > 0.0;
+    vec4 Box[8] = {
+        vec4(-1.0, 0.0, -1.0, 1.0),
+        vec4(1.0, 0.0, -1.0, 1.0),
+        vec4(-1.0, 10.0, -1.0, 1.0),
+        vec4(-1.0, 0.0, 1.0, 1.0),
+        vec4(1.0, 10.0, -1.0, 1.0),
+        vec4(-1.0, 10.0, 1.0, 1.0),
+        vec4(1.0, 0.0, 1.0, 1.0),
+        vec4(1.0, 10.0, 1.0, 1.0),
+    };
+
+    for (int i = 0; i < 8; i++)
+    {
+        Box[i] = vec4(CenterPosition + Rotation * vec2(5.0, 10.0).xyx * Box[i].xyz, 1.0);
+    }
+
+    for (int i = 0; i < 6; i++)
+    {
+        if (dot(ubo.FrustumPlanes[i], Box[0]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[1]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[2]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[3]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[4]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[5]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[6]) < 0.0
+        && dot(ubo.FrustumPlanes[i], Box[7]) < 0.0)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void main()
@@ -73,9 +99,9 @@ void main()
 
     vec2 hash = noise2(WorldUV);
     mat3 Rot = mat3(ubo.PlanetMatrix);
-    vec3 p = vertex.Position.xyz + normalize(vertex.Position.xyz) * 50.0 + Rot * 0.5 * Scale * exp2(Level) * vec3(hash.x, 0.0, hash.y);
+    vec3 p = vertex.Position.xyz + Rot * 0.5 * Scale * exp2(Level) * vec3(hash.x, 0.0, hash.y);
 
-    if (Cull(vec4(p, 1.0)))
+    if (Cull(p, Rot))
     {
         uint index = atomicAdd(commands.at[Level].instanceCount, 1);
         int vtx_new = int(commands.at[Level].firstInstance + index);

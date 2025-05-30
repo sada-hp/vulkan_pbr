@@ -48,7 +48,7 @@ void main()
 
             if (outScattering.rgb != vec3(0.0))
             {
-                vec4 clip = ubo.ProjectionMatrix * vec4(uboOld.ViewMatrix * vec4(Ray.FirstHit, 1.0));
+                vec4 clip = vec4(uboOld.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
                 outDepth = saturate(clip.z / clip.w);
 
                 outScattering = vec4(mix(outScattering.rgb, texture(oldImage, OldPosition.xy).rgb, 0.25), outScattering.a);

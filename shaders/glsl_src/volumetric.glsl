@@ -74,9 +74,6 @@ layout(set = 2, binding = 3) uniform UnfiormBuffer2
 {
     dmat4 ReprojectionMatrix;
     dmat4 ViewProjectionMatrix;
-    dmat4 ViewMatrix;
-    dmat4 ViewMatrixInverse;
-    dmat4 ViewProjectionMatrixInverse;
 } uboOld;
 
 void UpdateRay(inout RayMarch Ray)
