@@ -1214,8 +1214,8 @@ void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 	cloudParams.CoverageSq = settings.Coverage * settings.Coverage;
 	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.125);
 	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, glm::smoothstep(0.0f, 1.0f, cloudParams.CoverageSq));
-	cloudParams.LightIntensity = glm::mix(1.0, 0.05, settings.Coverage);
-	cloudParams.Ambient = glm::mix(0.01, 0.0, glm::smoothstep(0.0f, 1.0f, cloudParams.Coverage));
+	cloudParams.LightIntensity = glm::mix(0.05, 1.0, glm::max(0.5 - cloudParams.CoverageSq, 0.0) / 0.5);
+	cloudParams.Ambient = glm::mix(0.0, 0.015, (cloudParams.LightIntensity - 0.05) / 0.95);
 	cloudParams.Density = settings.Density;
 	cloudParams.TopBound = Rct;
 	cloudParams.BottomBound = Rcb + (Rct - Rcb) * (0.5 - glm::min(cloudParams.Coverage, 0.5f));

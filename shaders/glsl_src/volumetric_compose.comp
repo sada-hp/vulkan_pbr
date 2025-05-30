@@ -10,6 +10,9 @@ layout(set = 1, binding = 3) uniform UnfiormBuffer2
 {
     dmat4 ReprojectionMatrix;
     dmat4 ViewProjectionMatrix;
+    dmat4 ViewMatrix;
+    dmat4 ViewMatrixInverse;
+    dmat4 ViewProjectionMatrixInverse;
 } uboOld;
 
 layout(push_constant) uniform constants
@@ -70,7 +73,7 @@ void main()
             vec4 OldPosition = vec4(uboOld.ViewProjectionMatrix * ScreenWorld);
             OldPosition.xy = (OldPosition.xy / OldPosition.w) * 0.5 + 0.5;
 
-            imageStore(outImage, Texel, vec4(mix(color_sample.xyz / 4.0, texture(oldImage, OldPosition.xy).rgb, 0.25), color_sample.a / norm));
+            imageStore(outImage, Texel, vec4(mix(color_sample.rgb / norm, texture(oldImage, OldPosition.xy).rgb, 0.25), color_sample.a / norm));
             imageStore(depthImage, Texel, vec4(imageLoad(depthImage, Texel).r, depth_sample, 0.0, 0.0));
         }
         else
