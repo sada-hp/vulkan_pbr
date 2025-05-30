@@ -35,8 +35,7 @@ void main()
         int ViewIndex = int(gl_GlobalInvocationID.z);
         vec2 UV = (0.5 + vec2(gl_GlobalInvocationID.xy)) / size;
         vec4 ndcSpace = vec4(2.0 * UV - 1.0, 1.0, 1.0);
-        vec4 viewSpace = inverse(Projection) * ndcSpace;
-        vec4 worldSpace = inverse(View[ViewIndex]) * vec4(viewSpace.xyz, 0.0);
+        vec4 worldSpace = Reprojection[ViewIndex] * ndcSpace;
         vec3 direction = normalize(worldSpace.xyz);
         vec3 outColor = vec3(0.0);
 

@@ -3,6 +3,7 @@
 
 layout(set = 0, binding = 0) uniform UnfiormBuffer
 {
+    dmat4 ReprojectionMatrix;
     dmat4 ViewProjectionMatrix;
     dmat4 ViewMatrix;
     dmat4 ViewMatrixInverse;

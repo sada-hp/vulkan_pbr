@@ -414,6 +414,7 @@ bool VulkanBase::BeginFrame()
 		glm::dmat4 view_proj_matrix = m_Camera.GetViewProjection();
 		glm::mat4 projection_matrix = m_Camera.GetProjectionMatrix();
 		glm::dmat4 view_matrix_inverse = glm::inverse(view_matrix);
+		glm::dmat4 reprojection_matrix = view_matrix_inverse * glm::inverse(glm::dmat4(m_Camera.GetInfiniteProjectionMatrix()));
 		glm::mat4 projection_matrix_inverse = glm::inverse(projection_matrix);
 		glm::dmat4 view_proj_matrix_inverse = view_matrix_inverse * static_cast<glm::dmat4>(projection_matrix_inverse);
 		glm::dvec4 CameraPositionFP64 = glm::dvec4(m_Camera.Transform.GetOffset(), 1.0);
@@ -433,6 +434,7 @@ bool VulkanBase::BeginFrame()
 
 		UniformBuffer Uniform
 		{
+			reprojection_matrix,
 			view_proj_matrix,
 			view_matrix,
 			view_matrix_inverse,
@@ -476,11 +478,14 @@ bool VulkanBase::BeginFrame()
 			// m_WaterLUT[m_ResourceIndex].Image->TransferOwnership(VK_NULL_HANDLE, m_TerrainAsync[m_ResourceIndex].Commands, m_Scope.GetQueue(VK_QUEUE_GRAPHICS_BIT).GetFamilyIndex(), m_Scope.GetQueue(VK_QUEUE_COMPUTE_BIT).GetFamilyIndex());
 		}
 
-		VkBufferCopy region{};
-		region.size = m_GrassIndirectRef->GetSize() - sizeof(VkDrawIndirectCommand);
-		region.srcOffset = sizeof(VkDrawIndirectCommand);
-		vkCmdCopyBuffer(m_TerrainAsync[m_ResourceIndex].Commands, m_GrassIndirectRef->GetBuffer(), m_GrassIndirect[m_ResourceIndex]->GetBuffer(), 1, &region);
-	
+		if (m_GrassIndirectRef)
+		{
+			VkBufferCopy region{};
+			region.size = m_GrassIndirectRef->GetSize() - sizeof(VkDrawIndirectCommand);
+			region.srcOffset = sizeof(VkDrawIndirectCommand);
+			vkCmdCopyBuffer(m_TerrainAsync[m_ResourceIndex].Commands, m_GrassIndirectRef->GetBuffer(), m_GrassIndirect[m_ResourceIndex]->GetBuffer(), 1, &region);
+		}
+
 		m_TerrainLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 		// m_WaterLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
@@ -504,13 +509,13 @@ bool VulkanBase::BeginFrame()
 		}
 		m_TerrainLUT[m_ResourceIndex].Image->TransitionLayout(m_TerrainAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_QUEUE_COMPUTE_BIT);
 
-		uint32_t firstRing = m_TerrainLUT[0].Image->GetExtent().width * m_TerrainLUT[0].Image->GetExtent().height;
-		uint32_t nextRings = firstRing - glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().width) / 2.0) * glm::ceil(float(m_TerrainLUT[0].Image->GetExtent().height) / 2.0);
-
-		m_GrassOcclude->BindPipeline(m_TerrainAsync[m_ResourceIndex].Commands);
-		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_GrassOcclude);
-		m_GrassSet[m_ResourceIndex]->BindSet(1, m_TerrainAsync[m_ResourceIndex].Commands, *m_GrassOcclude);
-		vkCmdDispatchIndirect(m_TerrainAsync[m_ResourceIndex].Commands, m_GrassIndirectRef->GetBuffer(), 0);
+		if (m_GrassOcclude)
+		{
+			m_GrassOcclude->BindPipeline(m_TerrainAsync[m_ResourceIndex].Commands);
+			m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_TerrainAsync[m_ResourceIndex].Commands, *m_GrassOcclude);
+			m_GrassSet[m_ResourceIndex]->BindSet(1, m_TerrainAsync[m_ResourceIndex].Commands, *m_GrassOcclude);
+			vkCmdDispatchIndirect(m_TerrainAsync[m_ResourceIndex].Commands, m_GrassIndirectRef->GetBuffer(), 0);
+		}
 
 #if 0
 		VkClearColorValue Color;

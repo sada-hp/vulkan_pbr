@@ -69,6 +69,14 @@ namespace GR
 			return Projection.matrix;
 		}
 
+		glm::mat4 GetInfiniteProjectionMatrix() const
+		{
+			glm::mat4 matrix = Projection.matrix;
+			matrix[2][2] = 0.0;
+			matrix[3][2] = -1.0;
+			return matrix;
+		}
+
 		glm::dmat4 GetViewProjection() const
 		{
 			return glm::dmat4(GetProjectionMatrix()) * GetViewMatrix();

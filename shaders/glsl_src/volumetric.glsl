@@ -72,10 +72,8 @@ layout(set = 2, binding = 1, rg32f) uniform image2D depthImage;
 layout(set = 2, binding = 2) uniform sampler2D oldImage;
 layout(set = 2, binding = 3) uniform UnfiormBuffer2
 {
+    dmat4 ReprojectionMatrix;
     dmat4 ViewProjectionMatrix;
-    dmat4 ViewMatrix;
-    dmat4 ViewMatrixInverse;
-    dmat4 ViewProjectionMatrixInverse;
 } uboOld;
 
 void UpdateRay(inout RayMarch Ray)

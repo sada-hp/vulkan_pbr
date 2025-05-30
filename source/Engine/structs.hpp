@@ -13,6 +13,7 @@ struct ApplicationSettings
 */
 struct UniformBuffer
 {
+	glm::dmat4 ReprojectionMatrix;
 	glm::dmat4 ViewProjection;
 	glm::dmat4 ViewMatrix;
 	glm::dmat4 ViewMatrixInverse;

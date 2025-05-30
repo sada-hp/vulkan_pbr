@@ -25,7 +25,7 @@ void VulkanBase::_drawTerrain(const PBRObject& gro, const PBRConstants& constant
 	vkCmdDrawIndexed(cmd, gro.mesh->GetIndicesCount(), 1, 0, 0, 0);
 
 	// grass
-	if (glm::length(m_Camera.Transform.offset) < Rt)
+	if (glm::length(m_Camera.Transform.offset) < Rt && m_GrassPipeline)
 	{
 		m_GrassPipeline->BindPipeline(cmd);
 		m_UBOSets[m_ResourceIndex]->BindSet(0, cmd, *m_GrassPipeline);
