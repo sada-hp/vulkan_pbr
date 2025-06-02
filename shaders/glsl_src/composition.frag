@@ -44,7 +44,7 @@ float GetHeightFraction(vec3 x0)
     return saturate((length(x0) - Clouds.BottomBound) / Clouds.BoundDelta);
 }
 
-float SampleCloud(vec3 x0, float transmittance, float height)
+float SampleCloud(vec3 x0, float height)
 {
     const int lod = 1;
 
@@ -52,19 +52,19 @@ float SampleCloud(vec3 x0, float transmittance, float height)
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
 
-    float h1 = pow(height, 0.65);
+    float h1 = pow(height, 1.35);
     float h2 = saturate(remap(1.0 - height, 0.0, Clouds.BottomSmoothnessFactor, 0.0, 1.0));
 
     vec3 sx = x0 / Clouds.TopBound;
     vec2 anim = vec2(ubo.Wind * 0.01 * ubo.Time) + vec2(sin(1e-6 * ubo.Time), cos(1e-6 * ubo.Time));
-    vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim, lod).rgb;
+    vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 10.0, anim, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
     float weather2 = saturate(SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).r + 0.2);
 
     base *= weather1;
     float shape = 1.0 - Clouds.Coverage * h1 * h2 * weather2;
-
-    return mix(Clouds.Density, Clouds.Density / 6.0, transmittance) * height * saturate(remap(base, shape, 1.0, Clouds.HeightFactor, 1.0));
+    base = height * saturate(remap(base, shape, 1.0, Clouds.HeightFactor, 1.0));
+    return saturate(remap(base, 0.75 * mix(0.5, 0.2, Clouds.CoverageSq), 1.0, 0.0, 1.0));
 }
 
 float SampleCloudShadow(vec3 x1)
@@ -73,21 +73,19 @@ float SampleCloudShadow(vec3 x1)
     float bottomDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), Clouds.BottomBound);
     float topDistance = SphereMinDistance(x1, ubo.SunDirection.xyz, vec3(0.0), Clouds.TopBound);
     vec3 x0 = x1 + ubo.SunDirection.xyz * bottomDistance;
-    float len = topDistance - bottomDistance;
+    float len = distance(x1 + ubo.SunDirection.xyz * bottomDistance, x1 + ubo.SunDirection.xyz * topDistance);
 
     float Stepsize = len / float(steps);
 
     float Density = 0.0;
-    float transmittance = 1.0; 
     for (int i = 0; i < steps; i++)
     {
         x0 += ubo.SunDirection.xyz * Stepsize;
         float height = 1.0 - GetHeightFraction(x0);
-        Density = SampleCloud(x0, transmittance, height);
-        transmittance *= BeerLambert(Density, Stepsize);
+        Density += SampleCloud(x0, height);
     }
 
-    return saturate(0.05 + transmittance);
+    return Density > 0.0 ? saturate(0.05 + BeerLambert(0.1 * Clouds.Density * Density, Stepsize)) : 1.0;
 }
 
 void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere Atmosphere, inout float Shadow, inout float LightIntensity)
@@ -148,6 +146,7 @@ void SampleAtmosphere(vec3 Eye, vec3 World, vec3 View, vec3 Sun, out SAtmosphere
         w0 = w1;
     }
 
+    Shadow = SampleCloudShadow(World);
     Atmosphere.E = AtmosphereEnd.E * Atmosphere.Shadow * Shadow * LightIntensity;
     Atmosphere.L = AtmosphereEnd.L * Shadow;
 }

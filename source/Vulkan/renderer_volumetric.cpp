@@ -18,16 +18,16 @@ VkBool32 VulkanBase::volumetric_precompute()
 
 	SetCloudLayerSettings(CloudLayerProfile());
 
-	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 4u, 4u);
+	m_VolumeShape.Image = GRNoise::GenerateCloudShapeNoise(m_Scope, { 128u, 128u, 128u }, 1u, 4u);
 	m_VolumeShape.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeShape.Image);
 
-	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 4u, 4u);
+	m_VolumeDetail.Image = GRNoise::GenerateCloudDetailNoise(m_Scope, { 64u, 64u, 64u }, 2u, 16u);
 	m_VolumeDetail.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeDetail.Image);
 
 	m_VolumeWeather.Image = GRNoise::GenerateWorleyPerlin(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
 	m_VolumeWeather.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeather.Image);
 
-	m_VolumeWeatherCube.Image = GRNoise::GenerateWeatherCube(m_Scope, { 256u, 256u, 1u }, 16u, 32u, 8u);
+	m_VolumeWeatherCube.Image = GRNoise::GenerateWeatherCube(m_Scope, { 256u, 256u, 1u }, 16u, 8u, 8u);
 
 	m_VolumeWeatherCube.Image->flags &= ~VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	m_VolumeWeatherCube.View = std::make_unique<VulkanImageView>(m_Scope, *m_VolumeWeatherCube.Image);

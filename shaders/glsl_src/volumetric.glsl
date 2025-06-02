@@ -119,7 +119,7 @@ float SampleCloudShape(in RayMarch Ray, int lod)
 
     float base = textureLod(CloudLowFrequency, uv, lod).r;
 
-    float h1 = pow(height, 0.65);
+    float h1 = pow(height, 1.35);
     float h2 = saturate(remap(1.0 - height, 0.0, Params.BottomSmoothnessFactor, 0.0, 1.0));
 
     vec3 sx = Ray.Position / Params.TopBound;
@@ -128,7 +128,7 @@ float SampleCloudShape(in RayMarch Ray, int lod)
     vec3 temp = SampleArrayAsCube(WeatherMapCube, sx, 1.0, anim, lod).rgb;
     float weather2 = saturate(temp.r + 0.2);
 
-    temp = SampleArrayAsCube(WeatherMapCube, sx, 15.0, anim + vec2(sin(TWO_PI * temp.r), cos(TWO_PI * temp.b)) * 0.01, lod).rgb;
+    temp = SampleArrayAsCube(WeatherMapCube, sx, 10.0, anim + vec2(sin(TWO_PI * temp.r), cos(TWO_PI * temp.b)) * 0.01, lod).rgb;
     float weather1 = 1.0 - saturate(temp.x + 0.2) * saturate(0.5 + temp.y);
 
     base *= weather1;
@@ -143,21 +143,27 @@ float SampleCloudDetail(in RayMarch Ray, float base, int lod)
     vec3 uv =  GetUV(Ray.Position, 200.0, -ubo.Wind * 0.01);
 
     vec4 high_frequency_noise = textureLod(CloudHighFrequency, uv, lod);
-    float high_frequency_fbm = (high_frequency_noise.r * 1.0 + high_frequency_noise.g * 0.5 + high_frequency_noise.b * 0.25) / 1.75;
-    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 25.0));
+    float high_frequency_fbm = (high_frequency_noise.r * 0.5 + high_frequency_noise.g * 0.25 + high_frequency_noise.b * 0.125) / 0.85;
+    float high_frequency_modifier = mix(high_frequency_fbm, 1.0 - high_frequency_fbm, saturate(height * 10.0));
 
-    return saturate(mix(2.0 * Params.Density, Params.Density / 2.0, outScattering.a) * saturate(remap(base, high_frequency_modifier * mix(0.05, 0.15, outScattering.a), 1.0, 0.0, 1.0)));
+    return Params.Density * saturate(remap(base, high_frequency_modifier * mix(0.65, 0.2, Params.CoverageSq), 1.0, 0.0, 1.0));
 }
 
 // volumetric-cloudscapes-of-horizon-zero-dawn
 float SampleCone(RayMarch Ray, int mip)
 {
     float cone_density = 0.0;
+
+    Ray.Position = Ray.Position + Ray.Stepsize;
+    cone_density += SampleCloudShape(Ray, mip);
+    Ray.Position = Ray.Position - Ray.Stepsize;
+
     Ray.Stepsize /= 6.f;
-    for (int i = 0; i <= 6; i++)
+    for (int i = 1; i <= 6; i++)
     {
         Ray.Position = Ray.Position + light_kernel[i] * float(i) * Ray.Stepsize;
-        cone_density += Params.Density * SampleCloudShape(Ray, mip);
+        cone_density += SampleCloudShape(Ray, mip);
+        Ray.Stepsize *= i < 4 ? 1.0 : 2.0;
     }
 
     return cone_density;
@@ -172,7 +178,7 @@ float MultiScatter(float phi, float e, float ds)
         luminance += b * HGDPhaseCloud(phi, c) * BeerLambert(e * a, ds);
         a *= 0.7;
         b *= 0.75;
-        c *= 0.9;
+        c *= 0.85;
     }
 
     return saturate(luminance + Params.Ambient);
@@ -194,7 +200,7 @@ float MarchToLight(vec3 pos, vec3 rd, float phi, int steps, int mip)
         cone_density += outScattering.a > 0.01 ? SampleCone(Ray, mip) : SampleCloudShape(Ray, mip);
     }
 
-    return MultiScatter(phi, cone_density, Ray.Stepsize);
+    return MultiScatter(phi, Params.Density * cone_density, Ray.Stepsize);
 }
 
 void MarchToCloud(inout RayMarch Ray, float ray_length)
@@ -250,7 +256,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     Ray.FirstHit = Ray.End;
     Ray.LastHit = Ray.Start;
     Ray.Direction = -Ray.Direction;
-    steps = int(mix(16.0, 96.0, step_mod));
+    steps = int(mix(64.0, 96.0, step_mod));
     float Stepsize = distance(Ray.Start, Ray.End) / float(steps);
     Ray.Stepsize = Stepsize;
     float ToAEP = distance(Ray.FirstHit, Ray.Start);
@@ -262,7 +268,6 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
 
     float Dist = 0.0;
     float PrevDist = 0.0, DistAEP = 0.0;
-    float LightIntensity = MaxLightIntensity;
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);
@@ -284,7 +289,7 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
             float transmittance = BeerLambert(extinction, Ray.Stepsize);
             vec3 E = MarchToLight(Ray.Position, Sun, phi, 6, mip) * GetTransmittanceWithShadow(TransmittanceLUT, Ray.Radius, dot(Ray.Position, Sun) / Ray.Radius, Hits.Camera, EdotL);
             E += mix(AtmosphereStart.S, AtmosphereEnd.S, DistAEP) - mix(AtmosphereStart.S, AtmosphereEnd.S, PrevDist);
-            E *= extinction * LightIntensity;
+            E *= extinction * MaxLightIntensity;
             E = vec3(E - transmittance * E) / extinction;
             Ray.LastHit = Ray.Position;
             outScattering.rgb += E * outScattering.a;
@@ -298,5 +303,5 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
         DistAEP = Dist / ToAEP;
     }
 
-    outScattering.rgb += Params.LightIntensity * MaxLightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
+    outScattering.rgb += mix(1.0, Params.LightIntensity, 1.0 - outScattering.a) * MaxLightIntensity * AtmosphereStart.S * (1.0 - outScattering.a);
 }

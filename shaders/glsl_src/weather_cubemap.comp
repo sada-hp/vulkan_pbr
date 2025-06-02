@@ -22,10 +22,10 @@ void main()
         vec2 s1 = saturate(0.5 + 0.5 * vec2(cos(asin(UV.y * 2.0 - 1.0)), sin(acos(UV.x * 2.0 - 1.0))));
         float mask = perlin(UV, 0.15 * frequency);
 
-        float w = 1.0 - sqrt(fbm_worley(UV, 0.5 * frequency, worley_octaves));
+        float w = 1.0 - sqrt(fbm_worley(UV, frequency, worley_octaves));
 
-        float p = fbm_perlin(0.5 * (UV + s1.xy * mask), frequency, perlin_octaves) * 0.5 + 0.5;
-        float perlin_worley = remap(p, 0.0, 1.0, w, 1.0);
+        float p = fbm_perlin(UV + 0.5 * s1.xy * mask, frequency, perlin_octaves);
+        float perlin_worley = remap(p, -1.0, 1.0, w, 1.0);
 
         imageStore(outImage, ivec3(gl_GlobalInvocationID.xyz), vec4(p, w, perlin_worley, 0.0));
     }

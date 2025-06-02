@@ -204,6 +204,10 @@ namespace GR
 
 		static constexpr float Rcb = Rg + 0.25 * (Rt - Rg);
 		static constexpr float Rct = Rg + 0.95 * (Rt - Rg);
+
+	protected:
+		float Rcbb;
+		float Rctb;
 	};
 };
 

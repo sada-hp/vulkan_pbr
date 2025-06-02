@@ -658,7 +658,7 @@ bool VulkanBase::BeginFrame()
 		// m_DepthAttachmentsLR[m_ResourceIndex]->TransitionLayout(m_BackgroundAsync[m_ResourceIndex].Commands, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_COMPUTE_BIT);
 
 		double Re = glm::length(m_Camera.Transform.offset);
-		ComputePipeline* Pipeline = Re < Rcb ? m_VolumetricsUnderPipeline.get() : (Re > Rct ? m_VolumetricsAbovePipeline.get() : m_VolumetricsBetweenPipeline.get());
+		ComputePipeline* Pipeline = Re < Rcbb ? m_VolumetricsUnderPipeline.get() : (Re > Rctb ? m_VolumetricsAbovePipeline.get() : m_VolumetricsBetweenPipeline.get());
 
 		m_UBOTempSets[m_ResourceIndex]->BindSet(0, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
 		m_VolumetricsDescriptor->BindSet(1, m_BackgroundAsync[m_ResourceIndex].Commands, *Pipeline);
@@ -1211,15 +1211,18 @@ void VulkanBase::Wait() const
 void VulkanBase::SetCloudLayerSettings(CloudLayerProfile settings)
 {
 	cloudParams.Coverage = settings.Coverage;
-	cloudParams.CoverageSq = settings.Coverage * settings.Coverage;
-	cloudParams.HeightFactor = glm::pow(settings.Coverage, 1.125);
-	cloudParams.BottomSmoothnessFactor = glm::mix(0.05, 0.5, glm::smoothstep(0.0f, 1.0f, cloudParams.CoverageSq));
-	cloudParams.LightIntensity = glm::mix(0.05, 1.0, glm::max(0.7 - cloudParams.CoverageSq, 0.0) / 0.7);
-	cloudParams.Ambient = glm::mix(0.0, 0.01, (cloudParams.LightIntensity - 0.05) / 0.95);
+	cloudParams.CoverageSq = cloudParams.Coverage * cloudParams.Coverage;
+	cloudParams.HeightFactor = glm::pow(cloudParams.Coverage, 1.125);
+	cloudParams.BottomSmoothnessFactor = glm::mix(0.1, 0.15, cloudParams.CoverageSq);
+	cloudParams.LightIntensity = glm::mix(0.15, 1.0, glm::max(0.7 - cloudParams.CoverageSq, 0.0) / 0.7);
+	cloudParams.Ambient = glm::mix(0.0, 0.01, (cloudParams.LightIntensity - 0.15) / 0.85);
 	cloudParams.Density = settings.Density;
-	cloudParams.TopBound = Rct;
-	cloudParams.BottomBound = Rcb + (Rct - Rcb) * (0.5 - glm::min(cloudParams.Coverage, 0.5f));
+	cloudParams.TopBound = Rct - 0.5 * (Rct - Rcb) * (1.0 - cloudParams.Coverage);
+	cloudParams.BottomBound = Rcb + 0.5 * (Rct - Rcb) * glm::smoothstep(0.0, 1.0, 1.0 - cloudParams.Coverage);
 	cloudParams.BoundDelta = cloudParams.TopBound - cloudParams.BottomBound;
+
+	Rcbb = cloudParams.BottomBound;
+	Rctb = cloudParams.TopBound;
 
 	m_CloudLayer->Update(&cloudParams, sizeof(CloudParameters));
 }
