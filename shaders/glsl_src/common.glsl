@@ -69,6 +69,11 @@ vec2 saturateAngle(vec2 x)
     return clamp(x, -1.0, 1.0);
 }
 
+vec3 divide_w(vec4 v)
+{
+    return v.xyz / v.w;
+}
+
 vec4 SampleOnSphere(vec3 Position, sampler2D Target, float Scale, int mip, vec2 Offset)
 {
     float l = length(Position);

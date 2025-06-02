@@ -30,7 +30,7 @@ void main()
         RayMarch Ray;
         Ray.Direction = normalize(ScreenWorld.xyz);
 
-        Hits.Ground = inDepth == 0.0 ? SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg) : distance(inWorld, RayOrigin);
+        Hits.Ground = inDepth == 0.0 ? SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg) : distance(divide_w(vec4(ubo.ReprojectionMatrix * vec4(ScreenNDC.xy, inDepth, 1.0))).xyz, RayOrigin);
         Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.TopBound);
         Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.BottomBound);
         Hits.Camera = float(ubo.CameraRadius);
@@ -53,10 +53,10 @@ void main()
 
         MarchToCloud(Ray, distance(Ray.Start, Ray.End));
 
-        if (outScattering.rgb != vec3(0.0))
+        if (outScattering.a != 1.0)
         {
-            vec4 clip1 = vec4(uboOld.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
-            vec4 clip2 = vec4(uboOld.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
+            vec4 clip1 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.FirstHit, 1.0));
+            vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
             outDepth = saturate(max(clip1.z / clip1.w, clip2.z / clip2.w));
 
             outScattering = outDepth > sampledDepth ? vec4(mix(outScattering.rgb, texture(oldImage, OldPosition.xy).rgb, 0.25), outScattering.a) : vec4(0.0, 0.0, 0.0, 1.0);
