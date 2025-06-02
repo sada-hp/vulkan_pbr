@@ -332,7 +332,8 @@ namespace GR
 		
 		struct BoundingBox
 		{
-			glm::vec3 Points[8];
+			glm::vec3 Min;
+			glm::vec3 Max;
 		};
 
 		struct CullDistance

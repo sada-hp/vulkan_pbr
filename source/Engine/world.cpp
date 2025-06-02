@@ -39,10 +39,8 @@ namespace GR
 
 		Registry.emplace<Components::CullDistance>(ent);
 		Components::BoundingBox& Box = Registry.emplace<Components::BoundingBox>(ent);
-		Box.Points[0] = { Geometry.Min.x, Geometry.Min.y, Geometry.Min.z }; Box.Points[1] = { Geometry.Max.x, Geometry.Max.y, Geometry.Max.z };
-		Box.Points[2] = { Geometry.Max.x, Geometry.Min.y, Geometry.Min.z }; Box.Points[3] = { Geometry.Min.x, Geometry.Max.y, Geometry.Min.z };
-		Box.Points[4] = { Geometry.Min.x, Geometry.Min.y, Geometry.Max.z }; Box.Points[5] = { Geometry.Max.x, Geometry.Max.y, Geometry.Min.z };
-		Box.Points[6] = { Geometry.Min.x, Geometry.Max.y, Geometry.Max.z }; Box.Points[7] = { Geometry.Max.x, Geometry.Min.y, Geometry.Max.z };
+		Box.Min = Geometry.Min;
+		Box.Max = Geometry.Max;
 
 		return ent;
 	}
@@ -64,8 +62,10 @@ namespace GR
 
 		for (const auto& [ent, gro, world] : view.each())
 		{
-			if (glm::distance2(renderer->m_Camera.Transform.offset, world.offset) < SQR(Registry.get<Components::CullDistance>(ent).Value)
-				&& renderer->m_Camera.FrustumCull(world.GetMatrix(), Registry.get<Components::BoundingBox>(ent).Points))
+			Components::BoundingBox& Box = Registry.get<Components::BoundingBox>(ent);
+			Components::CullDistance& Cull = Registry.get<Components::CullDistance>(ent);
+			if (glm::distance2(renderer->m_Camera.Transform.offset, world.offset) < SQR(Cull.Value)
+				&& renderer->m_Camera.FrustumCull(world.GetMatrix(), Box.Min, Box.Max))
 			{
 				PBRConstants constants{};
 				constants.Offset = world.GetOffset();

@@ -87,17 +87,17 @@ namespace GR
 			return (glm::vec4*)_planes;
 		}
 
-		bool FrustumCull(glm::dmat4 worldmatrix, glm::vec3 bounds[8])
+		bool FrustumCull(glm::dmat4 worldmatrix, glm::vec3 Min, glm::vec3 Max)
 		{
 			glm::vec4 points[8] = {
-				worldmatrix * glm::vec4(bounds[0], 1.0),
-				worldmatrix * glm::vec4(bounds[1], 1.0),
-				worldmatrix * glm::vec4(bounds[2], 1.0),
-				worldmatrix * glm::vec4(bounds[3], 1.0),
-				worldmatrix * glm::vec4(bounds[4], 1.0),
-				worldmatrix * glm::vec4(bounds[5], 1.0),
-				worldmatrix * glm::vec4(bounds[6], 1.0),
-				worldmatrix * glm::vec4(bounds[7], 1.0)
+				worldmatrix * glm::vec4(Min.x, Min.y, Min.z, 1.0),
+				worldmatrix * glm::vec4(Max.x, Max.y, Max.z, 1.0),
+				worldmatrix * glm::vec4(Max.x, Min.y, Min.z, 1.0),
+				worldmatrix * glm::vec4(Min.x, Max.y, Min.z, 1.0),
+				worldmatrix * glm::vec4(Min.x, Min.y, Max.z, 1.0),
+				worldmatrix * glm::vec4(Max.x, Max.y, Min.z, 1.0),
+				worldmatrix * glm::vec4(Min.x, Max.y, Max.z, 1.0),
+				worldmatrix * glm::vec4(Max.x, Min.y, Max.z, 1.0)
 			};
 
 			for (uint32_t i = 0; i < 6; i++)
@@ -110,6 +110,26 @@ namespace GR
 					&& glm::dot(_planes[i], points[5]) < 0.0
 					&& glm::dot(_planes[i], points[6]) < 0.0
 					&& glm::dot(_planes[i], points[7]) < 0.0)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		bool FrustumCull(glm::dmat4 worldmatrix, glm::vec3 Point)
+		{
+			glm::vec4 point = worldmatrix * glm::vec4(Point, 1.0);
+
+			for (uint32_t i = 0; i < 6; i++)
+			{
+				if (glm::dot(_planes[0], point) < 0.0
+					&& glm::dot(_planes[1], point) < 0.0
+					&& glm::dot(_planes[2], point) < 0.0
+					&& glm::dot(_planes[3], point) < 0.0
+					&& glm::dot(_planes[4], point) < 0.0
+					&& glm::dot(_planes[5], point) < 0.0)
 				{
 					return false;
 				}
