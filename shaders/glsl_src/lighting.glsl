@@ -220,12 +220,12 @@ void AerialPerspective(sampler2D TransmittanceLUT, sampler2D IrradianceLUT, samp
         float EdotV = dot(Eye, View) / Re;
 
 #if 1
-        float d = -Re * EdotV - sqrt(Re * Re * (EdotV * EdotV - 1.0) + Rt * Rt);
+        float d = -Re * EdotV - sqrt(Re * Re * (EdotV * EdotV - 1.0) + (Rt + 2 * Rdelta) * (Rt + 2 * Rdelta));
         if (d > 0.0)
         {
             Eye = Eye + View * d;
-            EdotV = (Re * EdotV + d) / Rt;
-            Re = Rt;
+            EdotV = (Re * EdotV + d) / (Rt + 2 * Rdelta);
+            Re = Rt + 2 * Rdelta;
         }
 #endif
 
