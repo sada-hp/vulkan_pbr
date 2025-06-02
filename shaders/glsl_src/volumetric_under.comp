@@ -30,8 +30,7 @@ void main()
         RayMarch Ray;
         Ray.Direction = normalize(ScreenWorld.xyz);
 
-        Hits.Ground = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg);
-        Hits.Ground = Hits.Ground == 0 ? (sampledDepth > 0.0 ? distance(inWorld, RayOrigin) : 0.0) : (sampledDepth > 0.0 ? min(distance(inWorld, RayOrigin), Hits.Ground) : Hits.Ground);
+        Hits.Ground = inDepth == 0.0 ? SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Rg) : distance(inWorld, RayOrigin);
         Hits.TopCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.TopBound);
         Hits.BottomCloud = SphereMinDistance(RayOrigin, Ray.Direction, SphereCenter, Params.BottomBound);
         Hits.Camera = float(ubo.CameraRadius);

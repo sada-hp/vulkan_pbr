@@ -271,9 +271,13 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
     for (i = steps; i >= 0; i--)
     {
         UpdateRaySmooth(Ray, Stepsize, float(steps - i) * incr);
+        Dist += Ray.Stepsize;
 
         if (Ray.Radius < Params.BottomBound)
+        {
+            DistAEP = Dist / ToAEP;
             continue;
+        }
 
         if (Ray.Radius > Params.TopBound)
             break;
@@ -282,7 +286,6 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
         if ((sample_density = SampleCloudShape(Ray, mip)) > 0 && outScattering.a > 0.1)
             sample_density = SampleCloudDetail(Ray, sample_density, mip);
 
-        Dist += Ray.Stepsize;
         if (sample_density > 0.0)
         {
             float extinction = sample_density + 1e-7;
