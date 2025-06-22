@@ -9,7 +9,8 @@ Feature list:
 - Reversed Z-buffer
 - FXAA
 - Geoclipmap for planet shape
-- Procedural terrain generation 
+- Procedural terrain generation
+- Grass
   
 Features in work:
 - SSAO
