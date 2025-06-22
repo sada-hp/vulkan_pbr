@@ -16,4 +16,14 @@ Features in work:
 - Shadow mapping
 - SSR
 
-  ![preview2](https://github.com/user-attachments/assets/78ca3661-67c1-4806-ac06-deb62ba736a7)
+# Demos
+
+See [Demos](https://github.com/sada-hp/EngineDemos) for valid usage of GRay API.
+
+# Previews
+
+![preview2](https://github.com/user-attachments/assets/78ca3661-67c1-4806-ac06-deb62ba736a7)
+
+Youtube:
+
+[![Preview](https://img.youtube.com/vi/xo3GarAQ8Go/0.jpg)](https://www.youtube.com/watch?v=xo3GarAQ8Go)
