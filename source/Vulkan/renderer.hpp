@@ -202,8 +202,8 @@ namespace GR
 		static constexpr float Rt = ATMOSPHERE_RADIUS;
 #endif
 
-		static constexpr float Rcb = Rg + 0.25 * (Rt - Rg);
-		static constexpr float Rct = Rg + 0.95 * (Rt - Rg);
+		static constexpr float Rcb = Rg + 0.15 * (Rt - Rg);
+		static constexpr float Rct = Rg + 0.85 * (Rt - Rg);
 
 	protected:
 		float Rcbb;

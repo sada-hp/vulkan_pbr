@@ -302,6 +302,10 @@ void MarchToCloud(inout RayMarch Ray, float ray_length)
             if (outScattering.a < 1e-5)
                 break;
         }
+        else if (outScattering.a < 0.1)
+        {
+            break;
+        }
         
         DistAEP = Dist / ToAEP;
     }

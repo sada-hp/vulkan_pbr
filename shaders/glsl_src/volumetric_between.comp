@@ -59,7 +59,7 @@ void main()
             vec4 clip2 = vec4(ubo.ViewProjectionMatrix * vec4(Ray.LastHit, 1.0));
             outDepth = saturate(max(clip1.z / clip1.w, clip2.z / clip2.w));
 
-            outScattering = outDepth > sampledDepth ? vec4(mix(outScattering.rgb, texture(oldImage, OldPosition.xy).rgb, 0.25), outScattering.a) : vec4(0.0, 0.0, 0.0, 1.0);
+            outScattering = outDepth >= sampledDepth ? vec4(mix(outScattering.rgb, texture(oldImage, OldPosition.xy).rgb, 0.25), outScattering.a) : vec4(0.0, 0.0, 0.0, 1.0);
         }
 
         imageStore(outImage, Texel, outScattering);
